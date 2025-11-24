@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 
-ruff check src --fix      # linter
-ruff format src --check # formatter
+uv run ruff check src --fix      # linter
+uv run ruff format src --check # formatter
