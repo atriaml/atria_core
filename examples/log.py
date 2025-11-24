@@ -6,7 +6,7 @@ from atria_logger import enable_file_logging, get_logger, set_atria_log_level
 set_atria_log_level(logging.DEBUG)
 
 # Attach log file
-enable_file_logging("app.log")
+enable_file_logging("/tmp/app.log")
 
 # Get a module-level logger
 logger = get_logger(__name__)

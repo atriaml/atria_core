@@ -25,13 +25,14 @@ pip install atria_logger
 # Usage 
 ```bash
 import logging
-from atria_logger import get_logger, set_log_level, set_log_file
+
+from atria_logger import enable_file_logging, get_logger, set_atria_log_level
 
 # Set global log level
-set_log_level(logging.DEBUG)
+set_atria_log_level(logging.DEBUG)
 
 # Attach log file
-set_log_file("app.log")
+enable_file_logging("app.log")
 
 # Get a module-level logger
 logger = get_logger(__name__)
@@ -39,4 +40,5 @@ logger = get_logger(__name__)
 logger.debug("Debug message")
 logger.info("Info message")
 logger.error("Error message")
+
 ```
