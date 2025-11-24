@@ -41,7 +41,8 @@ jobs:
       - name: Read version from pyproject.toml
         id: get_version
         run: |
-          VERSION=$(uv version)
+          # uv version outputs "project-name X.Y.Z", so extract just the version
+          VERSION=$(uv version | awk '{print $2}')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Create Git tag if missing
