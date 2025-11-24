@@ -13,7 +13,6 @@ authors = [{ name = "Saifullah", email = "saifullah.saifullah@dfki.de" }]
 dependencies = [
     "coloredlogs>=15.0.1",
     "lazy_loader>=0.4",
-    "mypy>=1.18.2",
     "rich>=14.0.0",
 ]
 
@@ -55,6 +54,8 @@ warn_unused_ignores = true
 
 [dependency-groups]
 dev = [
+    "coverage>=7.12.0",
     "pytest>=9.0.1",
     "ruff>=0.14.6",
+    "mypy>=1.18.2",
 ]
