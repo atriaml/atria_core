@@ -121,6 +121,8 @@ class RootLoggerAdapter(logging.LoggerAdapter[logging.Logger]):
             self.logger, str(file_path), level, log_format
         )
 
+        self._file_handler.addFilter(DistributedFilter(rank=self._rank))
+
 
 # Module-level adapter instance
 _root_adapter: RootLoggerAdapter = RootLoggerAdapter(_root_logger)
