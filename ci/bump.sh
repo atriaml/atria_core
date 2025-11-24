@@ -39,7 +39,6 @@ fi
 
 # 6️⃣ Push commit and tag
 echo "🚀 Pushing commit and tag..."
-git push origin main
 git push origin "$TAG"
 
 echo "🎉 Done! Version bumped to $NEW_VERSION and tag pushed."
