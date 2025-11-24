@@ -27,16 +27,39 @@ jobs:
       - name: Run CI checks
         run: bash ./ci/run_checks.sh
 
-  create-release:
+  release:
     needs: build-and-test
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'  # Only release on main branch
+    if: github.ref == 'refs/heads/main'
+
     steps:
       - uses: actions/checkout@v5
 
-      - name: Create GitHub Release
-        uses: ncipollo/release-action@v1
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Read version from pyproject.toml
+        id: get_version
+        run: |
+          VERSION=$(uv version)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create Git tag if missing
+        id: create_tag
+        run: |
+          TAG="v${{ steps.get_version.outputs.version }}"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists, skipping tag creation."
+          else
+            git tag "$TAG"
+            git push origin "$TAG"
+          fi
+
+      - name: Create GitHub release if missing
+        uses: softprops/action-gh-release@v1
+        if: steps.create_tag.outputs.tag != ''
         with:
-          tag: v1.0.${{ github.run_number }}
-          name: Release v1.0.${{ github.run_number }}
-          body: "Automated release from CI"
+          tag_name: "v${{ steps.get_version.outputs.version }}"
+          name: "Release v${{ steps.get_version.outputs.version }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
