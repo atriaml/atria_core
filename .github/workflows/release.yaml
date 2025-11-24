@@ -1,8 +1,5 @@
 name: CI & Release
 
-permissions:
-  contents: write
-  
 on:
   push:
     branches:
@@ -38,6 +35,10 @@ jobs:
     needs: build-and-test
     if: needs.build-and-test.outputs.tests_passed == 'true' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      repository-projects: write
     steps:
       - uses: actions/checkout@v5
 
