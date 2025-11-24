@@ -10,16 +10,16 @@ NC='\033[0m' # No Color
 echo -e "${BLUE}==============================${NC}"
 echo -e "${BLUE} Running type checks with mypy ${NC}"
 echo -e "${BLUE}==============================${NC}"
-./scripts/lint.sh
+./ci/lint.sh
 
 echo -e "\n${BLUE}==============================${NC}"
 echo -e "${BLUE} Running linter with Ruff     ${NC}"
 echo -e "${BLUE}==============================${NC}"
-./scripts/format.sh
+./ci/format.sh
 
 echo -e "\n${BLUE}==============================${NC}"
 echo -e "${BLUE} Running tests with pytest    ${NC}"
 echo -e "${BLUE}==============================${NC}"
-./scripts/test.sh
+./ci/test.sh
 
 echo -e "\n${GREEN}=== All checks passed! ✅ ===${NC}"
