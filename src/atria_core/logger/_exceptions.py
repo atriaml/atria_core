@@ -5,13 +5,14 @@ replace explicit `logger.exception()` calls at handled call sites, and they
 cannot see exceptions that were caught and deliberately swallowed.
 """
 
+import logging
 import sys
 import threading
 from types import TracebackType
 
-from ._api import get_logger
+from ._constants import _ROOT_LOGGER_NAME
 
-_logger = get_logger("atria.uncaught")
+_logger = logging.getLogger(f"{_ROOT_LOGGER_NAME}.uncaught")
 
 _installed = False
 _original_excepthook = sys.excepthook
@@ -41,6 +42,11 @@ def _log_uncaught_thread_exception(args: threading.ExceptHookArgs) -> None:
 
 def install_global_exception_hook() -> None:
     """Install fail-safe logging for exceptions that escape every try/except.
+
+    This runs automatically the first time `atria_core.logger` is configured,
+    so you normally don't need to call it yourself - it's exposed publicly in
+    case something else has since replaced `sys.excepthook` /
+    `threading.excepthook` and you want to reinstall it.
 
     Once installed, any exception that propagates all the way up in the main
     thread, or out of a `threading.Thread`'s target function, is logged at

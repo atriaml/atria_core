@@ -45,7 +45,12 @@ class EnvInfo:
 
 
 @cache
-def _collect_env_info() -> EnvInfo:
+def get_env_info() -> EnvInfo:
+    """Return runtime info about the current process (version, Python, host, PID, rank, log level).
+
+    Computed once and cached - the values (aside from log level) don't change
+    over the life of a process.
+    """
     return EnvInfo(
         version=_atria_version(),
         python_version=platform.python_version(),
@@ -65,4 +70,4 @@ def log_banner() -> None:
     """
     banner = _figlet.renderText(_APP_NAME).rstrip("\n")
     logger.info("\n%s", banner)
-    logger.info(_collect_env_info().format())
+    logger.info(get_env_info().format())

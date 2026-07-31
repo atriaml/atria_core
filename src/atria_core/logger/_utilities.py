@@ -7,9 +7,29 @@ Utilities to configure and manage loggers in the Atria library. Includes:
 """
 
 import logging
+from pathlib import Path
 from typing import Any, TextIO
 
 import coloredlogs  # type: ignore[import-untyped]
+
+
+def _next_available_path(path: Path) -> Path:
+    """Return `path`, or if it already exists, the same path with an
+    incrementing numeric suffix appended (e.g. app.log -> app.log.1 ->
+    app.log.2 ...) until one that doesn't exist is found.
+
+    This keeps re-runs that log to the same fixed path from silently
+    appending to (or being confused with) a previous run's log file.
+    """
+    if not path.exists():
+        return path
+
+    counter = 1
+    candidate = path.with_name(f"{path.name}.{counter}")
+    while candidate.exists():
+        counter += 1
+        candidate = path.with_name(f"{path.name}.{counter}")
+    return candidate
 
 
 def _enable_colored_logging(
@@ -46,9 +66,11 @@ def _attach_file_handler(
         log_format: Format string for log messages (default standard format).
 
     Returns:
-        The attached FileHandler instance.
+        The attached FileHandler instance. Its `baseFilename` may differ from
+        `log_file_path` if that path already existed - see `_next_available_path`.
     """
-    handler = logging.FileHandler(log_file_path)
+    resolved_path = _next_available_path(Path(log_file_path))
+    handler = logging.FileHandler(resolved_path)
     handler.setLevel(log_level)
     handler.setFormatter(logging.Formatter(log_format))
     logger.addHandler(handler)

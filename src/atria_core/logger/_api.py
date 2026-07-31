@@ -36,18 +36,23 @@ def get_logger(name: str | None = None) -> logging.Logger:
 
 def enable_file_logging(
     file_path: str, log_format: str | None = None, level: int | None = None
-) -> None:
+) -> str:
     """Enable file logging for the library root logger.
 
     This attaches or replaces a file handler for the root logger, so that
-    all library logs are written to the specified file.
+    all library logs are written to the specified file. If `file_path`
+    already exists, an incrementing numeric suffix is appended instead (e.g.
+    app.log -> app.log.1) rather than appending to a previous run's log file.
 
     Args:
         file_path: Path to the log file.
         log_format: Optional log message format. Defaults to root logger format.
         level: Optional logging level for the file. Defaults to current root logger level.
+
+    Returns:
+        str: The actual file path logs are written to.
     """
-    get_root_adapter().attach_file(file_path, log_format, level)
+    return get_root_adapter().attach_file(file_path, log_format, level)
 
 
 def set_atria_log_level(level: int) -> None:

@@ -85,6 +85,36 @@ def test_file_logging(tmp_path: Path) -> None:
 
 
 # ----------------------------
+# Test: Enabling file logging on an existing path increments instead of overwriting
+# ----------------------------
+def test_enable_file_logging_increments_existing_file(tmp_path: Path) -> None:
+    """Test that enable_file_logging doesn't overwrite/append to a log file
+    that already exists - it should write to a new, incrementally-suffixed
+    path instead (e.g. app.log -> app.log.1).
+    """
+    from atria_core.logger import enable_file_logging
+
+    log_file = tmp_path / "atria_increment.log"
+    log_file.write_text("pre-existing content from a previous run\n")
+
+    resolved_path = enable_file_logging(str(log_file), level=logging.INFO)
+
+    assert resolved_path == str(log_file) + ".1"
+    # The pre-existing file must be left untouched
+    assert log_file.read_text() == "pre-existing content from a previous run\n"
+
+    logger = get_logger("atria.incrementtest")
+    set_atria_log_level(logging.INFO)
+    logger.info("New run's message")
+
+    for handler in logging.getLogger("atria").handlers:
+        if hasattr(handler, "flush"):
+            handler.flush()
+
+    assert Path(resolved_path).read_text().find("New run's message") != -1
+
+
+# ----------------------------
 # Test: Raising an exception alone is NOT logged
 # ----------------------------
 def test_raised_exception_not_logged_without_manual_handling(tmp_path: Path) -> None:

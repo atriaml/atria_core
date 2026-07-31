@@ -16,6 +16,7 @@ import os
 from pathlib import Path
 
 from ._constants import _DEFAULT_COLOR_STYLES, _DEFAULT_LOG_FORMAT, _ROOT_LOGGER_NAME
+from ._exceptions import install_global_exception_hook
 from ._filters import DistributedFilter
 from ._utilities import _attach_file_handler, _enable_colored_logging, _reset_logger
 
@@ -58,8 +59,9 @@ class RootLoggerAdapter(logging.LoggerAdapter[logging.Logger]):
     def configure(self) -> None:
         """Configure the root logger once.
 
-        Adds a distributed logging filter and enables colored console logging.
-        This method is idempotent.
+        Adds a distributed logging filter, enables colored console logging,
+        and installs the fail-safe global exception hooks. This method is
+        idempotent.
         """
         if self._configured:
             return
@@ -89,6 +91,8 @@ class RootLoggerAdapter(logging.LoggerAdapter[logging.Logger]):
             if hasattr(handler, "setLevel"):
                 handler.addFilter(DistributedFilter(rank=self._rank))
 
+        install_global_exception_hook()
+
         self._configured = True
 
     def update_log_level(self, level: int) -> None:
@@ -104,13 +108,20 @@ class RootLoggerAdapter(logging.LoggerAdapter[logging.Logger]):
 
     def attach_file(
         self, path: str, log_format: str | None = None, level: int | None = None
-    ) -> None:
+    ) -> str:
         """Attach or replace a file handler for the root logger.
+
+        If `path` already exists, an incrementing numeric suffix is appended
+        instead (e.g. app.log -> app.log.1) so this doesn't silently append
+        to a previous run's log file.
 
         Args:
             path (str): File path to write logs to.
             log_format (Optional[str]): Log message format. Defaults to `_DEFAULT_LOG_FORMAT`.
             level (Optional[int]): Logging level for the file handler. Defaults to the current root logger level.
+
+        Returns:
+            str: The actual file path logs are written to.
         """
         log_format = log_format or _DEFAULT_LOG_FORMAT
         level = level or self.logger.level
@@ -124,6 +135,7 @@ class RootLoggerAdapter(logging.LoggerAdapter[logging.Logger]):
         )
 
         self._file_handler.addFilter(DistributedFilter(rank=self._rank))
+        return self._file_handler.baseFilename
 
 
 # Module-level adapter instance
