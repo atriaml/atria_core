@@ -16,7 +16,7 @@ logger = get_logger("atria")
 
 _APP_NAME = "ATRIA"
 _BANNER_FONT = "slant"
-_DISTRIBUTION_NAME = "atria_logger"
+_DISTRIBUTION_NAME = "atria_core"
 
 _figlet = Figlet(font=_BANNER_FONT)
 

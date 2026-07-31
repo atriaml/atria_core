@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from atria_logger import (
+from atria_core.logger import (
     enable_file_logging,
     install_global_exception_hook,
     set_atria_log_level,

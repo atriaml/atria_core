@@ -30,11 +30,12 @@ def _log_uncaught_exception(
 
 def _log_uncaught_thread_exception(args: threading.ExceptHookArgs) -> None:
     thread_name = args.thread.name if args.thread is not None else "unknown"
-    _logger.critical(
-        "Unhandled exception in thread %s",
-        thread_name,
-        exc_info=(args.exc_type, args.exc_value, args.exc_traceback),
-    )
+    if args.exc_type is not None and args.exc_value is not None:
+        _logger.critical(
+            "Unhandled exception in thread %s",
+            thread_name,
+            exc_info=(args.exc_type, args.exc_value, args.exc_traceback),
+        )
     _original_threading_excepthook(args)
 
 

@@ -4,13 +4,13 @@ Call logger.exception() (or logger.error(..., exc_info=True)) from inside the
 except block. Raising and catching an exception alone writes nothing to the
 log - logging isn't tied into Python's exception machinery automatically.
 
-Run: python usage/04_manual_exception_logging.py
+Run: python usage/logger/04_manual_exception_logging.py
 Then check: /tmp/atria_usage_manual_exception.log
 """
 
 import logging
 
-from atria_logger import enable_file_logging, get_logger, set_atria_log_level
+from atria_core.logger import enable_file_logging, get_logger, set_atria_log_level
 
 set_atria_log_level(logging.DEBUG)
 enable_file_logging("/tmp/atria_usage_manual_exception.log")

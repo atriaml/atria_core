@@ -11,7 +11,7 @@ Test Functions:
 Dependencies:
     - pytest: For running the test cases.
     - logging: For creating and verifying log records.
-    - atria_logger.filters: Provides the `DistributedFilter` class.
+    - atria_core.logger._filters: Provides the `DistributedFilter` class.
 
 Author: Saifullah (saifullah3396@gmail.com)
 Date: 2025-04-07
@@ -21,7 +21,7 @@ License: MIT
 
 import logging
 
-from atria_logger import DistributedFilter
+from atria_core.logger import DistributedFilter
 
 
 def test_distributed_filter_rank_zero() -> None:

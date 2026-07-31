@@ -14,7 +14,7 @@ Dependencies:
     - pytest: For running the test cases.
     - logging: For verifying logger behavior.
     - sys: For stream handling.
-    - atria_logger.utilities: Provides the `attach_file_handler` and `attach_stream_handler` functions.
+    - atria_core.logger._utilities: Provides the `attach_file_handler` and `attach_stream_handler` functions.
 
 Author: Saifullah (saifullah3396@gmail.com)
 Date: 2025-04-07
@@ -28,7 +28,7 @@ import sys
 
 import pytest
 
-from atria_logger._utilities import _attach_file_handler, _attach_stream_handler
+from atria_core.logger._utilities import _attach_file_handler, _attach_stream_handler
 
 
 def test_configure_file_handler(tmp_path: pathlib.Path) -> None:

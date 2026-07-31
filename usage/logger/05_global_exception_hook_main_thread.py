@@ -6,13 +6,13 @@ propagated all the way up with nothing catching it. install_global_exception_hoo
 logs it at CRITICAL before the default traceback printing runs and the
 process exits - this script ends by raising on purpose so you can see that.
 
-Run: python usage/05_global_exception_hook_main_thread.py
+Run: python usage/logger/05_global_exception_hook_main_thread.py
 Then check: /tmp/atria_usage_main_thread_hook.log
 """
 
 import logging
 
-from atria_logger import (
+from atria_core.logger import (
     enable_file_logging,
     get_logger,
     install_global_exception_hook,

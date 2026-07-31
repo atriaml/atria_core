@@ -5,14 +5,14 @@ it's a separate mechanism, only triggered for exceptions that escape a
 Thread's target function. The crash only kills that thread; the main thread
 keeps running.
 
-Run: python usage/06_global_exception_hook_background_thread.py
+Run: python usage/logger/06_global_exception_hook_background_thread.py
 Then check: /tmp/atria_usage_background_thread_hook.log
 """
 
 import logging
 import threading
 
-from atria_logger import (
+from atria_core.logger import (
     enable_file_logging,
     get_logger,
     install_global_exception_hook,

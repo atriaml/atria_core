@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from atria_logger import get_logger, set_atria_log_level
+from atria_core.logger import get_logger, set_atria_log_level
 
 
 # ----------------------------
@@ -24,7 +24,7 @@ def test_logger_inherits_root_level() -> None:
 # ----------------------------
 def test_debug_message_propagation(caplog: pytest.LogCaptureFixture) -> None:
     """Test that DEBUG messages are captured when root level is DEBUG."""
-    from atria_logger import set_atria_log_level
+    from atria_core.logger import set_atria_log_level
 
     set_atria_log_level(logging.DEBUG)
     logger = get_logger("atria.debugtest")
@@ -41,7 +41,7 @@ def test_debug_message_propagation(caplog: pytest.LogCaptureFixture) -> None:
 # ----------------------------
 def test_info_message_propagation(caplog: pytest.LogCaptureFixture) -> None:
     """Test that INFO messages propagate to the captured log."""
-    from atria_logger import set_atria_log_level
+    from atria_core.logger import set_atria_log_level
 
     set_atria_log_level(logging.DEBUG)
     logger = get_logger("atria.infotest")
@@ -53,7 +53,7 @@ def test_info_message_propagation(caplog: pytest.LogCaptureFixture) -> None:
 
 def test_file_logging(tmp_path: Path) -> None:
     """Test that Atria logging writes messages to a temporary file."""
-    from atria_logger import enable_file_logging, set_atria_log_level
+    from atria_core.logger import enable_file_logging, set_atria_log_level
 
     # Prepare temp log file
     log_file = tmp_path / "atria_test.log"
@@ -94,7 +94,7 @@ def test_raised_exception_not_logged_without_manual_handling(tmp_path: Path) -> 
     a caught exception is only recorded if the code explicitly logs it
     (e.g. via `logger.exception(...)` or `logger.error(..., exc_info=True)`).
     """
-    from atria_logger import enable_file_logging
+    from atria_core.logger import enable_file_logging
 
     log_file = tmp_path / "atria_no_exception.log"
     enable_file_logging(str(log_file), level=logging.INFO)
@@ -121,7 +121,7 @@ def test_logger_exception_writes_traceback_to_file(tmp_path: Path) -> None:
     """Test that explicitly calling `logger.exception()` inside an except block
     writes the error message and traceback to the log file.
     """
-    from atria_logger import enable_file_logging
+    from atria_core.logger import enable_file_logging
 
     log_file = tmp_path / "atria_exception.log"
     enable_file_logging(str(log_file), level=logging.INFO)
