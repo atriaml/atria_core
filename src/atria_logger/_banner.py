@@ -1,23 +1,68 @@
-"""ASCII art banner for the Atria library."""
+"""ASCII art startup banner for the Atria logger."""
 
-import pyfiglet
-from rich.console import Console
+import logging
+import os
+import platform
+import socket
+from dataclasses import dataclass, fields
+from functools import cache
+from importlib import metadata
 
-_BANNER_FONT = "ansi_shadow"
+from pyfiglet import Figlet
+
+from ._api import get_logger
+
+logger = get_logger("atria")
+
+_APP_NAME = "ATRIA"
+_BANNER_FONT = "slant"
+_DISTRIBUTION_NAME = "atria_logger"
+
+_figlet = Figlet(font=_BANNER_FONT)
 
 
-def print_banner(
-    subtitle: str | None = None, style: str = "bold cyan", font: str = _BANNER_FONT
-) -> None:
-    """Print a stylized ATRIA ASCII art banner to the console.
+def _atria_version() -> str:
+    try:
+        return metadata.version(_DISTRIBUTION_NAME)
+    except metadata.PackageNotFoundError:
+        return "unknown"
 
-    Args:
-        subtitle: Optional line printed centered beneath the banner (e.g. a version string).
-        style: Rich style string used to color the banner.
-        font: pyfiglet font used to render the "ATRIA" text.
+
+@dataclass(frozen=True)
+class EnvInfo:
+    """Runtime info shown in the startup banner. Add new fields here as needed."""
+
+    version: str
+    python_version: str
+    hostname: str
+    pid: int
+    rank: str
+    log_level: str
+
+    def format(self) -> str:
+        """Render as a single "key=value ..." line."""
+        return " ".join(f"{field.name}={getattr(self, field.name)}" for field in fields(self))
+
+
+@cache
+def _collect_env_info() -> EnvInfo:
+    return EnvInfo(
+        version=_atria_version(),
+        python_version=platform.python_version(),
+        hostname=socket.gethostname(),
+        pid=os.getpid(),
+        rank=os.environ.get("RANK", "0"),
+        log_level=logging.getLevelName(logger.getEffectiveLevel()),
+    )
+
+
+def log_banner() -> None:
+    """Log the ATRIA startup banner along with basic runtime information.
+
+    Emits the ASCII art name followed by a summary line (package version,
+    Python version, hostname, PID, distributed rank, effective log level) -
+    the kind of one-time startup banner frameworks like Celery or Ray print.
     """
-    console = Console()
-    banner = pyfiglet.figlet_format("ATRIA", font=font)
-    console.print(banner, style=style, highlight=False)
-    if subtitle:
-        console.print(subtitle, style="dim", justify="center")
+    banner = _figlet.renderText(_APP_NAME).rstrip("\n")
+    logger.info("\n%s", banner)
+    logger.info(_collect_env_info().format())
