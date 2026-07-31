@@ -6,9 +6,9 @@ from typing import TYPE_CHECKING
 from PIL.Image import Image as PILImage
 
 from atria_core.logger import get_logger
-from atria_core.types._data_instance._visualizers._base import Visualizer
 from atria_core.types._generic._annotations import AnnotationType
 from atria_core.types._utilities._viz import _draw_bboxes_on_image
+from atria_core.types._visualizers._base import Visualizer
 
 if TYPE_CHECKING:
     from atria_core.types._data_instance._document_instance import DocumentInstance

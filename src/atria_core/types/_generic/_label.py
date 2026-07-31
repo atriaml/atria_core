@@ -1,10 +1,12 @@
-from atria_core.types._base._data_model import BaseDataModel
-from atria_core.types._pydantic import (
-    IntField,
-    StrField,
-)
+class Label:
+    def __init__(self, value: int, name: str) -> None:
+        self.value = value
+        self.name = name
 
+    def __repr__(self) -> str:
+        return f"Label(value={self.value}, name={self.name!r})"
 
-class Label(BaseDataModel):
-    value: IntField
-    name: StrField
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Label):
+            return NotImplemented
+        return self.value == other.value and self.name == other.name

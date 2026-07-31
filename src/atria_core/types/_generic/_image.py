@@ -1,52 +1,33 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
 
-from pydantic import field_validator
-from rich.repr import RichReprResult
-
-from atria_core.logger import get_logger
-from atria_core.types._base._data_model import BaseDataModel
-from atria_core.types._pydantic import (
-    OptIntField,
-    OptStrField,
-    ValidatedPILImage,
-)
-
-if TYPE_CHECKING:
-    from ._ops._image_ops import ImageOps
-
-logger = get_logger(__name__)
+import numpy as np
+from PIL import Image as PILImage
+from PIL.Image import Resampling
 
 
-class Image(BaseDataModel):
-    """
-    Clean image data class.
-    Operations accessed via: image.ops
-    """
+class Image:
+    def __init__(self, source: str | Path | PILImage.Image) -> None:
+        if isinstance(source, PILImage.Image):
+            self.file_path = None
+            self.content = source
+        else:
+            self.file_path = str(source)
+            self.content = None
 
-    file_path: OptStrField = None
-    content: ValidatedPILImage = None
+    def load(self):
+        if self.content is None:
+            from atria_core.types._utilities._image_encoding import _bytes_to_image
+            from atria_core.types._utilities._url_fetchers import _load_bytes_from_uri
 
-    source_width: OptIntField = None
-    source_height: OptIntField = None
-
-    # -------------------------------------
-    # Bound service object
-    # -------------------------------------
-    @property
-    def ops(self) -> ImageOps:
-        from ._ops._image_ops import ImageOps
-
-        return ImageOps(self)
+            self.content = _bytes_to_image(_load_bytes_from_uri(self.file_path))
 
     # -------------------------------------
     # Basic attributes
     # -------------------------------------
     @property
     def size(self) -> tuple[int, int]:
-        assert self.content is not None, "Image content is not loaded."
         return self.content.size
 
     @property
@@ -59,7 +40,6 @@ class Image(BaseDataModel):
 
     @property
     def channels(self) -> int:
-        assert self.content is not None
         return len(self.content.getbands())
 
     @property
@@ -67,53 +47,49 @@ class Image(BaseDataModel):
         return (self.channels, *self.size)
 
     # -------------------------------------
-    # Validators
+    # Ops
     # -------------------------------------
-    @field_validator("file_path", mode="before")
-    @classmethod
-    def _validate_file_path(cls, value: Any) -> str | None:
-        if isinstance(value, Path):
-            return str(value)
-        return value
+    def to_numpy(self) -> np.ndarray:
+        return np.array(self.content)
+
+    def to_rgb(self) -> Image:
+        return Image(self.content.convert("RGB"))
+
+    def to_grayscale(self) -> Image:
+        return Image(self.content.convert("L"))
+
+    def resize(
+        self, width: int, height: int, resample: Resampling = Resampling.BICUBIC
+    ) -> Image:
+        return Image(self.content.resize((width, height), resample))
+
+    def resize_with_aspect_ratio(
+        self, max_size: int, resample: Resampling = Resampling.BICUBIC
+    ) -> Image:
+        assert max_size > 0, "max_size must be > 0"
+
+        if max(self.width, self.height) <= max_size:
+            return self
+
+        if self.width >= self.height:
+            new_w = max_size
+            new_h = int(self.height * (max_size / self.width))
+        else:
+            new_h = max_size
+            new_w = int(self.width * (max_size / self.height))
+
+        return self.resize(new_w, new_h, resample)
 
     # -------------------------------------
-    # Load operation
+    # Dunder helpers
     # -------------------------------------
-    def load(self) -> Image:
-        """
-        Load image bytes from local path or URI.
-        """
-        if self.content is None:
-            from atria_core.types._utilities._image_encoding import _bytes_to_image
-            from atria_core.types._utilities._url_fetchers import _load_bytes_from_uri
+    def __repr__(self) -> str:
+        return (
+            f"Image(file_path={self.file_path!r}, width={self.width}, "
+            f"height={self.height}, channels={self.channels})"
+        )
 
-            if self.file_path is None:
-                raise ValueError("file_path must be set before loading")
-
-            img = _bytes_to_image(_load_bytes_from_uri(self.file_path))
-
-            return self.model_copy(
-                update={
-                    "content": img,
-                    "source_width": img.width,
-                    "source_height": img.height,
-                }
-            )
-        elif self.source_width is None or self.source_height is None:
-            return self.model_copy(
-                update={
-                    "source_width": self.content.width,
-                    "source_height": self.content.height,
-                }
-            )
-        return self
-
-    # -------------------------------------
-    # Rich repr
-    # -------------------------------------
-    def __rich_repr__(self) -> RichReprResult:
-        yield from super().__rich_repr__()
-        if self.content is not None:
-            yield "width", self.width
-            yield "height", self.height
-            yield "channels", self.channels
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Image):
+            return NotImplemented
+        return self.file_path == other.file_path and self.content == other.content

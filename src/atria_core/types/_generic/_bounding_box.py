@@ -1,78 +1,23 @@
 from __future__ import annotations
 
 import enum
-from typing import TYPE_CHECKING, Annotated, Any
-
-from pydantic import field_validator, model_validator
-
-from atria_core.logger import get_logger
-from atria_core.types._base._data_model import BaseDataModel
-from atria_core.types._pydantic import (
-    ListFloatField,
-    TableSchemaMetadata,
-)
-
-if TYPE_CHECKING:
-    from atria_core.types._generic._ops._bbox_ops import BoundingBoxOps
-
-logger = get_logger(__name__)
 
 
 class BoundingBoxMode(str, enum.Enum):
-    XYXY = "xyxy"  # (x1, y1, x2, y2)
-    XYWH = "xywh"  # (x1, y1, width, height)
+    XYXY = "xyxy"
+    XYWH = "xywh"
 
 
-class BoundingBox(BaseDataModel):
-    value: ListFloatField
-    mode: Annotated[BoundingBoxMode, TableSchemaMetadata(pa_type="string")] = (
-        BoundingBoxMode.XYXY
-    )
-    normalized: bool = False
-
-    @field_validator("mode", mode="before")
-    @classmethod
-    def validate_mode(cls, value: Any) -> BoundingBoxMode:
-        if isinstance(value, str):
-            return BoundingBoxMode(value)
-        return value
-
-    @field_validator("value", mode="after")
-    @classmethod
-    def validate_value(cls, value: Any) -> list[float]:
-        assert len(value) == 4, "Expected a 1D list of shape (4,) for bounding boxes."
-        return value
-
-    @model_validator(mode="after")
-    def check_value_mode_consistency(self) -> BoundingBox:
-        if self.mode == BoundingBoxMode.XYXY:
-            x1, y1, x2, y2 = self.value
-            assert x2 >= x1, "In XYXY mode, x2 must be greater than or equal to x1."
-            assert y2 >= y1, "In XYXY mode, y2 must be greater than or equal to y1."
-        elif self.mode == BoundingBoxMode.XYWH:
-            x1, y1, width, height = self.value
-            assert width >= 0, "In XYWH mode, width must be non-negative."
-            assert height >= 0, "In XYWH mode, height must be non-negative."
-        return self
-
-    @model_validator(mode="after")
-    def validate_normalized(self) -> BoundingBox:
-        if self.normalized:
-            for coord in self.value:
-                assert 0.0 <= coord <= 1.0, (
-                    "All bounding box coordinates must be in the range [0, 1] "
-                    f"when 'normalized' is True. Found {self.value=}"
-                )
-        return self
-
-    # -------------------------------------
-    # Bound service object
-    # -------------------------------------
-    @property
-    def ops(self) -> BoundingBoxOps:
-        from atria_core.types._generic._ops._bbox_ops import BoundingBoxOps
-
-        return BoundingBoxOps(self)
+class BoundingBox:
+    def __init__(
+        self,
+        value: list[float],
+        mode: BoundingBoxMode = BoundingBoxMode.XYXY,
+        normalized: bool = False,
+    ) -> None:
+        self.value = list(value)
+        self.mode = BoundingBoxMode(mode) if isinstance(mode, str) else mode
+        self.normalized = normalized
 
     # -------------------------------------
     # Basic attributes
@@ -91,28 +36,102 @@ class BoundingBox(BaseDataModel):
 
     @property
     def x2(self) -> float:
-        if self.mode == BoundingBoxMode.XYWH:
-            return self.x1 + self.width
-        else:
-            return self.value[2]
+        return (
+            self.x1 + self.width if self.mode == BoundingBoxMode.XYWH else self.value[2]
+        )
 
     @property
     def y2(self) -> float:
-        if self.mode == BoundingBoxMode.XYWH:
-            return self.y1 + self.height
-        else:
-            return self.value[3]
+        return (
+            self.y1 + self.height
+            if self.mode == BoundingBoxMode.XYWH
+            else self.value[3]
+        )
 
     @property
     def width(self) -> float:
-        if self.mode == BoundingBoxMode.XYWH:
-            return self.value[2]
-        else:
-            return self.x2 - self.x1
+        return self.value[2] if self.mode == BoundingBoxMode.XYWH else self.x2 - self.x1
 
     @property
     def height(self) -> float:
+        return self.value[3] if self.mode == BoundingBoxMode.XYWH else self.y2 - self.y1
+
+    # -------------------------------------
+    # Ops (formerly BoundingBoxOps)
+    # -------------------------------------
+    def switch_mode(self) -> BoundingBox:
+        """Switches the bounding box mode between XYXY and XYWH."""
+        if self.mode == BoundingBoxMode.XYXY:
+            return BoundingBox(
+                [self.x1, self.y1, self.width, self.height],
+                BoundingBoxMode.XYWH,
+                self.normalized,
+            )
+        return BoundingBox(
+            [self.x1, self.y1, self.x2, self.y2], BoundingBoxMode.XYXY, self.normalized
+        )
+
+    def normalize(self, width: float, height: float) -> BoundingBox:
+        """Normalizes coordinates to [0, 1]."""
+
+        def clip(v: float) -> float:
+            return min(max(v, 0.0), 1.0)
+
         if self.mode == BoundingBoxMode.XYWH:
-            return self.value[3]
+            value = [
+                clip(self.x1 / width),
+                clip(self.y1 / height),
+                clip(self.width / width),
+                clip(self.height / height),
+            ]
         else:
-            return self.y2 - self.y1
+            value = [
+                clip(self.x1 / width),
+                clip(self.y1 / height),
+                clip(self.x2 / width),
+                clip(self.y2 / height),
+            ]
+        return BoundingBox(value, self.mode, normalized=True)
+
+    def unnormalize(self, width: float, height: float) -> BoundingBox:
+        """Unnormalizes coordinates to absolute pixel values."""
+        if not self.normalized:
+            return self
+
+        if self.mode == BoundingBoxMode.XYWH:
+            value = [
+                self.x1 * width,
+                self.y1 * height,
+                self.width * width,
+                self.height * height,
+            ]
+        else:
+            value = [
+                self.x1 * width,
+                self.y1 * height,
+                self.x2 * width,
+                self.y2 * height,
+            ]
+        return BoundingBox(value, self.mode, normalized=False)
+
+    # -------------------------------------
+    # Dunder helpers
+    # -------------------------------------
+    def copy(self, **updates) -> BoundingBox:
+        return BoundingBox(
+            value=updates.get("value", list(self.value)),
+            mode=updates.get("mode", self.mode),
+            normalized=updates.get("normalized", self.normalized),
+        )
+
+    def __repr__(self) -> str:
+        return f"BoundingBox(value={self.value}, mode={self.mode.value}, normalized={self.normalized})"
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, BoundingBox):
+            return NotImplemented
+        return (
+            self.value == other.value
+            and self.mode == other.mode
+            and self.normalized == other.normalized
+        )
