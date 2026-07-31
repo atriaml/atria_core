@@ -17,6 +17,12 @@ with support for colored logs, distributed environments, and file logging.
 - Environment variable support for default log level and process rank.
 - Propagation-friendly module-level loggers.
 
+### `atria_core.types`
+
+Structured, immutable pydantic data models for document/OCR datasets
+(images, PDFs, bounding boxes, annotations, OCR results, document and image
+instances) along with a small OCR engine abstraction (Tesseract included).
+
 ---
 
 ## Installation

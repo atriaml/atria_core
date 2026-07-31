@@ -5,16 +5,34 @@ build-backend = "hatchling.build"
 [project]
 name = "atria_core"
 version = "0.1.8"
-description = "Core utilities for Atria projects, including a lightweight and flexible logging submodule."
+description = "Core utilities for Atria projects, including a lightweight and flexible logging submodule and structured data types for document/OCR processing."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE.txt" }
 authors = [{ name = "Saifullah", email = "saifullah.saifullah@dfki.de" }]
 dependencies = [
+    # core
     "coloredlogs>=15.0.1",
     "lazy_loader>=0.4",
     "pyfiglet>=1.0.4",
     "rich>=14.0.0",
+    # types
+    "numpy>=1.26.4",
+    "omegaconf>=2.3.0",
+    "Pillow>=11.0.0",
+    "beautifulsoup4>=4.12.2",
+    "imagesize>=1.4.1",
+    "pyarrow>=20.0.0",
+    "pydantic>=2.11.7",
+    "codename>=1.1",
+    "lxml>=6.0.0",
+    "pypdf2>=3.0.1",
+    "pymupdf>=1.26.3",
+    "pdf2image>=1.17.0",
+    "requests>=2.32.5",
+    "factory-boy>=3.3.3",
+    "pdfplumber>=0.11.8",
+    "pytesseract>=0.3.13",
 ]
 
 [project.optional-dependencies]
@@ -38,7 +56,7 @@ ignore = [
 docstring-code-format = true
 
 [tool.pytest.ini_options]
-pythonpath = ["./src"]
+pythonpath = ["./src", "."]
 addopts = "-rXs --strict-config --strict-markers --tb=short --import-mode=importlib"
 
 [project.urls]
