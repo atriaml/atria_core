@@ -2,8 +2,14 @@ from __future__ import annotations
 
 import enum
 import json
+from dataclasses import dataclass, replace
+from typing import Any, cast
 
+import numpy as np
+
+from atria_core.types._base_data_model import BaseDataModel
 from atria_core.types._generic._annotated_object import AnnotatedObject
+from atria_core.types._generic._bounding_box import BoundingBoxMode
 from atria_core.types._generic._qa_pair import QAPair
 
 
@@ -15,173 +21,170 @@ class AnnotationType(str, enum.Enum):
     layout_analysis = "layout_analysis"
 
 
-# index = label value, value = label name
-LabelMap = list[str]  # ["cat", "dog", ...]
-
-
-class ClassificationAnnotation:
+@dataclass(repr=False)
+class ClassificationAnnotation(BaseDataModel):
     type = AnnotationType.classification.value
 
-    def __init__(self, label: int, label_map: LabelMap) -> None:
-        self.label = label
-        self.label_map = label_map
+    label: int
+    label_map: list[str]
+
+    def __post_init__(self) -> None:
+        if self.label < 0 or self.label >= len(self.label_map):
+            raise ValueError(
+                f"Invalid label index {self.label}. "
+                f"Label map contains only {len(self.label_map)} labels."
+            )
 
     @property
     def label_name(self) -> str:
         return self.label_map[self.label]
 
-    def __repr__(self) -> str:
-        return f"ClassificationAnnotation(label={self.label}, label_name={self.label_name!r})"
+    def to_dict(self) -> dict[str, Any]:
+        return {"type": self.type, "label": self.label, "label_map": self.label_map}
 
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, ClassificationAnnotation):
-            return NotImplemented
-        return self.label == other.label and self.label_map == other.label_map
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> ClassificationAnnotation:
+        return cls(label=data["label"], label_map=data["label_map"])
 
 
-class EntityLabelingAnnotation:
+@dataclass(repr=False)
+class EntityLabelingAnnotation(BaseDataModel):
     type = AnnotationType.entity_labeling.value
 
-    def __init__(self, word_labels: list[int] | str, label_map: LabelMap) -> None:
-        self.word_labels = self._parse_word_labels(word_labels)
-        self.label_map = label_map
+    word_labels: list[int]
+    label_map: list[str]
 
-    @staticmethod
-    def _parse_word_labels(value: list[int] | str) -> list[int]:
-        if isinstance(value, str):
-            try:
-                value = json.loads(value)
-            except json.JSONDecodeError:
-                raise ValueError(f"Invalid JSON string: {value}") from None
-        return list(value)
+    def __post_init__(self) -> None:
+        if self.word_labels:
+            max_label = max(self.word_labels)
+            if max_label >= len(self.label_map):
+                raise ValueError(
+                    f"Invalid word label index {max_label}. "
+                    f"Label map contains only {len(self.label_map)} labels."
+                )
 
     @property
     def label_names(self) -> list[str]:
-        return [self.label_map[l] for l in self.word_labels]
+        return [self.label_map[label] for label in self.word_labels]
 
     def serialize_word_labels(self) -> str:
         return json.dumps(self.word_labels)
 
-    def __repr__(self) -> str:
-        return f"EntityLabelingAnnotation(word_labels={self.word_labels!r}, label_names={self.label_names!r})"
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "type": self.type,
+            "word_labels": self.word_labels,
+            "label_map": self.label_map,
+        }
 
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, EntityLabelingAnnotation):
-            return NotImplemented
-        return (
-            self.word_labels == other.word_labels and self.label_map == other.label_map
-        )
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> EntityLabelingAnnotation:
+        return cls(word_labels=list(data["word_labels"]), label_map=data["label_map"])
 
 
-class QuestionAnsweringAnnotation:
+@dataclass(repr=False)
+class QuestionAnsweringAnnotation(BaseDataModel):
     type = AnnotationType.question_answering.value
 
-    def __init__(self, qa_pairs: list[QAPair] | str) -> None:
-        self.qa_pairs = self._parse_qa_pairs(qa_pairs)
-
-    @staticmethod
-    def _parse_qa_pairs(value: list[QAPair] | str) -> list[QAPair]:
-        if isinstance(value, str):
-            try:
-                value = json.loads(value)
-            except json.JSONDecodeError:
-                raise ValueError(f"Invalid JSON string: {value}") from None
-        return [QAPair(**item) if isinstance(item, dict) else item for item in value]
+    qa_pairs: list[QAPair]
 
     def serialize_qa_pairs(self) -> str:
-        return json.dumps(
-            [
-                {
-                    "id": q.id,
-                    "question_text": q.question_text,
-                    "answer_spans": q.serialize_answer_spans(),
-                }
-                for q in self.qa_pairs
-            ]
-        )
+        return json.dumps([q.to_dict() for q in self.qa_pairs])
 
-    def __repr__(self) -> str:
-        return f"QuestionAnsweringAnnotation(qa_pairs={self.qa_pairs!r})"
+    def to_dict(self) -> dict[str, Any]:
+        return {"type": self.type, "qa_pairs": [q.to_dict() for q in self.qa_pairs]}
 
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, QuestionAnsweringAnnotation):
-            return NotImplemented
-        return self.qa_pairs == other.qa_pairs
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> QuestionAnsweringAnnotation:
+        return cls(qa_pairs=[QAPair.from_dict(q) for q in data["qa_pairs"]])
 
 
-class ObjectDetectionAnnotation:
+@dataclass(repr=False)
+class ObjectDetectionAnnotation(BaseDataModel):
     type = AnnotationType.object_detection.value
 
-    def __init__(
-        self,
-        label_map: LabelMap,
-        annotated_objects: list[AnnotatedObject] | str | None = None,
-    ) -> None:
-        self.label_map = label_map
-        self.annotated_objects = self._parse_annotated_objects(annotated_objects)
+    label_map: list[str]
+    annotated_objects: list[AnnotatedObject] | None = None
+    bbox_mode: BoundingBoxMode = BoundingBoxMode.XYXY
+    normalized: bool = False
 
-    @staticmethod
-    def _parse_annotated_objects(
-        value: list[AnnotatedObject] | str | None,
-    ) -> list[AnnotatedObject] | None:
-        if value is None:
-            return None
-        if isinstance(value, str):
-            try:
-                value = json.loads(value)
-            except json.JSONDecodeError:
-                raise ValueError(f"Invalid JSON string: {value}") from None
-        return [
-            AnnotatedObject(**item) if isinstance(item, dict) else item
-            for item in value
-        ]
+    def __post_init__(self) -> None:
+        if self.annotated_objects is not None:
+            for obj in self.annotated_objects:
+                if obj.label < 0 or obj.label >= len(self.label_map):
+                    raise ValueError(
+                        f"Invalid object label index {obj.label}. "
+                        f"Label map contains only {len(self.label_map)} labels."
+                    )
 
     def serialize_annotated_objects(self) -> str | None:
         if self.annotated_objects is None:
             return None
-        return json.dumps(
-            [
-                {
-                    "label": o.label,
-                    "bbox": {
-                        "value": o.bbox.value,
-                        "mode": o.bbox.mode.value,
-                        "normalized": o.bbox.normalized,
-                    },
-                    "segmentation": o.segmentation,
-                    "iscrowd": o.iscrowd,
-                }
-                for o in self.annotated_objects
-            ]
+        return json.dumps([o.to_dict() for o in self.annotated_objects])
+
+    # -------------------------------------
+    # Generic batch-transform protocol (see _transforms/_bounding_box.py)
+    # -------------------------------------
+    def box_batches(self) -> dict[str, tuple[np.ndarray, list[int]] | None]:
+        if not self.annotated_objects:
+            return {"bbox": None}
+        indices = list(range(len(self.annotated_objects)))
+        return {
+            "bbox": (
+                np.stack([obj.bbox for obj in self.annotated_objects]),
+                indices,
+            )
+        }
+
+    def with_box_batches(
+        self,
+        batches: dict[str, tuple[np.ndarray, list[int]]],
+        *,
+        normalized: bool,
+        mode: BoundingBoxMode,
+    ) -> ObjectDetectionAnnotation:
+        if self.annotated_objects is None or "bbox" not in batches:
+            return replace(self, normalized=normalized, bbox_mode=mode)
+
+        new_values, indices = batches["bbox"]
+        annotated_objects = list(self.annotated_objects)
+        for row, i in zip(new_values, indices, strict=True):
+            annotated_objects[i] = replace(annotated_objects[i], bbox=row)
+
+        return replace(
+            self,
+            annotated_objects=annotated_objects,
+            normalized=normalized,
+            bbox_mode=mode,
         )
 
-    def __repr__(self) -> str:
-        return (
-            f"ObjectDetectionAnnotation(annotated_objects={self.annotated_objects!r})"
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "type": self.type,
+            "label_map": self.label_map,
+            "annotated_objects": [o.to_dict() for o in self.annotated_objects]
+            if self.annotated_objects is not None
+            else None,
+            "bbox_mode": self.bbox_mode.value,
+            "normalized": self.normalized,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> ObjectDetectionAnnotation:
+        annotated_objects = data.get("annotated_objects")
+        return cls(
+            label_map=data["label_map"],
+            annotated_objects=[AnnotatedObject.from_dict(o) for o in annotated_objects]
+            if annotated_objects is not None
+            else None,
+            bbox_mode=BoundingBoxMode(data.get("bbox_mode", BoundingBoxMode.XYXY.value)),
+            normalized=data.get("normalized", False),
         )
 
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, ObjectDetectionAnnotation):
-            return NotImplemented
-        return (
-            self.annotated_objects == other.annotated_objects
-            and self.label_map == other.label_map
-        )
 
-
+@dataclass(repr=False)
 class LayoutAnalysisAnnotation(ObjectDetectionAnnotation):
     type = AnnotationType.layout_analysis.value
-
-    def __repr__(self) -> str:
-        return f"LayoutAnalysisAnnotation(annotated_objects={self.annotated_objects!r})"
-
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, LayoutAnalysisAnnotation):
-            return NotImplemented
-        return (
-            self.annotated_objects == other.annotated_objects
-            and self.label_map == other.label_map
-        )
 
 
 Annotation = (
@@ -193,8 +196,8 @@ Annotation = (
 )
 
 
-def annotation_from_dict(data: dict) -> Annotation:
-    _map = {
+def annotation_from_dict(data: dict[str, Any]) -> Annotation:
+    _map: dict[str, type[BaseDataModel]] = {
         AnnotationType.classification.value: ClassificationAnnotation,
         AnnotationType.entity_labeling.value: EntityLabelingAnnotation,
         AnnotationType.question_answering.value: QuestionAnsweringAnnotation,
@@ -202,7 +205,9 @@ def annotation_from_dict(data: dict) -> Annotation:
         AnnotationType.layout_analysis.value: LayoutAnalysisAnnotation,
     }
     annotation_type = data.get("type")
-    cls = _map.get(annotation_type)
+    cls = _map.get(annotation_type) if annotation_type is not None else None
     if cls is None:
         raise ValueError(f"Unknown annotation type: {annotation_type!r}")
-    return cls(**{k: v for k, v in data.items() if k != "type"})
+    return cast(
+        "Annotation", cls.from_dict({k: v for k, v in data.items() if k != "type"})
+    )

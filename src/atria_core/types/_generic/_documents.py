@@ -1,32 +1,37 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
+from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 from PIL import Image as PILImage
 
-from atria_core.types._extractors._base import ContentExtractor, ContentExtractorConfig
+from atria_core.types._base_data_model import BaseDataModel
 from atria_core.types._generic._doc_content import DocumentContent
 from atria_core.types._utilities._url_fetchers import (
     LocalResourceLoader,
     ResourceLoader,
 )
 
+if TYPE_CHECKING:
+    from atria_core.types._extractors._base import (
+        ContentExtractor,
+        ContentExtractorConfig,
+    )
 
-class MultiPageDocument:
+
+@dataclass(repr=False)
+class MultiPageDocument(BaseDataModel):
     """Multi-page document backed by a source path (local or remote URI).
     Holds no bytes, no open file/native handles as instance state — trivially
     picklable and safe to pass across process boundaries (e.g. torch
     DataLoader workers). Bytes are fetched and a pdfium handle opened fresh,
     on demand, each time a page is actually rendered."""
 
-    def __init__(
-        self,
-        source_path: str,
-        dpi: int = 200,
-    ) -> None:
-        self.source_path = source_path
-        self.dpi = dpi
+    source_path: str
+    dpi: int = 200
 
     @classmethod
     def from_pdf(
@@ -69,39 +74,31 @@ class MultiPageDocument:
             pdf.close()
 
         return SinglePageDocument(
-            sample_id=f"{self.sample_id}_page_{page_number}",
             image=image,
             source_path=self.source_path,
             page_id=page_number,
         )
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[SinglePageDocument]:
         for i in range(self.num_pages):
             yield self.get_page(i)
 
-    def __repr__(self) -> str:
-        return f"MultiPageDocument(sample_id={self.sample_id!r}, source={self.source_path!r})"
+    def to_dict(self) -> dict[str, Any]:
+        return {"source_path": self.source_path, "dpi": self.dpi}
 
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, MultiPageDocument):
-            return NotImplemented
-        return super().__eq__(other) and self.source_path == other.source_path
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> MultiPageDocument:
+        return cls(source_path=data["source_path"], dpi=data.get("dpi", 200))
 
 
-class SinglePageDocument:
+@dataclass(repr=False)
+class SinglePageDocument(BaseDataModel):
     """Plain data container for a single page document."""
 
-    def __init__(
-        self,
-        image: PILImage.Image,
-        source_path: str | None = None,
-        page_id: int | None = None,
-        content: DocumentContent | None = None,
-    ) -> None:
-        self.image = image
-        self.source_path = source_path
-        self.page_id = page_id
-        self.content = content
+    image: PILImage.Image
+    source_path: str | None = None
+    page_id: int | None = None
+    content: DocumentContent | None = None
 
     @classmethod
     def from_image(
@@ -135,29 +132,30 @@ class SinglePageDocument:
         self, extractor: ContentExtractor | ContentExtractorConfig
     ) -> SinglePageDocument:
         """Runs an extractor over this page and returns a new document with content attached."""
+        from atria_core.types._extractors._base import ContentExtractorConfig
+
         if isinstance(extractor, ContentExtractorConfig):
             extractor = extractor.build()
 
-        return SinglePageDocument(
-            image=self.image,
-            source_path=self.source_path,
-            page_id=self.page_id,
-            content=extractor(self.image),
-        )
+        return extractor(self)
 
-    def __repr__(self) -> str:
-        return (
-            f"SinglePageDocument(source={self.source_path!r}, "
-            f"page_id={self.page_id}, image={self.image.size}, content={self.content is not None})"
-        )
+    def to_dict(self) -> dict[str, Any]:
+        if self.source_path is None:
+            raise ValueError(
+                "SinglePageDocument must have a source_path before to_dict() "
+                "-- materialize in-memory content to a file first (see ArtifactStore)."
+            )
+        return {
+            "source_path": self.source_path,
+            "page_id": self.page_id,
+            "content": self.content.to_dict() if self.content is not None else None,
+        }
 
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, SinglePageDocument):
-            return NotImplemented
-        return (
-            super().__eq__(other)
-            and self.image == other.image
-            and self.source_path == other.source_path
-            and self.page_id == other.page_id
-            and self.content == other.content
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> SinglePageDocument:
+        content = data.get("content")
+        return cls.from_image(
+            source=data["source_path"],
+            page_id=data.get("page_id"),
+            content=DocumentContent.from_dict(content) if content is not None else None,
         )

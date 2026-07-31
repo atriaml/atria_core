@@ -8,8 +8,8 @@ from PIL.Image import Image as PILImage
 
 from atria_core.logger import get_logger
 from atria_core.types._extractors._base import ContentExtractor, ContentExtractorConfig
-from atria_core.types._generic._bounding_box import BoundingBox, BoundingBoxMode
 from atria_core.types._generic._doc_content import DocumentContent, TextElement
+from atria_core.types._transforms._bounding_box import BoundingBoxTransformer
 
 logger = get_logger(__name__)
 
@@ -42,7 +42,7 @@ class TesseractExtractor(ContentExtractor):
     def __init__(self, config: TesseractExtractorConfig):
         self.config = config
 
-    def __call__(self, image: PILImage) -> DocumentContent:
+    def _extract(self, image: PILImage) -> DocumentContent:
         preprocessed = self._preprocess_image(image)
         data = self._get_tesseract_data(preprocessed)
 
@@ -58,13 +58,10 @@ class TesseractExtractor(ContentExtractor):
         for word_info in word_infos:
             segment_words = segments_dict[word_info["segment_id"]]
             segment_bbox = self._calculate_line_bbox(segment_words)
-            text_elements.append(
-                self._create_text_element(
-                    word_info, segment_bbox, image.width, image.height
-                )
-            )
+            text_elements.append(self._create_text_element(word_info, segment_bbox))
 
-        return DocumentContent(text_elements=text_elements)
+        content = DocumentContent(text_elements=text_elements)
+        return BoundingBoxTransformer.normalize(content, image.width, image.height)
 
     def _build_config_string(self) -> str:
         parts = []
@@ -121,21 +118,13 @@ class TesseractExtractor(ContentExtractor):
         )
 
     def _create_text_element(
-        self,
-        word_info: dict[str, Any],
-        segment_bbox: tuple,
-        image_width: int,
-        image_height: int,
+        self, word_info: dict[str, Any], segment_bbox: tuple
     ) -> TextElement:
         return TextElement(
             text=word_info["text"],
-            bbox=BoundingBox(
-                value=list(word_info["bbox"]), mode=BoundingBoxMode.XYXY
-            ).normalize(image_width, image_height),
+            bbox=np.asarray(word_info["bbox"], dtype=np.float64),
             conf=word_info["conf"],
-            segment_bbox=BoundingBox(
-                value=list(segment_bbox), mode=BoundingBoxMode.XYXY
-            ).normalize(image_width, image_height),
+            segment_bbox=np.asarray(segment_bbox, dtype=np.float64),
         )
 
     def _preprocess_image(self, image: PILImage) -> np.ndarray:

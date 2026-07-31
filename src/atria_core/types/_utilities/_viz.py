@@ -7,7 +7,7 @@ from PIL import Image as PILImage
 from PIL import ImageDraw, ImageFont
 
 if TYPE_CHECKING:
-    from atria_core.types._generic._bounding_box import BoundingBox
+    import numpy as np
 
 # Color palette for bounding boxes
 _COLOR_PALETTE = [
@@ -112,14 +112,14 @@ def _get_bbox_color(
 
 def _draw_bbox_rectangle(
     draw: ImageDraw.ImageDraw,
-    bbox: BoundingBox,
+    bbox: np.ndarray,
     color: tuple[int, int, int],
 ) -> bool:
     """Draw a bounding box rectangle.
 
     Args:
         draw: ImageDraw object.
-        bbox: BoundingBox to draw.
+        bbox: bounding box coordinates to draw.
         color: RGB color tuple.
 
     Returns:
@@ -128,7 +128,7 @@ def _draw_bbox_rectangle(
     try:
         # Add alpha channel for the outline color
         outline_color = color + (255,)
-        draw.rectangle(bbox.value, outline=outline_color, width=_BBOX_WIDTH)
+        draw.rectangle(tuple(bbox.tolist()), outline=outline_color, width=_BBOX_WIDTH)
         return True
     except Exception as e:
         print(f"Error drawing bounding box {bbox}: {e}")
@@ -138,7 +138,7 @@ def _draw_bbox_rectangle(
 def _draw_text_label(
     draw: ImageDraw.ImageDraw,
     text: str,
-    bbox: BoundingBox,
+    bbox: np.ndarray,
     font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
 ) -> None:
     """Draw a text label above a bounding box with background.
@@ -146,15 +146,15 @@ def _draw_text_label(
     Args:
         draw: ImageDraw object.
         text: Text to draw.
-        bbox: BoundingBox to position the label relative to.
+        bbox: bounding box coordinates to position the label relative to.
         font: Font to use for the text.
     """
     # Calculate text dimensions
     text_width, text_height = _get_text_dimensions(draw, text, font)
 
     # Position text above the bounding box
-    text_x = bbox.value[0]
-    text_y = max(0, bbox.value[1] - text_height - _LABEL_OFFSET)
+    text_x = bbox[0]
+    text_y = max(0, bbox[1] - text_height - _LABEL_OFFSET)
 
     # Draw semi-transparent background behind text
     background_bbox = [
@@ -172,7 +172,7 @@ def _draw_text_label(
 
 def _draw_bboxes_on_image(
     image: PILImage.Image,
-    bboxes: list[BoundingBox],
+    bboxes: list[np.ndarray],
     bboxes_text: list[str] | None = None,
     bbox_labels: list[str] | None = None,
 ) -> PILImage.Image:
@@ -180,7 +180,7 @@ def _draw_bboxes_on_image(
 
     Args:
         image: Input Image object to draw on.
-        bboxes: List of BoundingBox objects to draw.
+        bboxes: List of bounding box coordinates to draw.
         bbox_labels: Optional list of label strings for each bounding box.
 
     Returns:

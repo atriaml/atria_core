@@ -1,30 +1,33 @@
 from __future__ import annotations
 
-from atria_core.types._data_instance._base import (
-    BaseDataInstance,
-)
-from atria_core.types._generic._annotations import Annotation
+from dataclasses import dataclass
+from typing import Any
+
+from atria_core.types._data_instance._base import BaseDataInstance
 from atria_core.types._generic._documents import MultiPageDocument, SinglePageDocument
 
 
+@dataclass(repr=False)
 class DocumentInstance(BaseDataInstance):
-    def __init__(
-        self,
-        sample_id: str,
-        document: SinglePageDocument | MultiPageDocument,
-        annotations: list[Annotation] | None = None,
-    ) -> None:
-        super().__init__(sample_id=sample_id, annotations=annotations)
-        self.document = document
+    document: SinglePageDocument | MultiPageDocument
 
-    def __repr__(self) -> str:
-        n = len(self.annotations) if self.annotations else 0
-        return (
-            f"ImageInstance(sample_id={self.sample_id!r}, "
-            f"document={self.document!r}, annotations={n})"
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "sample_id": self.sample_id,
+            "document_type": "multi_page"
+            if isinstance(self.document, MultiPageDocument)
+            else "single_page",
+            "document": self.document.to_dict(),
+            "annotations": self._annotations_to_dict(),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> DocumentInstance:
+        document_cls = (
+            MultiPageDocument if data["document_type"] == "multi_page" else SinglePageDocument
         )
-
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, SinglePageDocument | MultiPageDocument):
-            return NotImplemented
-        return super().__eq__(other) and self.document == other.document
+        return cls(
+            sample_id=data["sample_id"],
+            document=document_cls.from_dict(data["document"]),
+            annotations=cls._annotations_from_dict(data.get("annotations")),
+        )

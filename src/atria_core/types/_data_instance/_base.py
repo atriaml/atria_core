@@ -1,7 +1,9 @@
 from __future__ import annotations
 
-from typing import Literal, overload
+from dataclasses import dataclass, field
+from typing import Any, Literal, overload
 
+from atria_core.types._base_data_model import BaseDataModel
 from atria_core.types._generic._annotations import (
     Annotation,
     AnnotationType,
@@ -10,6 +12,7 @@ from atria_core.types._generic._annotations import (
     LayoutAnalysisAnnotation,
     ObjectDetectionAnnotation,
     QuestionAnsweringAnnotation,
+    annotation_from_dict,
 )
 
 
@@ -19,14 +22,10 @@ class AnnotationNotFoundError(Exception):
     pass
 
 
-class BaseDataInstance:
-    def __init__(
-        self,
-        sample_id: str,
-        annotations: list[Annotation] | None = None,
-    ) -> None:
-        self.sample_id = sample_id
-        self.annotations = annotations
+@dataclass(repr=False)
+class BaseDataInstance(BaseDataModel):
+    sample_id: str
+    annotations: list[Annotation] | None = field(default=None, kw_only=True)
 
     @property
     def key(self) -> str:
@@ -73,17 +72,17 @@ class BaseDataInstance:
         )
 
     # -------------------------------------
-    # Dunder helpers
+    # Shared (de)serialization helpers for subclasses
     # -------------------------------------
-    def __repr__(self) -> str:
-        n = len(self.annotations) if self.annotations else 0
-        return f"BaseDataInstance(sample_id={self.sample_id!r}, index={self.index}, annotations={n})"
+    def _annotations_to_dict(self) -> list[dict[str, Any]] | None:
+        if self.annotations is None:
+            return None
+        return [a.to_dict() for a in self.annotations]
 
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, BaseDataInstance):
-            return NotImplemented
-        return (
-            self.sample_id == other.sample_id
-            and self.index == other.index
-            and self.annotations == other.annotations
-        )
+    @staticmethod
+    def _annotations_from_dict(
+        data: list[dict[str, Any]] | None,
+    ) -> list[Annotation] | None:
+        if data is None:
+            return None
+        return [annotation_from_dict(a) for a in data]

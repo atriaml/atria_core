@@ -1,30 +1,27 @@
 from __future__ import annotations
 
-from atria_core.types._data_instance._base import (
-    BaseDataInstance,
-)
-from atria_core.types._generic._annotations import Annotation
+from dataclasses import dataclass
+from typing import Any
+
+from atria_core.types._data_instance._base import BaseDataInstance
 from atria_core.types._generic._image import Image
 
 
+@dataclass(repr=False)
 class ImageInstance(BaseDataInstance):
-    def __init__(
-        self,
-        sample_id: str,
-        image: Image,
-        annotations: list[Annotation] | None = None,
-    ) -> None:
-        super().__init__(sample_id=sample_id, annotations=annotations)
-        self.image = image
+    image: Image
 
-    def __repr__(self) -> str:
-        n = len(self.annotations) if self.annotations else 0
-        return (
-            f"ImageInstance(sample_id={self.sample_id!r}, "
-            f"image={self.image!r}, annotations={n})"
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "sample_id": self.sample_id,
+            "image": self.image.to_dict(),
+            "annotations": self._annotations_to_dict(),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> ImageInstance:
+        return cls(
+            sample_id=data["sample_id"],
+            image=Image.from_dict(data["image"]),
+            annotations=cls._annotations_from_dict(data.get("annotations")),
         )
-
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, ImageInstance):
-            return NotImplemented
-        return super().__eq__(other) and self.image == other.image

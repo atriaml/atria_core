@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     )
     from ._generic._doc_content import TextElement, DocumentContent
     from ._generic._annotated_object import AnnotatedObject
-    from ._generic._bounding_box import BoundingBox, BoundingBoxMode
+    from ._generic._bounding_box import BoundingBoxMode
     from ._generic._annotations import (
         Annotation,
         EntityLabelingAnnotation,
@@ -35,11 +35,8 @@ if TYPE_CHECKING:
         ObjectDetectionAnnotation,
         AnnotationType,
     )
-    from ._generic._pdf import PDF
     from ._generic._image import Image
-    from ._generic._label import Label
-    from ._generic._ocr import OCR
-    from ._generic._qa_pair import QAPair, AnswerSpan
+    from ._generic._qa_pair import QAPair
     from ._utilities._repr import RepresentationMixin
 
 __getattr__, __dir__, __all__ = lazy.attach(
@@ -52,7 +49,6 @@ __getattr__, __dir__, __all__ = lazy.attach(
             "ModelType",
             "OCRType",
             "TaskType",
-            "ExecutionStage",
         ],
         "_data_instance._base": ["BaseDataInstance"],
         "_data_instance._document_instance": ["DocumentInstance"],
@@ -66,7 +62,7 @@ __getattr__, __dir__, __all__ = lazy.attach(
         ],
         "_generic._doc_content": ["DocumentContent", "TextElement"],
         "_generic._annotated_object": ["AnnotatedObject"],
-        "_generic._bounding_box": ["BoundingBox", "BoundingBoxMode"],
+        "_generic._bounding_box": ["BoundingBoxMode"],
         "_generic._annotations": [
             "Annotation",
             "EntityLabelingAnnotation",
@@ -76,11 +72,8 @@ __getattr__, __dir__, __all__ = lazy.attach(
             "ObjectDetectionAnnotation",
             "AnnotationType",
         ],
-        "_generic._pdf": ["PDF"],
         "_generic._image": ["Image"],
-        "_generic._label": ["Label"],
-        "_generic._ocr": ["OCR"],
-        "_generic._qa_pair": ["QAPair", "AnswerSpan"],
+        "_generic._qa_pair": ["QAPair"],
         "_utilities._repr": ["RepresentationMixin"],
     },
 )

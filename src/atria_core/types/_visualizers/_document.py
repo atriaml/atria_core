@@ -7,6 +7,8 @@ from PIL.Image import Image as PILImage
 
 from atria_core.logger import get_logger
 from atria_core.types._generic._annotations import AnnotationType
+from atria_core.types._generic._documents import MultiPageDocument
+from atria_core.types._transforms._bounding_box import BoundingBoxTransformer
 from atria_core.types._utilities._viz import _draw_bboxes_on_image
 from atria_core.types._visualizers._base import Visualizer
 
@@ -17,7 +19,7 @@ logger = get_logger(__name__)
 
 class DocumentVisualizer(Visualizer):
     def __init__(self, instance: DocumentInstance) -> None:
-        self.instance = instance
+        self.instance: DocumentInstance = instance
 
     def _draw_on_image(
         self,
@@ -25,21 +27,22 @@ class DocumentVisualizer(Visualizer):
         draw_segment_bboxes: bool = False,
         draw_word_labels: bool = False,
     ) -> PILImage:
-        # Placeholder for drawing logic specific to the data instance type
-        if self.instance.content is None:
+        document = self.instance.document
+        if isinstance(document, MultiPageDocument):
+            raise TypeError(
+                "DocumentVisualizer requires a SinglePageDocument; got a MultiPageDocument."
+            )
+
+        content = document.content
+        if content is None:
             return image
 
+        content = BoundingBoxTransformer.unnormalize(content, image.width, image.height)
         bbox_list = (
-            self.instance.content.segment_bbox_list
-            if draw_segment_bboxes
-            else self.instance.content.bbox_list
+            content.segment_bbox_list if draw_segment_bboxes else content.bbox_list
         )
         if len(bbox_list) > 0:
-            bboxes = [
-                bbox.ops.unnormalize(width=image.width, height=image.height)
-                for bbox in bbox_list
-                if bbox is not None
-            ]
+            bboxes = [bbox for bbox in bbox_list if bbox is not None]
 
             bbox_labels = None
             if draw_word_labels:
@@ -47,7 +50,7 @@ class DocumentVisualizer(Visualizer):
                     ann = self.instance.get_annotation_by_type(
                         annotation_type=AnnotationType.entity_labeling
                     )
-                    bbox_labels = [label.name for label in ann.word_labels]
+                    bbox_labels = ann.label_names
                 except Exception:  # noqa: E722
                     pass
 
@@ -55,7 +58,7 @@ class DocumentVisualizer(Visualizer):
             image = _draw_bboxes_on_image(
                 image=image,
                 bboxes=bboxes,
-                bboxes_text=self.instance.content.text_list,
+                bboxes_text=content.text_list,
                 bbox_labels=bbox_labels,
             )
 

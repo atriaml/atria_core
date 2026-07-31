@@ -1,34 +1,41 @@
 from __future__ import annotations
 
-from atria_core.types._generic._bounding_box import BoundingBox
-from atria_core.types._generic._label import Label
+from dataclasses import dataclass
+from typing import Any
+
+import numpy as np
+
+from atria_core.types._base_data_model import BaseDataModel
+from atria_core.types._generic._bounding_box import as_bbox_array, as_segmentation_array
 
 
-class AnnotatedObject:
-    def __init__(
-        self,
-        label: Label,
-        bbox: BoundingBox,
-        segmentation: list[list[float]] | None = None,
-        iscrowd: bool = False,
-    ) -> None:
-        self.label = label
-        self.bbox = bbox
-        self.segmentation = segmentation
-        self.iscrowd = iscrowd
+@dataclass(repr=False, eq=False)
+class AnnotatedObject(BaseDataModel):
+    label: int
+    bbox: np.ndarray
+    segmentation: np.ndarray | None = None
+    iscrowd: bool = False
 
-    def __repr__(self) -> str:
-        return (
-            f"AnnotatedObject(label={self.label!r}, bbox={self.bbox!r}, "
-            f"segmentation={self.segmentation!r}, iscrowd={self.iscrowd})"
-        )
+    def __post_init__(self) -> None:
+        self.bbox = as_bbox_array(self.bbox)
+        if self.segmentation is not None:
+            self.segmentation = as_segmentation_array(self.segmentation)
 
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, AnnotatedObject):
-            return NotImplemented
-        return (
-            self.label == other.label
-            and self.bbox == other.bbox
-            and self.segmentation == other.segmentation
-            and self.iscrowd == other.iscrowd
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "label": self.label,
+            "bbox": self.bbox.tolist(),
+            "segmentation": self.segmentation.tolist()
+            if self.segmentation is not None
+            else None,
+            "iscrowd": self.iscrowd,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> AnnotatedObject:
+        return cls(
+            label=data["label"],
+            bbox=data["bbox"],
+            segmentation=data.get("segmentation"),
+            iscrowd=data.get("iscrowd", False),
         )
