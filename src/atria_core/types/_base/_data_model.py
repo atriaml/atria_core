@@ -20,16 +20,6 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-def _load_any(value):
-    if isinstance(value, BaseDataModel):
-        return value.load()
-    if isinstance(value, list):
-        return [_load_any(v) for v in value]
-    if isinstance(value, dict):
-        return {k: _load_any(v) for k, v in value.items()}
-    return value
-
-
 class BaseDataModel(  # type: ignore[misc]
     RepresentationMixin,
     BaseModel,
@@ -43,6 +33,12 @@ class BaseDataModel(  # type: ignore[misc]
         revalidate_instances="always",
     )
 
+    def load_objects(self) -> Self:
+        raise NotImplementedError(
+            "This function can be implemented by the children classes"
+            "to handle logic for lazily loading images/artifacts."
+        )
+
     # -------------------------------------
     # Bound service object
     # -------------------------------------
@@ -51,13 +47,6 @@ class BaseDataModel(  # type: ignore[misc]
         from atria_core.types._base._ops._base_ops import StandardOps
 
         return StandardOps(self)
-
-    def load(self) -> Self:
-        loaded_fields = {}
-        for name in self.__class__.model_fields:
-            loaded_fields[name] = _load_any(getattr(self, name))
-        new_instance = self.model_copy(update=loaded_fields)
-        return new_instance
 
     @classmethod
     def table_schema(cls) -> dict[str, Any]:

@@ -7,7 +7,7 @@ from pydantic import field_serializer, field_validator
 from atria_core.types._base._data_model import BaseDataModel
 from atria_core.types._common import OCRType
 from atria_core.types._pydantic import OptStrField, TableSchemaMetadata
-from atria_core.types._utilities._url_fetchers import _load_bytes_from_uri
+from atria_core.types._utilities._url_fetchers import ResourceLoader
 
 
 def _detect_encoding(content: bytes) -> str:
@@ -51,7 +51,7 @@ class OCR(BaseDataModel):
             if self.file_path is None:
                 raise ValueError("Either file_path or content must be provided.")
 
-            content = _load_bytes_from_uri(self.file_path)
+            content = ResourceLoader.for_uri(self.file_path).load_bytes()
             if content.startswith(b"b'"):
                 content = ast.literal_eval(content.decode("utf-8"))
             if isinstance(content, bytes):

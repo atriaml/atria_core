@@ -1,34 +1,20 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 import numpy as np
 from PIL.Image import Resampling
 
 from atria_core.logger import get_logger
 from atria_core.types._base._ops._base_ops import StandardOps
 from atria_core.types._generic._image import Image
+from atria_core.types._pydantic import ValidatedPILImage
 
 logger = get_logger(__name__)
 
-if TYPE_CHECKING:
-    pass
-
 
 class ImageOps(StandardOps[Image]):
-    """
-    All image operations live here.
-    Bound service object used through: image.ops
-    """
-
     @property
-    def image(self) -> Image:
-        return self.model
-
-    @property
-    def content(self):
-        assert self.image.content is not None, "Image content is missing."
-        return self.image.content
+    def content(self) -> ValidatedPILImage:
+        return self.model.content
 
     def to_numpy(self) -> np.ndarray:
         return np.array(self.content)
@@ -37,10 +23,10 @@ class ImageOps(StandardOps[Image]):
     # Color space conversions
     # -----------------------------
     def to_rgb(self) -> Image:
-        return self.image.model_copy(update={"content": self.content.convert("RGB")})
+        return self.model.model_copy(update={"content": self.content.convert("RGB")})
 
     def to_grayscale(self) -> Image:
-        return self.image.model_copy(update={"content": self.content.convert("L")})
+        return self.model.model_copy(update={"content": self.content.convert("L")})
 
     # -----------------------------
     # Resizing
@@ -48,7 +34,7 @@ class ImageOps(StandardOps[Image]):
     def resize(
         self, width: int, height: int, resample: Resampling = Resampling.BICUBIC
     ) -> Image:
-        return self.image.model_copy(
+        return self.model.model_copy(
             update={"content": self.content.resize((width, height), resample)}
         )
 
@@ -57,9 +43,9 @@ class ImageOps(StandardOps[Image]):
     ) -> Image:
         assert max_size > 0, "max_size must be > 0"
 
-        width, height = self.image.size
+        width, height = self.model.size
         if max(width, height) <= max_size:
-            return self.image
+            return self.model
 
         if width >= height:
             new_w = max_size

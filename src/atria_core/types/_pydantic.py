@@ -31,6 +31,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any
 
+from PIL.Image import Image as PILImage
 from pydantic import (
     PlainSerializer,
     SerializerFunctionWrapHandler,
@@ -47,7 +48,6 @@ from atria_core.types._utilities._image_encoding import (
 
 if TYPE_CHECKING:
     import pyarrow as pa
-    from PIL.Image import Image as PILImage
 
 
 @dataclass
@@ -198,9 +198,6 @@ def _image_validator(value: Any, handler: ValidatorFunctionWrapHandler) -> Any:
     # this is to avoid DecompressionBombError for large images
     PILImageModule.MAX_IMAGE_PIXELS = 933120000
 
-    if value is None:
-        return None
-
     if isinstance(value, bytes):
         return _bytes_to_image(value)
     elif isinstance(value, str):
@@ -304,7 +301,7 @@ OptListStrField = Annotated[
 """
 
 ValidatedPILImage = Annotated[
-    Any | None,
+    PILImage,
     WrapValidator(_image_validator),
     PlainSerializer(_image_serializer),
     TableSchemaMetadata(pa_type="binary"),

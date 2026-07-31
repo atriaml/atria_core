@@ -132,12 +132,6 @@ class TesseractOCREngine(BaseOCREngine):
         return np.array(image.convert("L"))
 
     def extract_text_elements(self, image: Image) -> list[TextElement]:
-        # load image
-        image = image.load()
-
-        # assert
-        assert image.content is not None, "Image content must be loaded."
-
         # preprocess image
         preprocessed_image = self._preprocess_image(image.content)
 

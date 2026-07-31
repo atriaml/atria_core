@@ -1,84 +1,41 @@
+from __future__ import annotations
+
+import io
+from typing import Self
+
 import pdfplumber
-from PIL.Image import Image as PILImage
 
 from atria_core.logger import get_logger
 from atria_core.types._base._data_model import BaseDataModel
 from atria_core.types._generic._bounding_box import BoundingBox, BoundingBoxMode
 from atria_core.types._generic._doc_content import TextElement
-from atria_core.types._pydantic import OptIntField, OptStrField
+from atria_core.types._generic._image import Image
 
 logger = get_logger(__name__)
 
 
 class PDF(BaseDataModel):
-    file_path: OptStrField = None
-    num_pages: OptIntField = None
+    content: bytes
 
-    @property
-    def pages(self) -> list[PILImage]:
-        """Lazily extract pages from PDF when accessed."""
-        if self.file_path is None:
-            raise ValueError(
-                "PDF file path is not set. Please set file_path before accessing pages."
-            )
+    @classmethod
+    def from_file_path_or_uri(cls, file_uri: str) -> Self:
+        from atria_core.types._utilities._url_fetchers import ResourceLoader
 
-        from pdf2image import convert_from_path
+        return cls(content=ResourceLoader.for_uri(file_uri).load_bytes())
 
-        return convert_from_path(self.file_path)
+    def get_page(self, page_number: int) -> Image:
+        """Render a specific page (0-indexed) as an Image."""
+        from pdf2image import convert_from_bytes
 
-    def get_page(self, page_num: int) -> PILImage:
-        """Get a specific page from the PDF (0-indexed)."""
-        if page_num < 0 or (self.num_pages is not None and page_num >= self.num_pages):
-            raise IndexError(
-                f"Page {page_num} is out of range. PDF has {self.num_pages} pages."
-            )
+        pil_image = convert_from_bytes(
+            self.content, first_page=page_number + 1, last_page=page_number + 1
+        )[0]
+        return Image(content=pil_image)
 
-        return self.pages[page_num]
-
-    def load(self):
-        """Load PDF metadata without extracting pages."""
-        if self.file_path is None:
-            raise ValueError(
-                "PDF file path is not set. Please set file_path before loading."
-            )
-
-        # Load number of pages if not already set
-        if self.num_pages is None:
-            try:
-                import pymupdf
-
-                doc = pymupdf.open(self.file_path)
-                num_pages = doc.page_count
-                doc.close()
-
-                return PDF(
-                    file_path=self.file_path,
-                    num_pages=num_pages,
-                )
-            except ImportError:
-                # Fallback to pdf2image if pymupdf is not available or fails
-                from pdf2image import convert_from_path
-
-                pages = convert_from_path(self.file_path)
-                num_pages = len(pages)
-
-                return PDF(
-                    file_path=self.file_path,
-                    num_pages=num_pages,
-                )
-            except Exception as e:
-                raise RuntimeError(
-                    f"Failed to load PDF metadata from {self.file_path}: {e}"
-                ) from e
-        return self
-
-    def extract_text_elements(self, page_number: int = 0) -> list["TextElement"]:
-        assert self.file_path is not None, (
-            "PDF file path must be set to extract text elements."
-        )
+    def extract_text_elements(self, page_number: int = 0) -> list[TextElement]:
         text_elements: list[TextElement] = []
         try:
-            with pdfplumber.open(self.file_path) as pdf:
+            with pdfplumber.open(io.BytesIO(self.content)) as pdf:
                 page = pdf.pages[page_number]
                 page_width = page.width
                 page_height = page.height
@@ -111,5 +68,5 @@ class PDF(BaseDataModel):
                     ).ops.normalize(width=crop_width, height=crop_height)
                     text_elements.append(TextElement(text=text, bbox=bbox))
         except Exception as e:
-            logger.exception(f"Error reading PDF {self.file_path}: {e}")
+            logger.exception(f"Error reading PDF page {page_number}: {e}")
         return text_elements
