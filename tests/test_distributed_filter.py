@@ -21,7 +21,7 @@ License: MIT
 
 import logging
 
-from atria_logger.filters import DistributedFilter
+from atria_logger import DistributedFilter
 
 
 def test_distributed_filter_rank_zero() -> None:

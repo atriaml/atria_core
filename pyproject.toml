@@ -13,6 +13,7 @@ authors = [{ name = "Saifullah", email = "saifullah.saifullah@dfki.de" }]
 dependencies = [
     "coloredlogs>=15.0.1",
     "lazy_loader>=0.4",
+    "pyfiglet>=1.0.4",
     "rich>=14.0.0",
 ]
 
@@ -37,13 +38,13 @@ ignore = [
 docstring-code-format = true
 
 [tool.pytest.ini_options]
-pythonpath = ["."]
+pythonpath = ["./src"]
 addopts = "-rXs --strict-config --strict-markers --tb=short --import-mode=importlib"
 
 [project.urls]
-Homepage = "https://github.com/saifullah3396/atria_logger/"
-Source = "https://github.com/saifullah3396/atria_logger/"
-BugReports = "https://github.com/saifullah3396/atria_logger/"
+Homepage = "https://github.com/atriaml/atria_logger/"
+Source = "https://github.com/atriaml/atria_logger/"
+BugReports = "https://github.com/atriaml/atria_logger/"
 
 [tool.mypy]
 ignore_missing_imports = true

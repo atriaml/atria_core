@@ -28,7 +28,7 @@ import sys
 
 import pytest
 
-from atria_logger.utilities import _attach_file_handler, _attach_stream_handler
+from atria_logger._utilities import _attach_file_handler, _attach_stream_handler
 
 
 def test_configure_file_handler(tmp_path: pathlib.Path) -> None:
