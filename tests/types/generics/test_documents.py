@@ -4,14 +4,7 @@ from pathlib import Path
 
 from PIL import Image as PILImage
 
-from atria_core.types._extractors._base import ContentExtractor
-from atria_core.types._generic._doc_content import DocumentContent
-from atria_core.types._generic._documents import MultiPageDocument, SinglePageDocument
-
-
-class StubExtractor(ContentExtractor):
-    def _extract(self, image: PILImage.Image) -> DocumentContent:
-        return DocumentContent(_text=f"{image.width}x{image.height}")
+from atria_core.types import MultiPageDocument, SinglePageDocument
 
 
 def test_single_page_document_from_pil_image(sample_image: PILImage.Image) -> None:
@@ -27,16 +20,6 @@ def test_single_page_document_from_path(sample_image_path: Path) -> None:
     assert doc.source_path == str(sample_image_path)
     assert doc.page_id == 0
     assert doc.image.size == (16, 12)
-
-
-def test_extract_content_via_extractor_instance(sample_image: PILImage.Image) -> None:
-    doc = SinglePageDocument.from_image(sample_image)
-    extracted = doc.extract_content(StubExtractor())
-    assert isinstance(extracted, SinglePageDocument)
-    assert extracted.content is not None
-    assert extracted.content.text == "16x12"
-    # original document is untouched
-    assert doc.content is None
 
 
 def test_multi_page_document_num_pages(sample_pdf_path: Path) -> None:

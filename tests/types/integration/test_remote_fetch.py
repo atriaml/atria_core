@@ -10,10 +10,10 @@ import numpy as np
 import pytest
 from PIL import Image as PILImage
 
-from atria_core.types._generic._documents import MultiPageDocument
-from atria_core.types._generic._image import Image
-from atria_core.types._transforms._image import ImageTransformer
-from atria_core.types._utilities._url_fetchers import (
+from atria_core.transforms import functional as F
+from atria_core.types import (
+    Image,
+    MultiPageDocument,
     RemoteResourceLoader,
     ResourceLoader,
 )
@@ -56,7 +56,7 @@ def test_fetch_process_use_remote_image(tmp_path: Path, http_server: str) -> Non
     image = image.load()
     assert np.array_equal(np.array(original), np.array(image.require_content()))
 
-    processed = ImageTransformer.resize(image, 10, 5)
+    processed = F.image.resize(image, 10, 5)
     assert processed.size == (10, 5)
 
 

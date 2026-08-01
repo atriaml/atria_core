@@ -4,7 +4,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from PIL import Image as PILImage
 
@@ -14,12 +14,6 @@ from atria_core.types._utilities._url_fetchers import (
     LocalResourceLoader,
     ResourceLoader,
 )
-
-if TYPE_CHECKING:
-    from atria_core.types._extractors._base import (
-        ContentExtractor,
-        ContentExtractorConfig,
-    )
 
 
 @dataclass(frozen=True, repr=False)
@@ -127,17 +121,6 @@ class SinglePageDocument(BaseDataModel):
             page_id=page_id,
             content=content,
         )
-
-    def extract_content(
-        self, extractor: ContentExtractor | ContentExtractorConfig
-    ) -> SinglePageDocument:
-        """Runs an extractor over this page and returns a new document with content attached."""
-        from atria_core.types._extractors._base import ContentExtractorConfig
-
-        if isinstance(extractor, ContentExtractorConfig):
-            extractor = extractor.build()
-
-        return extractor(self)
 
     def to_dict(self) -> dict[str, Any]:
         if self.source_path is None:

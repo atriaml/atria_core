@@ -7,4 +7,14 @@ the `submodules` list below as they're introduced.
 
 import lazy_loader as lazy
 
-__getattr__, __dir__, __all__ = lazy.attach(__name__, submodules=["logger", "types"])
+__getattr__, __dir__, __all__ = lazy.attach(
+    __name__,
+    submodules=[
+        "logger",
+        "types",
+        "transforms",
+        "extractors",
+        "visualizers",
+        "serialization",
+    ],
+)
