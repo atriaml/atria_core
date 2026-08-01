@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from atria_core.types._generic._annotated_object import AnnotatedObject
 from atria_core.types._generic._annotations import (
     AnnotationType,
     ClassificationAnnotation,
@@ -55,26 +56,38 @@ def test_question_answering_annotation_roundtrip() -> None:
     assert restored == ann
 
 
+def test_object_detection_annotation_from_objects_and_to_objects() -> None:
+    objects = [make_annotated_object(label=0), make_annotated_object(label=1)]
+    ann = ObjectDetectionAnnotation.from_objects(objects, label_map=["cat", "dog"])
+
+    assert list(ann.labels) == [0, 1]
+    assert ann.bboxes.shape == (2, 4)
+
+    back = ann.to_objects()
+    assert [o.label for o in back] == [0, 1]
+
+
 def test_object_detection_annotation_roundtrip() -> None:
-    ann = make_object_detection_annotation(
-        annotated_objects=[make_annotated_object(), make_annotated_object(label=1)]
+    ann = ObjectDetectionAnnotation.from_objects(
+        [make_annotated_object(), make_annotated_object(label=1)],
+        label_map=["cat", "dog"],
     )
     data = ann.to_dict()
     restored = ObjectDetectionAnnotation.from_dict(data)
     assert restored.to_dict() == data
 
 
-def test_object_detection_annotation_none_annotated_objects() -> None:
-    ann = ObjectDetectionAnnotation(label_map=["a"], annotated_objects=None)
-    assert ann.serialize_annotated_objects() is None
+def test_object_detection_annotation_no_objects() -> None:
+    ann = ObjectDetectionAnnotation(label_map=["a"])
+    assert ann.to_objects() == []
     data = ann.to_dict()
-    assert data["annotated_objects"] is None
+    assert data["labels"] is None
     restored = ObjectDetectionAnnotation.from_dict(data)
-    assert restored == ann
+    assert restored.labels is None
 
 
 def test_layout_analysis_annotation_type() -> None:
-    ann = LayoutAnalysisAnnotation(label_map=["a"], annotated_objects=None)
+    ann = LayoutAnalysisAnnotation(label_map=["a"])
     assert ann.type == AnnotationType.layout_analysis.value
     assert ann.to_dict()["type"] == "layout_analysis"
 
@@ -86,7 +99,7 @@ def test_layout_analysis_annotation_type() -> None:
         lambda: make_entity_labeling_annotation(),
         lambda: make_question_answering_annotation(),
         lambda: make_object_detection_annotation(),
-        lambda: LayoutAnalysisAnnotation(label_map=["a"], annotated_objects=None),
+        lambda: LayoutAnalysisAnnotation(label_map=["a"]),
     ],
 )
 def test_annotation_from_dict_roundtrip(maker) -> None:

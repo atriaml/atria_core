@@ -18,11 +18,11 @@ class BoxBatchOwner(Protocol):
     bbox_mode: BoundingBoxMode
     normalized: bool
 
-    def box_batches(self) -> dict[str, tuple[np.ndarray, list[int]] | None]: ...
+    def box_batches(self) -> dict[str, np.ndarray | None]: ...
 
     def with_box_batches(
         self: Container,
-        batches: dict[str, tuple[np.ndarray, list[int]]],
+        batches: dict[str, np.ndarray],
         *,
         normalized: bool,
         mode: BoundingBoxMode,
@@ -87,10 +87,7 @@ class BoundingBoxTransformer:
     ) -> Container:
         batches = container.box_batches()
         transformed = {
-            name: (fn(boxes), indices)
-            for name, batch in batches.items()
-            if batch is not None
-            for boxes, indices in [batch]
+            name: fn(boxes) for name, boxes in batches.items() if boxes is not None
         }
         if not transformed:
             return container

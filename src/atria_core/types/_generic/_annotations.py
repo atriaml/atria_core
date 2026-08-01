@@ -99,84 +99,110 @@ class QuestionAnsweringAnnotation(BaseDataModel):
         return cls(qa_pairs=[QAPair.from_dict(q) for q in data["qa_pairs"]])
 
 
-@dataclass(repr=False)
+@dataclass(repr=False, eq=False)
 class ObjectDetectionAnnotation(BaseDataModel):
+    """Detected objects, stored as structure-of-arrays: one entry per
+    object, but columnar (parallel arrays) rather than a list of per-object
+    objects. `segmentations` stays a list of per-object (P, 2) point arrays
+    since polygon point counts are ragged and can't stack into one array. A
+    given array field is present for every object or None for the whole
+    annotation -- no per-object holes."""
+
     type = AnnotationType.object_detection.value
 
     label_map: list[str]
-    annotated_objects: list[AnnotatedObject] | None = None
+    labels: np.ndarray | None = None
+    bboxes: np.ndarray | None = None
+    segmentations: list[np.ndarray] | None = None
+    iscrowd: np.ndarray | None = None
     bbox_mode: BoundingBoxMode = BoundingBoxMode.XYXY
     normalized: bool = False
 
     def __post_init__(self) -> None:
-        if self.annotated_objects is not None:
-            for obj in self.annotated_objects:
-                if obj.label < 0 or obj.label >= len(self.label_map):
-                    raise ValueError(
-                        f"Invalid object label index {obj.label}. "
-                        f"Label map contains only {len(self.label_map)} labels."
-                    )
+        if self.labels is not None and self.labels.size > 0:
+            if bool(np.any((self.labels < 0) | (self.labels >= len(self.label_map)))):
+                bad = int(self.labels[(self.labels < 0) | (self.labels >= len(self.label_map))][0])
+                raise ValueError(
+                    f"Invalid object label index {bad}. "
+                    f"Label map contains only {len(self.label_map)} labels."
+                )
 
-    def serialize_annotated_objects(self) -> str | None:
-        if self.annotated_objects is None:
-            return None
-        return json.dumps([o.to_dict() for o in self.annotated_objects])
+    @classmethod
+    def from_objects(
+        cls, objects: list[AnnotatedObject], label_map: list[str]
+    ) -> ObjectDetectionAnnotation:
+        """The human-readable construction path: build one AnnotatedObject
+        per detection, then stack them into this annotation's arrays."""
+        if not objects:
+            return cls(label_map=label_map)
+        segmentations = [o.segmentation for o in objects]
+        return cls(
+            label_map=label_map,
+            labels=np.array([o.label for o in objects]),
+            bboxes=np.stack([o.bbox for o in objects]),
+            segmentations=segmentations
+            if any(s is not None for s in segmentations)
+            else None,
+            iscrowd=np.array([o.iscrowd for o in objects]),
+        )
+
+    def to_objects(self) -> list[AnnotatedObject]:
+        """The human-readable view: one AnnotatedObject per row."""
+        if self.labels is None or self.bboxes is None:
+            return []
+        n = len(self.labels)
+        segmentations = self.segmentations or [None] * n
+        iscrowd = self.iscrowd if self.iscrowd is not None else np.zeros(n, dtype=bool)
+        return [
+            AnnotatedObject(
+                label=int(self.labels[i]),
+                bbox=self.bboxes[i],
+                segmentation=segmentations[i],
+                iscrowd=bool(iscrowd[i]),
+            )
+            for i in range(n)
+        ]
 
     # -------------------------------------
     # Generic batch-transform protocol (see _transforms/_bounding_box.py)
     # -------------------------------------
-    def box_batches(self) -> dict[str, tuple[np.ndarray, list[int]] | None]:
-        if not self.annotated_objects:
-            return {"bbox": None}
-        indices = list(range(len(self.annotated_objects)))
-        return {
-            "bbox": (
-                np.stack([obj.bbox for obj in self.annotated_objects]),
-                indices,
-            )
-        }
+    def box_batches(self) -> dict[str, np.ndarray | None]:
+        return {"bboxes": self.bboxes}
 
     def with_box_batches(
-        self,
-        batches: dict[str, tuple[np.ndarray, list[int]]],
-        *,
-        normalized: bool,
-        mode: BoundingBoxMode,
+        self, batches: dict[str, np.ndarray], *, normalized: bool, mode: BoundingBoxMode
     ) -> ObjectDetectionAnnotation:
-        if self.annotated_objects is None or "bbox" not in batches:
-            return replace(self, normalized=normalized, bbox_mode=mode)
-
-        new_values, indices = batches["bbox"]
-        annotated_objects = list(self.annotated_objects)
-        for row, i in zip(new_values, indices, strict=True):
-            annotated_objects[i] = replace(annotated_objects[i], bbox=row)
-
-        return replace(
-            self,
-            annotated_objects=annotated_objects,
-            normalized=normalized,
-            bbox_mode=mode,
-        )
+        return replace(self, normalized=normalized, bbox_mode=mode, **batches)
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "type": self.type,
             "label_map": self.label_map,
-            "annotated_objects": [o.to_dict() for o in self.annotated_objects]
-            if self.annotated_objects is not None
+            "labels": self.labels.tolist() if self.labels is not None else None,
+            "bboxes": self.bboxes.tolist() if self.bboxes is not None else None,
+            "segmentations": [s.tolist() for s in self.segmentations]
+            if self.segmentations is not None
             else None,
+            "iscrowd": self.iscrowd.tolist() if self.iscrowd is not None else None,
             "bbox_mode": self.bbox_mode.value,
             "normalized": self.normalized,
         }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> ObjectDetectionAnnotation:
-        annotated_objects = data.get("annotated_objects")
+        def _array(key: str, dtype: type) -> np.ndarray | None:
+            value = data.get(key)
+            return np.asarray(value, dtype=dtype) if value is not None else None
+
+        segmentations = data.get("segmentations")
         return cls(
             label_map=data["label_map"],
-            annotated_objects=[AnnotatedObject.from_dict(o) for o in annotated_objects]
-            if annotated_objects is not None
+            labels=_array("labels", np.int64),
+            bboxes=_array("bboxes", np.float64),
+            segmentations=[np.asarray(s, dtype=np.float64) for s in segmentations]
+            if segmentations is not None
             else None,
+            iscrowd=_array("iscrowd", np.bool_),
             bbox_mode=BoundingBoxMode(data.get("bbox_mode", BoundingBoxMode.XYXY.value)),
             normalized=data.get("normalized", False),
         )

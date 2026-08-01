@@ -59,3 +59,34 @@ def text_pdf_path(tmp_path: Path) -> Path:
     path = tmp_path / "text_sample.pdf"
     pdf.save(str(path))
     return path
+
+
+@pytest.fixture
+def native_text_pdf_path(tmp_path: Path) -> Path:
+    """A PDF with a real, embedded text layer (not a rendered image) --
+    for exercising PdfNativeExtractor, which reads that layer directly
+    rather than OCR-ing pixels. pypdfium2 has no high-level "draw text"
+    helper, so this drops to its raw bindings to insert real PDF text
+    objects with a standard font."""
+    import ctypes
+
+    import pypdfium2 as pdfium
+    import pypdfium2.raw as pdfium_raw
+
+    pdf = pdfium.PdfDocument.new()
+    page = pdf.new_page(400, 150)
+
+    y = 120
+    for text in ["HELLO WORLD", "SECOND LINE"]:
+        text_obj = pdfium_raw.FPDFPageObj_NewTextObj(pdf.raw, b"Helvetica", 14)
+        utf16 = text.encode("utf-16-le") + b"\x00\x00"
+        buf = ctypes.create_string_buffer(utf16)
+        pdfium_raw.FPDFText_SetText(text_obj, ctypes.cast(buf, ctypes.POINTER(ctypes.c_ushort)))
+        pdfium_raw.FPDFPageObj_Transform(text_obj, 1, 0, 0, 1, 20, y)
+        pdfium_raw.FPDFPage_InsertObject(page.raw, text_obj)
+        y -= 30
+    pdfium_raw.FPDFPage_GenerateContent(page.raw)
+
+    path = tmp_path / "native_text_sample.pdf"
+    pdf.save(str(path))
+    return path

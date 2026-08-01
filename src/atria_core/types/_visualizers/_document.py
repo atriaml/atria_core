@@ -3,12 +3,13 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import numpy as np
 from PIL.Image import Image as PILImage
 
 from atria_core.logger import get_logger
 from atria_core.types._generic._annotations import AnnotationType
 from atria_core.types._generic._documents import MultiPageDocument
-from atria_core.types._transforms._bounding_box import BoundingBoxTransformer
+from atria_core.types._generic._elements import OCRLevel
 from atria_core.types._utilities._viz import _draw_bboxes_on_image
 from atria_core.types._visualizers._base import Visualizer
 
@@ -34,33 +35,39 @@ class DocumentVisualizer(Visualizer):
             )
 
         content = document.content
-        if content is None:
+        if content is None or content.elements is None:
             return image
 
-        content = BoundingBoxTransformer.unnormalize(content, image.width, image.height)
-        bbox_list = (
-            content.segment_bbox_list if draw_segment_bboxes else content.bbox_list
+        words = content.elements.at(OCRLevel.word)
+        if words.bboxes is None or len(words) == 0:
+            return image
+
+        # ElementArray.bboxes is always normalized to [0, 1]; scale to pixels
+        # for drawing.
+        scale = np.array([image.width, image.height, image.width, image.height])
+        bboxes_arr = (
+            content.elements.segment_bboxes(OCRLevel.word)
+            if draw_segment_bboxes
+            else words.bboxes
+        ) * scale
+
+        bbox_labels = None
+        if draw_word_labels:
+            try:
+                ann = self.instance.get_annotation_by_type(
+                    annotation_type=AnnotationType.entity_labeling
+                )
+                bbox_labels = ann.label_names
+            except Exception:  # noqa: E722
+                pass
+
+        # Draw bounding boxes on the image
+        image = _draw_bboxes_on_image(
+            image=image,
+            bboxes=list(bboxes_arr),
+            bboxes_text=words.texts.tolist() if words.texts is not None else None,
+            bbox_labels=bbox_labels,
         )
-        if len(bbox_list) > 0:
-            bboxes = [bbox for bbox in bbox_list if bbox is not None]
-
-            bbox_labels = None
-            if draw_word_labels:
-                try:
-                    ann = self.instance.get_annotation_by_type(
-                        annotation_type=AnnotationType.entity_labeling
-                    )
-                    bbox_labels = ann.label_names
-                except Exception:  # noqa: E722
-                    pass
-
-            # Draw bounding boxes on the image
-            image = _draw_bboxes_on_image(
-                image=image,
-                bboxes=bboxes,
-                bboxes_text=content.text_list,
-                bbox_labels=bbox_labels,
-            )
 
         return image
 

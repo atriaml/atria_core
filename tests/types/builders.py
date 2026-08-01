@@ -12,7 +12,8 @@ from atria_core.types._generic._annotations import (
     ObjectDetectionAnnotation,
     QuestionAnsweringAnnotation,
 )
-from atria_core.types._generic._doc_content import DocumentContent, TextElement
+from atria_core.types._generic._doc_content import DocumentContent
+from atria_core.types._generic._elements import ElementArray
 from atria_core.types._generic._image import Image
 from atria_core.types._generic._qa_pair import QAPair
 
@@ -22,26 +23,28 @@ def make_bounding_box(**overrides: Any) -> np.ndarray:
     return np.asarray(value, dtype=np.float64)
 
 
+def make_element_array(
+    texts: list[str] | None = None, bboxes: np.ndarray | None = None
+) -> ElementArray:
+    """Simple flat (word-only) ElementArray. For hierarchy tests (multiple
+    levels/parent_ids), construct ElementArray directly instead."""
+    texts = texts if texts is not None else ["hello"]
+    bboxes = (
+        bboxes if bboxes is not None else np.stack([make_bounding_box()] * len(texts))
+    )
+    return ElementArray.from_words(texts, bboxes)
+
+
+def make_document_content(**overrides: Any) -> DocumentContent:
+    kwargs: dict[str, Any] = {"elements": make_element_array()}
+    kwargs.update(overrides)
+    return DocumentContent(**kwargs)
+
+
 def make_annotated_object(**overrides: Any) -> AnnotatedObject:
     kwargs: dict[str, Any] = {"label": 0, "bbox": make_bounding_box()}
     kwargs.update(overrides)
     return AnnotatedObject(**kwargs)
-
-
-def make_text_element(**overrides: Any) -> TextElement:
-    kwargs: dict[str, Any] = {
-        "text": "hello",
-        "bbox": make_bounding_box(),
-        "conf": 0.95,
-    }
-    kwargs.update(overrides)
-    return TextElement(**kwargs)
-
-
-def make_document_content(**overrides: Any) -> DocumentContent:
-    kwargs: dict[str, Any] = {"text_elements": [make_text_element()]}
-    kwargs.update(overrides)
-    return DocumentContent(**kwargs)
 
 
 def make_qa_pair(**overrides: Any) -> QAPair:
@@ -77,7 +80,8 @@ def make_question_answering_annotation(**overrides: Any) -> QuestionAnsweringAnn
 def make_object_detection_annotation(**overrides: Any) -> ObjectDetectionAnnotation:
     kwargs: dict[str, Any] = {
         "label_map": ["cat", "dog"],
-        "annotated_objects": [make_annotated_object()],
+        "labels": np.array([0]),
+        "bboxes": np.stack([make_bounding_box()]),
     }
     kwargs.update(overrides)
     return ObjectDetectionAnnotation(**kwargs)

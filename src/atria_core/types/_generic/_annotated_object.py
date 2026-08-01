@@ -11,6 +11,10 @@ from atria_core.types._generic._bounding_box import as_bbox_array, as_segmentati
 
 @dataclass(repr=False, eq=False)
 class AnnotatedObject(BaseDataModel):
+    """One detected/annotated object. A human-readable, easy-to-construct
+    counterpart to ObjectDetectionAnnotation's array-backed storage -- build
+    a list of these and pass it to ObjectDetectionAnnotation.from_objects()."""
+
     label: int
     bbox: np.ndarray
     segmentation: np.ndarray | None = None

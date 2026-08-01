@@ -21,7 +21,8 @@ IMPORT_CHECK = [
     "SplitConfig",
     "SplitInfo",
     "DocumentContent",
-    "TextElement",
+    "ElementArray",
+    "OCRLevel",
     "AnnotatedObject",
     "BoundingBoxMode",
     "Annotation",
@@ -48,17 +49,17 @@ def test_construct_repr_eq_generic_types() -> None:
     from atria_core.types import (
         AnnotatedObject,
         DocumentContent,
+        ElementArray,
         QAPair,
-        TextElement,
     )
 
     bbox = (0.1, 0.1, 0.5, 0.5)
     annotated_object = AnnotatedObject(label=1, bbox=bbox)
-    text_element = TextElement(text="hello", bbox=bbox)
-    doc_content = DocumentContent(text_elements=[text_element])
+    elements = ElementArray.from_words(["hello"], [bbox])
+    doc_content = DocumentContent(elements=elements)
     qa_pair = QAPair(id=0, question_text="what?", answer_text="this", start=0, end=4)
 
-    for obj in [bbox, annotated_object, text_element, doc_content, qa_pair]:
+    for obj in [bbox, annotated_object, elements, doc_content, qa_pair]:
         assert repr(obj)
         assert obj == obj
 
@@ -80,7 +81,7 @@ def test_content_extractor_recursion() -> None:
 
     class StubExtractor(ContentExtractor):
         def _extract(self, image: PILImage.Image) -> DocumentContent:
-            return DocumentContent(text_elements=[])
+            return DocumentContent(text="stub")
 
     doc = SinglePageDocument.from_image(PILImage.new("RGB", (4, 4)))
     extracted = doc.extract_content(StubExtractor())
