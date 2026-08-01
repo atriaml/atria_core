@@ -7,8 +7,8 @@ from typing import Any
 import numpy as np
 
 from atria_core.logger import get_logger
-from atria_core.types._generic._documents import MultiPageDocument, SinglePageDocument
 from atria_core.types._generic._doc_content import DocumentContent
+from atria_core.types._generic._documents import MultiPageDocument, SinglePageDocument
 from atria_core.types._generic._elements import ElementArray, OCRLevel
 from atria_core.types._utilities._url_fetchers import ResourceLoader
 
@@ -94,7 +94,7 @@ class PdfNativeExtractor:
             parent_ids=np.array(parent_ids),
             levels=np.array(levels),
             bboxes=np.asarray(bboxes, dtype=np.float64),
-            texts=texts,
+            texts=np.asarray(texts, dtype=object),
             confs=np.asarray(confs, dtype=np.float64),
         )
         return DocumentContent(elements=elements)

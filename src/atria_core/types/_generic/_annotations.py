@@ -103,17 +103,19 @@ class QuestionAnsweringAnnotation(BaseDataModel):
 class ObjectDetectionAnnotation(BaseDataModel):
     """Detected objects, stored as structure-of-arrays: one entry per
     object, but columnar (parallel arrays) rather than a list of per-object
-    objects. `segmentations` stays a list of per-object (P, 2) point arrays
-    since polygon point counts are ragged and can't stack into one array. A
-    given array field is present for every object or None for the whole
-    annotation -- no per-object holes."""
+    objects. Polygon point counts are ragged, so `segmentations` is one
+    padded (N, P_max, 2) array (NaN-padded) plus `segmentation_lengths` for
+    each object's real point count -- avoids per-object boxed arrays while
+    staying genuinely vectorizable. A given array field is present for every
+    object or None for the whole annotation -- no per-object holes."""
 
     type = AnnotationType.object_detection.value
 
     label_map: list[str]
     labels: np.ndarray | None = None
     bboxes: np.ndarray | None = None
-    segmentations: list[np.ndarray] | None = None
+    segmentations: np.ndarray | None = None  # (N, P_max, 2), NaN-padded
+    segmentation_lengths: np.ndarray | None = None  # (N,) real point count per object
     iscrowd: np.ndarray | None = None
     bbox_mode: BoundingBoxMode = BoundingBoxMode.XYXY
     normalized: bool = False
@@ -135,14 +137,26 @@ class ObjectDetectionAnnotation(BaseDataModel):
         per detection, then stack them into this annotation's arrays."""
         if not objects:
             return cls(label_map=label_map)
-        segmentations = [o.segmentation for o in objects]
+
+        segmentations = None
+        segmentation_lengths = None
+        polygons = [o.segmentation for o in objects]
+        if any(p is not None for p in polygons):
+            lengths = np.array([0 if p is None else len(p) for p in polygons])
+            p_max = int(lengths.max())
+            padded = np.full((len(objects), p_max, 2), np.nan)
+            for i, polygon in enumerate(polygons):
+                if polygon is not None:
+                    padded[i, : len(polygon)] = polygon
+            segmentations = padded
+            segmentation_lengths = lengths
+
         return cls(
             label_map=label_map,
             labels=np.array([o.label for o in objects]),
             bboxes=np.stack([o.bbox for o in objects]),
-            segmentations=segmentations
-            if any(s is not None for s in segmentations)
-            else None,
+            segmentations=segmentations,
+            segmentation_lengths=segmentation_lengths,
             iscrowd=np.array([o.iscrowd for o in objects]),
         )
 
@@ -151,13 +165,19 @@ class ObjectDetectionAnnotation(BaseDataModel):
         if self.labels is None or self.bboxes is None:
             return []
         n = len(self.labels)
-        segmentations = self.segmentations or [None] * n
         iscrowd = self.iscrowd if self.iscrowd is not None else np.zeros(n, dtype=bool)
+
+        def _segmentation(i: int) -> np.ndarray | None:
+            if self.segmentations is None or self.segmentation_lengths is None:
+                return None
+            length = int(self.segmentation_lengths[i])
+            return self.segmentations[i, :length] if length > 0 else None
+
         return [
             AnnotatedObject(
                 label=int(self.labels[i]),
                 bbox=self.bboxes[i],
-                segmentation=segmentations[i],
+                segmentation=_segmentation(i),
                 iscrowd=bool(iscrowd[i]),
             )
             for i in range(n)
@@ -172,7 +192,12 @@ class ObjectDetectionAnnotation(BaseDataModel):
     def with_box_batches(
         self, batches: dict[str, np.ndarray], *, normalized: bool, mode: BoundingBoxMode
     ) -> ObjectDetectionAnnotation:
-        return replace(self, normalized=normalized, bbox_mode=mode, **batches)
+        return replace(
+            self,
+            bboxes=batches.get("bboxes", self.bboxes),
+            normalized=normalized,
+            bbox_mode=mode,
+        )
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -180,8 +205,11 @@ class ObjectDetectionAnnotation(BaseDataModel):
             "label_map": self.label_map,
             "labels": self.labels.tolist() if self.labels is not None else None,
             "bboxes": self.bboxes.tolist() if self.bboxes is not None else None,
-            "segmentations": [s.tolist() for s in self.segmentations]
+            "segmentations": self.segmentations.tolist()
             if self.segmentations is not None
+            else None,
+            "segmentation_lengths": self.segmentation_lengths.tolist()
+            if self.segmentation_lengths is not None
             else None,
             "iscrowd": self.iscrowd.tolist() if self.iscrowd is not None else None,
             "bbox_mode": self.bbox_mode.value,
@@ -194,14 +222,12 @@ class ObjectDetectionAnnotation(BaseDataModel):
             value = data.get(key)
             return np.asarray(value, dtype=dtype) if value is not None else None
 
-        segmentations = data.get("segmentations")
         return cls(
             label_map=data["label_map"],
             labels=_array("labels", np.int64),
             bboxes=_array("bboxes", np.float64),
-            segmentations=[np.asarray(s, dtype=np.float64) for s in segmentations]
-            if segmentations is not None
-            else None,
+            segmentations=_array("segmentations", np.float64),
+            segmentation_lengths=_array("segmentation_lengths", np.int64),
             iscrowd=_array("iscrowd", np.bool_),
             bbox_mode=BoundingBoxMode(data.get("bbox_mode", BoundingBoxMode.XYXY.value)),
             normalized=data.get("normalized", False),

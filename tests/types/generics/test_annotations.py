@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import numpy as np
 import pytest
 
-from atria_core.types._generic._annotated_object import AnnotatedObject
 from atria_core.types._generic._annotations import (
     AnnotationType,
     ClassificationAnnotation,
@@ -65,6 +65,41 @@ def test_object_detection_annotation_from_objects_and_to_objects() -> None:
 
     back = ann.to_objects()
     assert [o.label for o in back] == [0, 1]
+
+
+def test_object_detection_annotation_segmentation_padding_mixed_objects() -> None:
+    # some objects have a segmentation (varying point counts), some don't --
+    # segmentations must pad to the max point count and track real lengths.
+    objects = [
+        make_annotated_object(segmentation=[[0.1, 0.1], [0.2, 0.2], [0.3, 0.1]]),
+        make_annotated_object(label=1),  # no segmentation
+        make_annotated_object(segmentation=[[0.0, 0.0], [0.05, 0.05]]),
+    ]
+    ann = ObjectDetectionAnnotation.from_objects(objects, label_map=["a", "b"])
+
+    assert ann.segmentations.shape == (3, 3, 2)
+    assert list(ann.segmentation_lengths) == [3, 0, 2]
+
+    back = ann.to_objects()
+    assert back[0].segmentation.shape == (3, 2)
+    assert back[1].segmentation is None
+    assert back[2].segmentation.shape == (2, 2)
+
+    data = ann.to_dict()
+    restored = ObjectDetectionAnnotation.from_dict(data)
+    # NaN padding means to_dict() output isn't self-equal via `==`; compare
+    # everything except the NaN-bearing field directly, and that one with
+    # equal_nan.
+    restored_data = restored.to_dict()
+    assert {k: v for k, v in restored_data.items() if k != "segmentations"} == {
+        k: v for k, v in data.items() if k != "segmentations"
+    }
+    assert np.array_equal(
+        restored.segmentations, ann.segmentations, equal_nan=True
+    )
+    restored_objects = restored.to_objects()
+    assert restored_objects[1].segmentation is None
+    assert restored_objects[2].segmentation.shape == (2, 2)
 
 
 def test_object_detection_annotation_roundtrip() -> None:

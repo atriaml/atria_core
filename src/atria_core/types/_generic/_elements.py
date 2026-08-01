@@ -144,7 +144,7 @@ class ElementArray(BaseDataModel):
         if self.levels is None:
             return np.empty((0, 4))
         mask = self.levels == level.value
-        return self.parent_bbox()[mask]
+        return np.asarray(self.parent_bbox()[mask])
 
     def joined_text(self, level: OCRLevel = OCRLevel.word) -> str:
         texts = self.at(level).texts

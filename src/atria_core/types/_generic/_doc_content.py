@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from atria_core.types._base_data_model import BaseDataModel
-from atria_core.types._generic._elements import ElementArray, OCRLevel
+from atria_core.types._generic._elements import ElementArray
 
 
 @dataclass(repr=False)
