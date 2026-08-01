@@ -7,7 +7,7 @@ from atria_core.types._data_instance._base import BaseDataInstance
 from atria_core.types._generic._image import Image
 
 
-@dataclass(repr=False)
+@dataclass(frozen=True, repr=False)
 class ImageInstance(BaseDataInstance):
     image: Image
 
@@ -23,5 +23,5 @@ class ImageInstance(BaseDataInstance):
         return cls(
             sample_id=data["sample_id"],
             image=Image.from_dict(data["image"]),
-            annotations=cls._annotations_from_dict(data.get("annotations")),
+            _annotations=cls._annotations_from_dict(data.get("annotations")),
         )

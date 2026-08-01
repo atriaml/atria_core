@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any, Literal, overload
+from dataclasses import dataclass, field, replace
+from typing import Any, Literal, Self, overload
 
 from atria_core.types._base_data_model import BaseDataModel
 from atria_core.types._generic._annotations import (
+    ANNOTATION_TYPES,
     Annotation,
     AnnotationType,
     ClassificationAnnotation,
@@ -12,20 +13,18 @@ from atria_core.types._generic._annotations import (
     LayoutAnalysisAnnotation,
     ObjectDetectionAnnotation,
     QuestionAnsweringAnnotation,
-    annotation_from_dict,
 )
 
 
-class AnnotationNotFoundError(Exception):
-    """Custom exception raised when a specific annotation type is not found in a data instance."""
-
-    pass
-
-
-@dataclass(repr=False)
+@dataclass(frozen=True, repr=False)
 class BaseDataInstance(BaseDataModel):
     sample_id: str
-    annotations: list[Annotation] | None = field(default=None, kw_only=True)
+    #: Keyed by annotation.type -- at most one annotation per type. Private:
+    #: the only supported way to add/replace an entry is add_annotation(),
+    #: and the only way to read one is has_annotation_type()/
+    #: get_annotation_by_type() -- that's what keeps the key always in sync
+    #: with the value's own type.
+    _annotations: dict[str, Annotation] = field(default_factory=dict, kw_only=True)
 
     @property
     def key(self) -> str:
@@ -34,55 +33,58 @@ class BaseDataInstance(BaseDataModel):
     # -------------------------------------
     # Annotation helpers
     # -------------------------------------
+    def add_annotation(self, annotation: Annotation) -> Self:
+        """Returns a new instance with `annotation` added, replacing any
+        existing annotation of the same type."""
+        return replace(
+            self, _annotations={**self._annotations, annotation.type: annotation}
+        )
+
     def has_annotation_type(self, annotation_type: AnnotationType) -> bool:
-        if self.annotations is not None:
-            for annotation in self.annotations:
-                if annotation.type == annotation_type.value:
-                    return True
-        return False
+        return annotation_type.value in self._annotations
 
     @overload
     def get_annotation_by_type(
         self, annotation_type: Literal[AnnotationType.classification]
-    ) -> ClassificationAnnotation: ...
+    ) -> ClassificationAnnotation | None: ...
     @overload
     def get_annotation_by_type(
         self, annotation_type: Literal[AnnotationType.entity_labeling]
-    ) -> EntityLabelingAnnotation: ...
+    ) -> EntityLabelingAnnotation | None: ...
     @overload
     def get_annotation_by_type(
         self, annotation_type: Literal[AnnotationType.question_answering]
-    ) -> QuestionAnsweringAnnotation: ...
+    ) -> QuestionAnsweringAnnotation | None: ...
     @overload
     def get_annotation_by_type(
         self, annotation_type: Literal[AnnotationType.object_detection]
-    ) -> ObjectDetectionAnnotation: ...
+    ) -> ObjectDetectionAnnotation | None: ...
     @overload
     def get_annotation_by_type(
         self, annotation_type: Literal[AnnotationType.layout_analysis]
-    ) -> LayoutAnalysisAnnotation: ...
+    ) -> LayoutAnalysisAnnotation | None: ...
 
-    def get_annotation_by_type(self, annotation_type: AnnotationType) -> Annotation:
-        if self.annotations is not None:
-            for annotation in self.annotations:
-                if annotation.type == annotation_type.value:
-                    return annotation
-        raise AnnotationNotFoundError(
-            f"No annotation of type {annotation_type} found in the data instance."
-        )
+    def get_annotation_by_type(self, annotation_type: AnnotationType) -> Annotation | None:
+        return self._annotations.get(annotation_type.value)
 
     # -------------------------------------
     # Shared (de)serialization helpers for subclasses
     # -------------------------------------
-    def _annotations_to_dict(self) -> list[dict[str, Any]] | None:
-        if self.annotations is None:
+    def _annotations_to_dict(self) -> dict[str, dict[str, Any]] | None:
+        if not self._annotations:
             return None
-        return [a.to_dict() for a in self.annotations]
+        return {t: a.to_dict() for t, a in self._annotations.items()}
 
     @staticmethod
     def _annotations_from_dict(
-        data: list[dict[str, Any]] | None,
-    ) -> list[Annotation] | None:
-        if data is None:
-            return None
-        return [annotation_from_dict(a) for a in data]
+        data: dict[str, dict[str, Any]] | None,
+    ) -> dict[str, Annotation]:
+        if not data:
+            return {}
+        result: dict[str, Annotation] = {}
+        for annotation_type, item in data.items():
+            cls = ANNOTATION_TYPES.get(annotation_type)
+            if cls is None:
+                raise ValueError(f"Unknown annotation type: {annotation_type!r}")
+            result[annotation_type] = cls.from_dict(item)
+        return result

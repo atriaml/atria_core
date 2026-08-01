@@ -12,14 +12,14 @@ from atria_core.types._serialization._artifact_store import ArtifactStore
 def test_materialize_image_writes_file_and_returns_unloaded_image(tmp_path: Path) -> None:
     store = ArtifactStore(tmp_path)
     original = PILImage.new("RGB", (5, 5), color="red")
-    result = store.materialize_image("s1", Image(original))
+    result = store.materialize_image("s1", Image.from_source(original))
 
     path = tmp_path / "artifacts" / "s1.png"
     assert path.exists()
     assert result.file_path == str(path)
     assert result.content is None
 
-    result.load()
+    result = result.load()
     assert np.array_equal(np.array(original), np.array(result.require_content()))
 
 

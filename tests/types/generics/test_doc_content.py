@@ -10,7 +10,7 @@ def test_derives_text_from_elements() -> None:
 
 
 def test_explicit_text_not_overridden() -> None:
-    content = DocumentContent(text="explicit", elements=make_element_array())
+    content = DocumentContent(_text="explicit", elements=make_element_array())
     assert content.text == "explicit"
 
 
@@ -28,7 +28,7 @@ def test_to_dict_from_dict_roundtrip() -> None:
 
 
 def test_to_dict_handles_no_elements() -> None:
-    content = DocumentContent(text="just text")
+    content = DocumentContent(_text="just text")
     data = content.to_dict()
     assert data == {"text": "just text", "elements": None}
     restored = DocumentContent.from_dict(data)

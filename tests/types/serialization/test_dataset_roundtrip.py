@@ -7,6 +7,7 @@ from PIL import Image as PILImage
 
 from atria_core.types._data_instance._document_instance import DocumentInstance
 from atria_core.types._data_instance._image_instance import ImageInstance
+from atria_core.types._generic._annotations import AnnotationType
 from atria_core.types._generic._documents import MultiPageDocument, SinglePageDocument
 from atria_core.types._generic._image import Image
 from atria_core.types._serialization._dataset_reader import DatasetReader
@@ -18,11 +19,10 @@ def test_image_instance_dataset_roundtrip(tmp_path: Path) -> None:
     instances = [
         ImageInstance(
             sample_id="s1",
-            image=Image(PILImage.new("RGB", (8, 6), color="red")),
-            annotations=[make_classification_annotation()],
-        ),
+            image=Image.from_source(PILImage.new("RGB", (8, 6), color="red")),
+        ).add_annotation(make_classification_annotation()),
         ImageInstance(
-            sample_id="s2", image=Image(PILImage.new("RGB", (8, 6), color="blue"))
+            sample_id="s2", image=Image.from_source(PILImage.new("RGB", (8, 6), color="blue"))
         ),
     ]
 
@@ -36,15 +36,16 @@ def test_image_instance_dataset_roundtrip(tmp_path: Path) -> None:
 
     for original, loaded in zip(instances, restored, strict=True):
         assert loaded.sample_id == original.sample_id
-        loaded.image.load()
+        loaded_image = loaded.image.load()
         assert np.array_equal(
             np.array(original.image.require_content()),
-            np.array(loaded.image.require_content()),
+            np.array(loaded_image.require_content()),
         )
 
-    assert restored[0].annotations is not None
-    assert restored[0].annotations[0].label_name == "cat"
-    assert restored[1].annotations is None
+    restored_ann = restored[0].get_annotation_by_type(AnnotationType.classification)
+    assert restored_ann is not None
+    assert restored_ann.label_name == "cat"
+    assert restored[1].get_annotation_by_type(AnnotationType.classification) is None
 
 
 def test_document_instance_single_page_dataset_roundtrip(tmp_path: Path) -> None:
@@ -81,7 +82,7 @@ def test_document_instance_multi_page_dataset_roundtrip(
 
 def test_dataset_roundtrip_preserves_sample_order(tmp_path: Path) -> None:
     instances = [
-        ImageInstance(sample_id=f"s{i}", image=Image(PILImage.new("RGB", (4, 4))))
+        ImageInstance(sample_id=f"s{i}", image=Image.from_source(PILImage.new("RGB", (4, 4))))
         for i in range(5)
     ]
     DatasetWriter(tmp_path).write(instances)

@@ -8,14 +8,14 @@ from tests.types.builders import make_classification_annotation
 
 
 def test_construct_and_repr() -> None:
-    image = Image(PILImage.new("RGB", (4, 4)))
+    image = Image.from_source(PILImage.new("RGB", (4, 4)))
     instance = ImageInstance(sample_id="s1", image=image)
     assert repr(instance)
     assert instance.image is image
 
 
 def test_equality() -> None:
-    image = Image(PILImage.new("RGB", (4, 4)))
+    image = Image.from_source(PILImage.new("RGB", (4, 4)))
     a = ImageInstance(sample_id="s1", image=image)
     b = ImageInstance(sample_id="s1", image=image)
     c = ImageInstance(sample_id="s2", image=image)
@@ -25,8 +25,8 @@ def test_equality() -> None:
 
 def test_inherits_base_data_instance_behavior() -> None:
     ann = make_classification_annotation()
-    image = Image(PILImage.new("RGB", (4, 4)))
-    instance = ImageInstance(sample_id="s1", image=image, annotations=[ann])
+    image = Image.from_source(PILImage.new("RGB", (4, 4)))
+    instance = ImageInstance(sample_id="s1", image=image).add_annotation(ann)
     assert instance.key == "s1"
     from atria_core.types._generic._annotations import AnnotationType
 

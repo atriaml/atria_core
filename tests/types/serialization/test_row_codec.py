@@ -13,7 +13,7 @@ from atria_core.types._serialization._row_codec import RowCodec
 
 def test_to_row_produces_expected_shape(tmp_path: Path) -> None:
     store = ArtifactStore(tmp_path)
-    instance = ImageInstance(sample_id="s1", image=Image(PILImage.new("RGB", (4, 4))))
+    instance = ImageInstance(sample_id="s1", image=Image.from_source(PILImage.new("RGB", (4, 4))))
 
     row = RowCodec.to_row(instance, store)
 
@@ -26,7 +26,7 @@ def test_to_row_produces_expected_shape(tmp_path: Path) -> None:
 
 def test_to_row_does_not_mutate_original_instance(tmp_path: Path) -> None:
     store = ArtifactStore(tmp_path)
-    image = Image(PILImage.new("RGB", (4, 4)))
+    image = Image.from_source(PILImage.new("RGB", (4, 4)))
     instance = ImageInstance(sample_id="s1", image=image)
 
     RowCodec.to_row(instance, store)
@@ -38,7 +38,7 @@ def test_to_row_does_not_mutate_original_instance(tmp_path: Path) -> None:
 
 def test_from_row_reconstructs_instance(tmp_path: Path) -> None:
     store = ArtifactStore(tmp_path)
-    instance = ImageInstance(sample_id="s1", image=Image(PILImage.new("RGB", (4, 4))))
+    instance = ImageInstance(sample_id="s1", image=Image.from_source(PILImage.new("RGB", (4, 4))))
     row = RowCodec.to_row(instance, store)
 
     restored = RowCodec.from_row(row)

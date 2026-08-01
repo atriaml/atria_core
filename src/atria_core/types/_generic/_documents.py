@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     )
 
 
-@dataclass(repr=False)
+@dataclass(frozen=True, repr=False)
 class MultiPageDocument(BaseDataModel):
     """Multi-page document backed by a source path (local or remote URI).
     Holds no bytes, no open file/native handles as instance state — trivially
@@ -91,7 +91,7 @@ class MultiPageDocument(BaseDataModel):
         return cls(source_path=data["source_path"], dpi=data.get("dpi", 200))
 
 
-@dataclass(repr=False)
+@dataclass(frozen=True, repr=False)
 class SinglePageDocument(BaseDataModel):
     """Plain data container for a single page document."""
 

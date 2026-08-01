@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import enum
-from dataclasses import dataclass, fields
+from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
@@ -22,7 +22,7 @@ class OCRLevel(int, enum.Enum):
     word = 5
 
 
-@dataclass(repr=False, eq=False)
+@dataclass(frozen=True, repr=False, eq=False)
 class ElementArray(BaseDataModel):
     """Every element of a page's OCR/text-layer hierarchy (page, block,
     paragraph, line, word), flat, one row per element, with `parent_ids`
@@ -43,7 +43,9 @@ class ElementArray(BaseDataModel):
 
     def __post_init__(self) -> None:
         if self.texts is not None and not isinstance(self.texts, np.ndarray):
-            self.texts = np.asarray(self.texts, dtype=object)
+            raise TypeError(
+                f"texts must be a numpy array (dtype=object); got {type(self.texts).__name__}"
+            )
 
         n = len(self.texts) if self.texts is not None else None
         for name, arr in (
@@ -66,24 +68,19 @@ class ElementArray(BaseDataModel):
                     f"min={self.bboxes.min():.4f} max={self.bboxes.max():.4f}"
                 )
 
-        if self.ids is not None and self.parent_ids is not None:
-            has_parent = self.parent_ids != _ROOT_PARENT
-            ok = ~has_parent | np.isin(self.parent_ids, self.ids)
-            if not ok.all():
-                raise ValueError(
-                    f"dangling parent_ids at rows {np.flatnonzero(~ok)[:5].tolist()}"
-                )
-
-    @classmethod
-    def _unchecked(cls, **kwargs: Any) -> ElementArray:
-        """Constructs without running __post_init__'s validation. Only for
-        internal use by `at()`: a slice's parent_ids legitimately point
-        outside the slice, which the dangling-parent-id check would
-        otherwise reject on every real page."""
-        obj = object.__new__(cls)
-        for f in fields(cls):
-            setattr(obj, f.name, kwargs.get(f.name))
-        return obj
+    def validate_hierarchy(self) -> None:
+        """Checks every non-root parent_id references a real id in this same
+        array. Not run automatically in __post_init__: `at()`'s slices
+        legitimately have parent_ids pointing outside the slice, so this is
+        opt-in -- call it after building a full hierarchy (extractors do)."""
+        if self.ids is None or self.parent_ids is None:
+            return
+        has_parent = self.parent_ids != _ROOT_PARENT
+        ok = ~has_parent | np.isin(self.parent_ids, self.ids)
+        if not ok.all():
+            raise ValueError(
+                f"dangling parent_ids at rows {np.flatnonzero(~ok)[:5].tolist()}"
+            )
 
     @classmethod
     def from_words(cls, texts: list[str], bboxes: Any) -> ElementArray:
@@ -110,7 +107,7 @@ class ElementArray(BaseDataModel):
         if self.levels is None:
             return self
         mask = self.levels == level.value
-        return ElementArray._unchecked(
+        return ElementArray(
             ids=self.ids[mask] if self.ids is not None else None,
             parent_ids=self.parent_ids[mask] if self.parent_ids is not None else None,
             levels=self.levels[mask],

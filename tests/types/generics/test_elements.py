@@ -27,7 +27,7 @@ def _hierarchy() -> ElementArray:
                 [0.35, 0.1, 0.6, 0.2],
             ]
         ),
-        texts=["", "", "hello", "world"],
+        texts=np.array(["", "", "hello", "world"], dtype=object),
     )
 
 
@@ -72,17 +72,42 @@ def test_to_dict_from_dict_roundtrip() -> None:
 
 def test_rejects_length_mismatch() -> None:
     with pytest.raises(ValueError, match="expected"):
-        ElementArray(bboxes=np.zeros((2, 4)), texts=["only one"])
+        ElementArray(bboxes=np.zeros((2, 4)), texts=np.array(["only one"], dtype=object))
 
 
 def test_rejects_unnormalized_bbox() -> None:
     with pytest.raises(ValueError, match="normalized"):
-        ElementArray(bboxes=np.array([[0.0, 0.0, 2.0, 2.0]]), texts=["x"])
+        ElementArray(
+            bboxes=np.array([[0.0, 0.0, 2.0, 2.0]]), texts=np.array(["x"], dtype=object)
+        )
 
 
-def test_rejects_dangling_parent_id() -> None:
+def test_rejects_non_ndarray_texts() -> None:
+    with pytest.raises(TypeError, match="texts"):
+        ElementArray(texts=["x"])  # type: ignore[arg-type]
+
+
+def test_at_produces_slice_with_dangling_parent_ids_uncheck() -> None:
+    # at() doesn't call validate_hierarchy() -- a word-only slice's
+    # parent_ids point at line ids no longer present, by design.
+    ea = _hierarchy()
+    words = ea.at(OCRLevel.word)
     with pytest.raises(ValueError, match="dangling"):
-        ElementArray(ids=np.array([0]), parent_ids=np.array([99]), texts=["x"])
+        words.validate_hierarchy()
+
+
+def test_validate_hierarchy_rejects_dangling_parent_id() -> None:
+    ea = ElementArray(
+        ids=np.array([0]),
+        parent_ids=np.array([99]),
+        texts=np.array(["x"], dtype=object),
+    )
+    with pytest.raises(ValueError, match="dangling"):
+        ea.validate_hierarchy()
+
+
+def test_validate_hierarchy_passes_for_well_formed_tree() -> None:
+    _hierarchy().validate_hierarchy()
 
 
 def test_empty_array_is_falsy_len() -> None:

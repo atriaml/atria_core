@@ -12,6 +12,7 @@ from atria_core.types._generic._annotations import (
     ObjectDetectionAnnotation,
     QuestionAnsweringAnnotation,
 )
+from atria_core.types._generic._bounding_box import as_bbox_array, as_segmentation_array
 from atria_core.types._generic._doc_content import DocumentContent
 from atria_core.types._generic._elements import ElementArray
 from atria_core.types._generic._image import Image
@@ -44,6 +45,14 @@ def make_document_content(**overrides: Any) -> DocumentContent:
 def make_annotated_object(**overrides: Any) -> AnnotatedObject:
     kwargs: dict[str, Any] = {"label": 0, "bbox": make_bounding_box()}
     kwargs.update(overrides)
+    # AnnotatedObject requires real numpy arrays (it only validates, it
+    # doesn't coerce) -- this builder accepts plain lists for convenience
+    # and converts them here, the same way from_dict does at its boundary.
+    if not isinstance(kwargs["bbox"], np.ndarray):
+        kwargs["bbox"] = as_bbox_array(kwargs["bbox"])
+    segmentation = kwargs.get("segmentation")
+    if segmentation is not None and not isinstance(segmentation, np.ndarray):
+        kwargs["segmentation"] = as_segmentation_array(segmentation)
     return AnnotatedObject(**kwargs)
 
 
@@ -93,4 +102,4 @@ def make_pil_image(size: tuple[int, int] = (16, 12), color: str = "white") -> PI
 
 def make_image(**overrides: Any) -> Image:
     source = overrides.pop("source", None) or make_pil_image()
-    return Image(source)
+    return Image.from_source(source)

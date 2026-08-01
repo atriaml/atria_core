@@ -50,10 +50,10 @@ def test_fetch_process_use_remote_image(tmp_path: Path, http_server: str) -> Non
     original = PILImage.new("RGB", (20, 10), color="red")
     original.save(tmp_path / "photo.png")
 
-    image = Image(f"{http_server}/photo.png")
+    image = Image.from_source(f"{http_server}/photo.png")
     assert image.content is None  # not fetched yet
 
-    image.load()
+    image = image.load()
     assert np.array_equal(np.array(original), np.array(image.require_content()))
 
     processed = ImageTransformer.resize(image, 10, 5)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import shutil
 
+import numpy as np
 import pytest
 from PIL import Image as PILImage
 
@@ -54,7 +55,7 @@ def test_construct_repr_eq_generic_types() -> None:
     )
 
     bbox = (0.1, 0.1, 0.5, 0.5)
-    annotated_object = AnnotatedObject(label=1, bbox=bbox)
+    annotated_object = AnnotatedObject(label=1, bbox=np.asarray(bbox, dtype=np.float64))
     elements = ElementArray.from_words(["hello"], [bbox])
     doc_content = DocumentContent(elements=elements)
     qa_pair = QAPair(id=0, question_text="what?", answer_text="this", start=0, end=4)
@@ -67,7 +68,7 @@ def test_construct_repr_eq_generic_types() -> None:
 def test_construct_repr_eq_instances() -> None:
     from atria_core.types import Image, ImageInstance
 
-    image = Image(PILImage.new("RGB", (4, 4)))
+    image = Image.from_source(PILImage.new("RGB", (4, 4)))
     instance = ImageInstance(sample_id="s1", image=image)
 
     assert repr(instance)
@@ -81,7 +82,7 @@ def test_content_extractor_recursion() -> None:
 
     class StubExtractor(ContentExtractor):
         def _extract(self, image: PILImage.Image) -> DocumentContent:
-            return DocumentContent(text="stub")
+            return DocumentContent(_text="stub")
 
     doc = SinglePageDocument.from_image(PILImage.new("RGB", (4, 4)))
     extracted = doc.extract_content(StubExtractor())

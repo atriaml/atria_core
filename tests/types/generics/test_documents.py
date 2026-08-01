@@ -11,7 +11,7 @@ from atria_core.types._generic._documents import MultiPageDocument, SinglePageDo
 
 class StubExtractor(ContentExtractor):
     def _extract(self, image: PILImage.Image) -> DocumentContent:
-        return DocumentContent(text=f"{image.width}x{image.height}")
+        return DocumentContent(_text=f"{image.width}x{image.height}")
 
 
 def test_single_page_document_from_pil_image(sample_image: PILImage.Image) -> None:

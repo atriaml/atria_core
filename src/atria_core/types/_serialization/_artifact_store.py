@@ -23,10 +23,10 @@ class ArtifactStore:
     def materialize_image(self, key: str, image: Image) -> Image:
         """Writes `image`'s content into this store and returns a new,
         unloaded, file-backed Image pointing at the copy."""
-        image.load()
+        image = image.load()
         path = self.artifacts_dir / f"{key}.png"
         image.require_content().save(path)
-        return Image(str(path))
+        return Image.from_source(str(path))
 
     def materialize_page_image(self, key: str, image: PILImage) -> str:
         """Same as materialize_image, but for a raw PIL image (as held by

@@ -10,7 +10,6 @@ from atria_core.types._generic._annotations import (
     LayoutAnalysisAnnotation,
     ObjectDetectionAnnotation,
     QuestionAnsweringAnnotation,
-    annotation_from_dict,
 )
 from tests.types.builders import (
     make_annotated_object,
@@ -137,14 +136,8 @@ def test_layout_analysis_annotation_type() -> None:
         lambda: LayoutAnalysisAnnotation(label_map=["a"]),
     ],
 )
-def test_annotation_from_dict_roundtrip(maker) -> None:
+def test_annotation_to_dict_from_dict_roundtrip(maker) -> None:
     ann = maker()
     data = ann.to_dict()
-    restored = annotation_from_dict(data)
+    restored = type(ann).from_dict(data)
     assert restored.to_dict() == data
-    assert type(restored) is type(ann)
-
-
-def test_annotation_from_dict_unknown_type_raises() -> None:
-    with pytest.raises(ValueError, match="Unknown annotation type"):
-        annotation_from_dict({"type": "not_a_real_type"})

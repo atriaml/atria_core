@@ -9,7 +9,7 @@ from atria_core.types._generic._image import Image
 
 
 def test_construct_from_pil_image_is_already_loaded(sample_image: PILImage.Image) -> None:
-    image = Image(sample_image)
+    image = Image.from_source(sample_image)
     assert image.file_path is None
     assert image.content is sample_image
     assert image.size == (16, 12)
@@ -20,33 +20,34 @@ def test_construct_from_pil_image_is_already_loaded(sample_image: PILImage.Image
 
 
 def test_construct_from_path_is_lazy(sample_image_path: Path) -> None:
-    image = Image(sample_image_path)
+    image = Image.from_source(sample_image_path)
     assert image.file_path == str(sample_image_path)
     assert image.content is None
 
 
 def test_require_content_without_load_raises(sample_image_path: Path) -> None:
-    image = Image(sample_image_path)
+    image = Image.from_source(sample_image_path)
     with pytest.raises(AssertionError):
         image.require_content()
 
 
 def test_load_from_path_populates_content(sample_image_path: Path) -> None:
-    image = Image(sample_image_path)
-    image.load()
+    image = Image.from_source(sample_image_path)
+    image = image.load()
     assert image.content is not None
     assert image.size == (16, 12)
 
 
 def test_load_is_idempotent_when_already_loaded(sample_image: PILImage.Image) -> None:
-    image = Image(sample_image)
-    image.load()
-    assert image.content is sample_image
+    image = Image.from_source(sample_image)
+    loaded = image.load()
+    assert loaded is image
+    assert loaded.content is sample_image
 
 
 def test_equality_by_field() -> None:
-    a = Image("/some/path.png")
-    b = Image("/some/path.png")
-    c = Image("/other/path.png")
+    a = Image.from_source("/some/path.png")
+    b = Image.from_source("/some/path.png")
+    c = Image.from_source("/other/path.png")
     assert a == b
     assert a != c

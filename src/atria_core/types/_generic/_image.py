@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -9,27 +9,30 @@ from PIL import Image as PILImage
 from atria_core.types._base_data_model import BaseDataModel
 
 
-@dataclass(init=False, repr=False)
+@dataclass(frozen=True, repr=False)
 class Image(BaseDataModel):
     file_path: str | None = None
     content: PILImage.Image | None = None
 
-    def __init__(self, source: str | Path | PILImage.Image) -> None:
+    @classmethod
+    def from_source(cls, source: str | Path | PILImage.Image) -> Image:
         if isinstance(source, PILImage.Image):
-            self.file_path = None
-            self.content = source
-        else:
-            self.file_path = str(source)
-            self.content = None
+            return cls(file_path=None, content=source)
+        return cls(file_path=str(source), content=None)
 
-    def load(self) -> None:
-        if self.content is None:
-            from atria_core.types._utilities._image_encoding import _bytes_to_image
-            from atria_core.types._utilities._url_fetchers import ResourceLoader
+    def load(self) -> Image:
+        """Returns an Image with `content` populated -- `self` if already
+        loaded, otherwise a new instance (content is never fetched in
+        place)."""
+        if self.content is not None:
+            return self
 
-            assert self.file_path is not None, "Image has neither content nor file_path"
-            loader = ResourceLoader.for_uri(self.file_path)
-            self.content = _bytes_to_image(loader.load_bytes())
+        from atria_core.types._utilities._image_encoding import _bytes_to_image
+        from atria_core.types._utilities._url_fetchers import ResourceLoader
+
+        assert self.file_path is not None, "Image has neither content nor file_path"
+        loader = ResourceLoader.for_uri(self.file_path)
+        return replace(self, content=_bytes_to_image(loader.load_bytes()))
 
     def require_content(self) -> PILImage.Image:
         """Returns the loaded PIL image, or raises if load() hasn't been called."""
@@ -69,4 +72,4 @@ class Image(BaseDataModel):
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Image:
-        return cls(data["file_path"])
+        return cls(file_path=data["file_path"])

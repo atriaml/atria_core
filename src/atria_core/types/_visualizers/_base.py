@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING, cast
 from PIL.Image import Image as PILImage
 
 from atria_core.logger import get_logger
-from atria_core.types._data_instance._base import AnnotationNotFoundError
 from atria_core.types._generic._annotations import AnnotationType
 
 if TYPE_CHECKING:
@@ -21,13 +20,12 @@ class Visualizer:
 
     @property
     def output_name(self) -> str:
-        try:
-            classification_annotation = self.instance.get_annotation_by_type(
-                AnnotationType.classification
-            )
-            return f"{self.instance.sample_id}_label={classification_annotation.label_name}"
-        except AnnotationNotFoundError:
+        classification_annotation = self.instance.get_annotation_by_type(
+            AnnotationType.classification
+        )
+        if classification_annotation is None:
             return self.instance.sample_id
+        return f"{self.instance.sample_id}_label={classification_annotation.label_name}"
 
     def _load_image(self) -> PILImage:
         from atria_core.types._data_instance._document_instance import DocumentInstance
@@ -35,8 +33,7 @@ class Visualizer:
         from atria_core.types._generic._documents import MultiPageDocument
 
         if isinstance(self.instance, ImageInstance):
-            self.instance.image.load()
-            return cast(PILImage, self.instance.image.content)
+            return cast(PILImage, self.instance.image.load().content)
 
         if isinstance(self.instance, DocumentInstance):
             document = self.instance.document

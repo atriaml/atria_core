@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-@dataclass(repr=False)
+@dataclass(frozen=True, repr=False)
 class SplitConfig(BaseDataModel):
     """The split type and additional keyword arguments for generating a dataset split."""
 
@@ -32,7 +32,7 @@ class SplitConfig(BaseDataModel):
         )
 
 
-@dataclass(repr=False)
+@dataclass(frozen=True, repr=False)
 class DatasetShardInfo(BaseDataModel):
     """Information about a single dataset shard."""
 
@@ -59,7 +59,7 @@ class DatasetShardInfo(BaseDataModel):
         )
 
 
-@dataclass(repr=False)
+@dataclass(frozen=True, repr=False)
 class SplitInfo(BaseDataModel):
     """Aggregate information about a dataset split, across all its shards."""
 
@@ -98,7 +98,7 @@ class SplitInfo(BaseDataModel):
             return cls.from_dict(json.load(f))
 
 
-@dataclass(repr=False)
+@dataclass(frozen=True, repr=False)
 class DatasetLabels(BaseDataModel):
     """Classification and token labels for a dataset."""
 
@@ -148,7 +148,7 @@ class DatasetLabels(BaseDataModel):
         )
 
 
-@dataclass(repr=False)
+@dataclass(frozen=True, repr=False)
 class DatasetMetadata(BaseDataModel):
     """Metadata for a dataset, including configuration and labels."""
 
@@ -210,7 +210,7 @@ class DatasetMetadata(BaseDataModel):
         self.__dict__.update(restored.__dict__)
 
 
-@dataclass(repr=False)
+@dataclass(frozen=True, repr=False)
 class DatasetStorageInfo(BaseDataModel):
     """Storage information for a dataset: its metadata and split info."""
 

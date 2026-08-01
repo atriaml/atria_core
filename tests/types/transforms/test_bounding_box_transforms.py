@@ -18,7 +18,7 @@ from atria_core.types._transforms._bounding_box import BoundingBoxTransformer
 
 def _annotation(bbox=(10, 10, 50, 60)) -> ObjectDetectionAnnotation:
     return ObjectDetectionAnnotation.from_objects(
-        [AnnotatedObject(label=0, bbox=bbox)], label_map=["a"]
+        [AnnotatedObject(label=0, bbox=np.asarray(bbox, dtype=np.float64))], label_map=["a"]
     )
 
 
@@ -80,7 +80,7 @@ def test_normalize_with_no_objects_is_noop() -> None:
 
 def test_normalize_preserves_layout_analysis_annotation_subclass() -> None:
     ann = LayoutAnalysisAnnotation.from_objects(
-        [AnnotatedObject(label=0, bbox=(10, 10, 50, 60))], label_map=["a"]
+        [AnnotatedObject(label=0, bbox=np.array([10.0, 10.0, 50.0, 60.0]))], label_map=["a"]
     )
     result = BoundingBoxTransformer.normalize(ann, 100, 100)
     assert isinstance(result, LayoutAnalysisAnnotation)

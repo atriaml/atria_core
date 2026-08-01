@@ -6,7 +6,7 @@ from typing import Any
 from atria_core.types._base_data_model import BaseDataModel
 
 
-@dataclass(repr=False)
+@dataclass(frozen=True, repr=False)
 class QAPair(BaseDataModel):
     id: int
     question_text: str

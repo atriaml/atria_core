@@ -7,7 +7,7 @@ from atria_core.types._data_instance._base import BaseDataInstance
 from atria_core.types._generic._documents import MultiPageDocument, SinglePageDocument
 
 
-@dataclass(repr=False)
+@dataclass(frozen=True, repr=False)
 class DocumentInstance(BaseDataInstance):
     document: SinglePageDocument | MultiPageDocument
 
@@ -29,5 +29,5 @@ class DocumentInstance(BaseDataInstance):
         return cls(
             sample_id=data["sample_id"],
             document=document_cls.from_dict(data["document"]),
-            annotations=cls._annotations_from_dict(data.get("annotations")),
+            _annotations=cls._annotations_from_dict(data.get("annotations")),
         )

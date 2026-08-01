@@ -109,6 +109,7 @@ class TesseractExtractor(ContentExtractor):
             texts=np.asarray(texts, dtype=object),
             confs=np.asarray(confs, dtype=np.float64),
         )
+        elements.validate_hierarchy()
         return DocumentContent(elements=elements)
 
     def _build_config_string(self) -> str:

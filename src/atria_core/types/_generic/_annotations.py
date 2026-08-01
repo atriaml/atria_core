@@ -3,7 +3,7 @@ from __future__ import annotations
 import enum
 import json
 from dataclasses import dataclass, replace
-from typing import Any, cast
+from typing import Any
 
 import numpy as np
 
@@ -21,7 +21,7 @@ class AnnotationType(str, enum.Enum):
     layout_analysis = "layout_analysis"
 
 
-@dataclass(repr=False)
+@dataclass(frozen=True, repr=False)
 class ClassificationAnnotation(BaseDataModel):
     type = AnnotationType.classification.value
 
@@ -47,7 +47,7 @@ class ClassificationAnnotation(BaseDataModel):
         return cls(label=data["label"], label_map=data["label_map"])
 
 
-@dataclass(repr=False)
+@dataclass(frozen=True, repr=False)
 class EntityLabelingAnnotation(BaseDataModel):
     type = AnnotationType.entity_labeling.value
 
@@ -82,7 +82,7 @@ class EntityLabelingAnnotation(BaseDataModel):
         return cls(word_labels=list(data["word_labels"]), label_map=data["label_map"])
 
 
-@dataclass(repr=False)
+@dataclass(frozen=True, repr=False)
 class QuestionAnsweringAnnotation(BaseDataModel):
     type = AnnotationType.question_answering.value
 
@@ -99,7 +99,7 @@ class QuestionAnsweringAnnotation(BaseDataModel):
         return cls(qa_pairs=[QAPair.from_dict(q) for q in data["qa_pairs"]])
 
 
-@dataclass(repr=False, eq=False)
+@dataclass(frozen=True, repr=False, eq=False)
 class ObjectDetectionAnnotation(BaseDataModel):
     """Detected objects, stored as structure-of-arrays: one entry per
     object, but columnar (parallel arrays) rather than a list of per-object
@@ -234,7 +234,7 @@ class ObjectDetectionAnnotation(BaseDataModel):
         )
 
 
-@dataclass(repr=False)
+@dataclass(frozen=True, repr=False, eq=False)
 class LayoutAnalysisAnnotation(ObjectDetectionAnnotation):
     type = AnnotationType.layout_analysis.value
 
@@ -247,19 +247,11 @@ Annotation = (
     | LayoutAnalysisAnnotation
 )
 
-
-def annotation_from_dict(data: dict[str, Any]) -> Annotation:
-    _map: dict[str, type[BaseDataModel]] = {
-        AnnotationType.classification.value: ClassificationAnnotation,
-        AnnotationType.entity_labeling.value: EntityLabelingAnnotation,
-        AnnotationType.question_answering.value: QuestionAnsweringAnnotation,
-        AnnotationType.object_detection.value: ObjectDetectionAnnotation,
-        AnnotationType.layout_analysis.value: LayoutAnalysisAnnotation,
-    }
-    annotation_type = data.get("type")
-    cls = _map.get(annotation_type) if annotation_type is not None else None
-    if cls is None:
-        raise ValueError(f"Unknown annotation type: {annotation_type!r}")
-    return cast(
-        "Annotation", cls.from_dict({k: v for k, v in data.items() if k != "type"})
-    )
+#: type string -> class, for BaseDataInstance's annotation dict (de)serialization.
+ANNOTATION_TYPES: dict[str, type[Annotation]] = {
+    AnnotationType.classification.value: ClassificationAnnotation,
+    AnnotationType.entity_labeling.value: EntityLabelingAnnotation,
+    AnnotationType.question_answering.value: QuestionAnsweringAnnotation,
+    AnnotationType.object_detection.value: ObjectDetectionAnnotation,
+    AnnotationType.layout_analysis.value: LayoutAnalysisAnnotation,
+}

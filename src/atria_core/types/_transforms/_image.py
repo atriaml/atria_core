@@ -16,7 +16,7 @@ class ImageTransformer:
     def resize(
         image: Image, width: int, height: int, resample: Resampling = Resampling.BICUBIC
     ) -> Image:
-        return Image(image.require_content().resize((width, height), resample))
+        return Image.from_source(image.require_content().resize((width, height), resample))
 
     @staticmethod
     def resize_with_aspect_ratio(
@@ -38,11 +38,11 @@ class ImageTransformer:
 
     @staticmethod
     def to_rgb(image: Image) -> Image:
-        return Image(image.require_content().convert("RGB"))
+        return Image.from_source(image.require_content().convert("RGB"))
 
     @staticmethod
     def to_grayscale(image: Image) -> Image:
-        return Image(image.require_content().convert("L"))
+        return Image.from_source(image.require_content().convert("L"))
 
     @staticmethod
     def to_numpy(image: Image) -> np.ndarray:
