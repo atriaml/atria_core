@@ -1,10 +1,15 @@
 from __future__ import annotations
 
-from collections.abc import Generator
+from collections.abc import Generator, Iterator
+from typing import Any
 
 import pytest
 
-from atria_core.datasets import HFSplitIterator, SplitIterator
+from atria_core.datasets import (
+    HFSplitIterator,
+    IndexableSplitIterator,
+    IterableSplitIterator,
+)
 from atria_core.types import DatasetSplitType
 from atria_core.types._data_instance._base import BaseDataInstance
 
@@ -18,6 +23,27 @@ class _Record(BaseDataInstance):
         return cls(sample_id=str(data["sample_id"]))
 
 
+class _ListSplitIterator(IndexableSplitIterator[_Record]):
+    def __init__(self, items: list[_Record], **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self._items = items
+
+    def _raw_getitem(self, index: int) -> Any:
+        return self._items[index]
+
+    def _raw_len(self) -> int:
+        return len(self._items)
+
+
+class _GeneratorSplitIterator(IterableSplitIterator[_Record]):
+    def __init__(self, items: Iterator[_Record], **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self._items = items
+
+    def _raw_iter(self) -> Iterator[_Record]:
+        return self._items
+
+
 def _records(n: int) -> list[_Record]:
     return [_Record(sample_id=str(i)) for i in range(n)]
 
@@ -27,9 +53,9 @@ def _record(item: _Record | list[_Record] | tuple[int, _Record]) -> _Record:
     return item
 
 
-def test_iterates_over_list_base_iterator() -> None:
-    iterator = SplitIterator(
-        split=DatasetSplitType.train, base_iterator=_records(3), data_model=_Record
+def test_iterates_over_indexable_split_iterator() -> None:
+    iterator = _ListSplitIterator(
+        items=_records(3), split=DatasetSplitType.train, data_model=_Record
     )
 
     result = [_record(item) for item in iterator]
@@ -38,8 +64,8 @@ def test_iterates_over_list_base_iterator() -> None:
 
 
 def test_getitem_and_len() -> None:
-    iterator = SplitIterator(
-        split=DatasetSplitType.train, base_iterator=_records(3), data_model=_Record
+    iterator = _ListSplitIterator(
+        items=_records(3), split=DatasetSplitType.train, data_model=_Record
     )
 
     assert len(iterator) == 3
@@ -47,9 +73,9 @@ def test_getitem_and_len() -> None:
 
 
 def test_max_len_truncates() -> None:
-    iterator = SplitIterator(
+    iterator = _ListSplitIterator(
+        items=_records(5),
         split=DatasetSplitType.train,
-        base_iterator=_records(5),
         data_model=_Record,
         max_len=2,
     )
@@ -59,8 +85,8 @@ def test_max_len_truncates() -> None:
 
 
 def test_subset_indices_restricts_access() -> None:
-    iterator = SplitIterator(
-        split=DatasetSplitType.train, base_iterator=_records(5), data_model=_Record
+    iterator = _ListSplitIterator(
+        items=_records(5), split=DatasetSplitType.train, data_model=_Record
     )
     iterator.subset_indices = [4, 2, 0]
 
@@ -69,9 +95,9 @@ def test_subset_indices_restricts_access() -> None:
 
 
 def test_output_transform_applied() -> None:
-    iterator = SplitIterator(
+    iterator = _ListSplitIterator(
+        items=_records(2),
         split=DatasetSplitType.train,
-        base_iterator=_records(2),
         data_model=_Record,
         output_transform=lambda sample: _Record(
             sample_id=f"transformed-{sample.sample_id}"
@@ -82,8 +108,8 @@ def test_output_transform_applied() -> None:
 
 
 def test_disable_tf_yields_raw_index_sample_pairs() -> None:
-    iterator = SplitIterator(
-        split=DatasetSplitType.train, base_iterator=_records(2), data_model=_Record
+    iterator = _ListSplitIterator(
+        items=_records(2), split=DatasetSplitType.train, data_model=_Record
     )
     iterator.disable_tf()
 
@@ -96,8 +122,8 @@ def test_disable_tf_yields_raw_index_sample_pairs() -> None:
 
 
 def test_get_random_subset() -> None:
-    iterator = SplitIterator(
-        split=DatasetSplitType.train, base_iterator=_records(10), data_model=_Record
+    iterator = _ListSplitIterator(
+        items=_records(10), split=DatasetSplitType.train, data_model=_Record
     )
 
     subset = iterator.get_random_subset(subset_size=3, seed=1)
@@ -110,22 +136,29 @@ def _record_generator() -> Generator[_Record, None, None]:
     yield from _records(2)
 
 
-def test_getitem_requires_indexing_support() -> None:
-    iterator = SplitIterator(
-        split=DatasetSplitType.train,
-        base_iterator=_record_generator(),
-        data_model=_Record,
+def test_iterable_split_iterator_does_not_support_indexing() -> None:
+    iterator = _GeneratorSplitIterator(
+        items=_record_generator(), split=DatasetSplitType.train, data_model=_Record
     )
 
     with pytest.raises(RuntimeError):
         _ = iterator[0]
 
 
-def test_hf_split_iterator_forces_iterable_only_mode() -> None:
+def test_hf_split_iterator_iterates() -> None:
     iterator = HFSplitIterator(
-        split=DatasetSplitType.train,
-        base_iterator=_record_generator(),
-        data_model=_Record,
+        hf_dataset=_records(2), split=DatasetSplitType.train, data_model=_Record
     )
 
     assert [_record(item).sample_id for item in iterator] == ["0", "1"]
+
+
+def test_hf_split_iterator_forces_iterable_only_mode() -> None:
+    # hf_dataset here is a plain list (indexable), but HFSplitIterator
+    # always forces iterable-only access regardless of what it wraps.
+    iterator = HFSplitIterator(
+        hf_dataset=_records(2), split=DatasetSplitType.train, data_model=_Record
+    )
+
+    with pytest.raises(RuntimeError):
+        _ = iterator[0]

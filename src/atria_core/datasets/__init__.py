@@ -19,10 +19,12 @@ if TYPE_CHECKING:
     from ._dataset_builders import PreprocessTransform as PreprocessTransform
     from ._exceptions import ConfigurationNotFoundError as ConfigurationNotFoundError
     from ._exceptions import SplitNotFoundError as SplitNotFoundError
+    from ._hf_dataset import HFSplitIterator as HFSplitIterator
     from ._hf_dataset import HuggingfaceDataset as HuggingfaceDataset
     from ._hf_dataset import HuggingfaceDocumentDataset as HuggingfaceDocumentDataset
     from ._hf_dataset import HuggingfaceImageDataset as HuggingfaceImageDataset
-    from ._split_iterators import HFSplitIterator as HFSplitIterator
+    from ._split_iterators import IndexableSplitIterator as IndexableSplitIterator
+    from ._split_iterators import IterableSplitIterator as IterableSplitIterator
     from ._split_iterators import InstanceTransform as InstanceTransform
     from ._split_iterators import SplitIterator as SplitIterator
 
@@ -46,10 +48,16 @@ __getattr__, __dir__, __all__ = lazy.attach(
         "_dataset_builders": ["ComposedTransform", "PreprocessTransform"],
         "_exceptions": ["ConfigurationNotFoundError", "SplitNotFoundError"],
         "_hf_dataset": [
+            "HFSplitIterator",
             "HuggingfaceDataset",
             "HuggingfaceDocumentDataset",
             "HuggingfaceImageDataset",
         ],
-        "_split_iterators": ["HFSplitIterator", "InstanceTransform", "SplitIterator"],
+        "_split_iterators": [
+            "IndexableSplitIterator",
+            "IterableSplitIterator",
+            "InstanceTransform",
+            "SplitIterator",
+        ],
     },
 )

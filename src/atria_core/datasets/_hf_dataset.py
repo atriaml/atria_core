@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Iterator
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Generic
 
@@ -13,6 +13,7 @@ from atria_core.datasets._common import (
 from atria_core.datasets._constants import _DEFAULT_DOWNLOAD_PATH
 from atria_core.datasets._dataset import Dataset
 from atria_core.datasets._dataset_builders import _default_data_dir, _validate_data_dir
+from atria_core.datasets._split_iterators import IterableSplitIterator, SplitIterator
 from atria_core.logger import get_logger
 from atria_core.types import (
     DatasetMetadata,
@@ -25,6 +26,18 @@ if TYPE_CHECKING:
     import datasets
 
 logger = get_logger(__name__)
+
+
+class HFSplitIterator(IterableSplitIterator[T_BaseDataInstance]):
+    """Concrete IterableSplitIterator wrapping an HF streaming dataset --
+    HF streaming datasets are iterable-only, so only _raw_iter applies."""
+
+    def __init__(self, hf_dataset: Iterable[Any], **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self._hf_dataset = hf_dataset
+
+    def _raw_iter(self) -> Iterator[Any]:
+        return iter(self._hf_dataset)
 
 
 class HuggingfaceDataset(
@@ -131,13 +144,38 @@ class HuggingfaceDataset(
     def _metadata(self) -> DatasetMetadata:
         return DatasetMetadata.from_huggingface_info(self._hf_dataset_builder.info)
 
-    def _split_iterator(self, split: DatasetSplitType, data_dir: str) -> Iterable[Any]:
+    def _build_split_iterator(
+        self,
+        split: DatasetSplitType,
+        data_dir: str,
+        output_transform: Callable[
+            [T_BaseDataInstance], T_BaseDataInstance | list[T_BaseDataInstance]
+        ]
+        | None = None,
+    ) -> SplitIterator[T_BaseDataInstance]:
+        """HFSplitIterator needs the actual streaming dataset object (built
+        from HF-specific state this Dataset holds), not just split/data_dir
+        -- overrides _build_split_iterator directly instead of setting
+        __split_iterator_cls__."""
         assert self._hf_split_generators is not None, (
             "Hugging Face split generators have not been initialized. "
             "Ensure that _available_splits() has been called."
         )
-        return self._hf_dataset_builder._as_streaming_dataset_single(  # type: ignore[no-any-return]
+        hf_dataset = self._hf_dataset_builder._as_streaming_dataset_single(
             self._hf_split_generators[split]
+        )
+        limits = {
+            DatasetSplitType.train: self.config.max_train_samples,
+            DatasetSplitType.validation: self.config.max_validation_samples,
+            DatasetSplitType.test: self.config.max_test_samples,
+        }
+        return HFSplitIterator(
+            hf_dataset=hf_dataset,
+            split=split,
+            data_model=self.data_model,
+            input_transform=self.input_transform,
+            output_transform=output_transform,
+            max_len=limits[split],
         )
 
 

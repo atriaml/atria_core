@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import itertools
+import multiprocessing as mp
 import pickle
 import sys
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from pathlib import Path
 from typing import Any, ClassVar, Self
 from urllib.parse import urlparse
@@ -15,7 +16,11 @@ import ray
 import tqdm
 
 from atria_core.datasets._common import DatasetLoadingMode, T_BaseDataInstance
-from atria_core.datasets._split_iterators import InstanceTransform, SplitIterator
+from atria_core.datasets._split_iterators import (
+    IndexableSplitIterator,
+    InstanceTransform,
+    SplitIterator,
+)
 from atria_core.datasets._storage._storage_manager import StorageManager
 from atria_core.logger import get_logger
 from atria_core.serialization._artifact_store import ArtifactStore
@@ -220,6 +225,129 @@ class RayParallelDeltalakeWriter:
                 ray.shutdown()
 
 
+def _chunked(iterator: Iterator[Any], size: int) -> Iterator[list[Any]]:
+    while True:
+        chunk = list(itertools.islice(iterator, size))
+        if not chunk:
+            return
+        yield chunk
+
+
+_mp_delta_worker_state: tuple[
+    Path, str | Path, str, type[BaseDataInstance], InstanceTransform[BaseDataInstance] | None
+] | None = None
+
+
+def _init_mp_delta_worker(
+    write_dir: Path,
+    data_dir: str | Path,
+    split_name: str,
+    data_model: type[BaseDataInstance],
+    preprocess_transform: InstanceTransform[BaseDataInstance] | None,
+) -> None:
+    global _mp_delta_worker_state
+    _mp_delta_worker_state = (write_dir, data_dir, split_name, data_model, preprocess_transform)
+
+
+def _convert_chunk_to_rows(chunk: list[tuple[int, Any]]) -> list[dict[str, Any]]:
+    """Runs in a worker process, dispatched via Pool.imap: converts a chunk
+    of samples to rows (materializing artifact content along the way). The
+    actual Delta Lake writes still happen sequentially in the main process
+    -- Delta table appends must be ordered, unlike msgpack's independent
+    per-chunk shard files."""
+    assert _mp_delta_worker_state is not None, "Worker was not initialized"
+    write_dir, data_dir, split_name, data_model, preprocess_transform = _mp_delta_worker_state
+    worker = DeltalakeWriterWorker(
+        worker_id=0,
+        write_dir=write_dir,
+        data_dir=data_dir,
+        split=split_name,
+        data_model=data_model,
+        preprocess_transform=preprocess_transform,
+    ).load()
+    rows: list[dict[str, Any]] = []
+    for idx, sample in chunk:
+        rows.extend(worker.write(idx, sample))
+    return rows
+
+
+class MultiprocessingParallelDeltalakeWriter:
+    """Ray-free alternative to RayParallelDeltalakeWriter: workers only
+    convert sample chunks into rows via Pool.imap; this process still does
+    the actual Delta Lake writes, sequentially, in batches."""
+
+    def __init__(
+        self,
+        write_dir: Path,
+        data_dir: str | Path,
+        num_workers: int = 4,
+        chunk_size: int = 1000,
+        max_memory: int = 1_000_000_000,
+    ) -> None:
+        self.write_dir = write_dir
+        self.data_dir = data_dir
+        self.num_workers = num_workers
+        self.chunk_size = chunk_size
+        self.max_memory = max_memory
+
+    def write_split(self, split_iterator: SplitIterator[Any], split_dir: Path) -> None:
+        split_name = split_iterator.split.value
+        logger.info(
+            f"Writing split {split_name} with {self.num_workers} multiprocessing workers..."
+        )
+
+        coordinator_batch: list[dict[str, Any]] = []
+        write_batch_size: int | None = None
+        first_batch = True
+
+        def _maybe_flush_batch() -> None:
+            nonlocal first_batch, write_batch_size
+            if not coordinator_batch:
+                return
+            if write_batch_size is None:
+                write_batch_size = max(
+                    1, self.max_memory // len(pickle.dumps(coordinator_batch[0]))
+                )
+                logger.info(
+                    f"Delta lake write batch size: {write_batch_size} rows "
+                    f"(max_memory={self.max_memory // 1_000_000} MB)"
+                )
+            if len(coordinator_batch) >= write_batch_size:
+                mode = "overwrite" if first_batch else "append"
+                logger.info(
+                    f"Writing batch of {len(coordinator_batch)} rows to delta lake at {split_dir}"
+                )
+                _write_rows_to_deltalake(coordinator_batch, split_dir, mode=mode)
+                first_batch = False
+                coordinator_batch.clear()
+
+        chunks = _chunked(iter(split_iterator), self.chunk_size)
+        with mp.Pool(
+            processes=self.num_workers,
+            initializer=_init_mp_delta_worker,
+            initargs=(
+                self.write_dir,
+                self.data_dir,
+                split_name,
+                split_iterator.data_model,
+                split_iterator._tf,
+            ),
+        ) as pool:
+            for rows in tqdm.tqdm(
+                pool.imap(_convert_chunk_to_rows, chunks),
+                desc=f"Writing split {split_name}",
+            ):
+                coordinator_batch.extend(rows)
+                _maybe_flush_batch()
+
+        if coordinator_batch:
+            mode = "overwrite" if first_batch else "append"
+            logger.info(
+                f"Writing final batch of {len(coordinator_batch)} rows to delta lake at {split_dir}"
+            )
+            _write_rows_to_deltalake(coordinator_batch, split_dir, mode=mode)
+
+
 class SingleDeltalakeWriter:
     def __init__(
         self,
@@ -297,6 +425,7 @@ class DeltalakeStorageManager(StorageManager):
         num_processes: int = 8,
         max_memory: int = 1_000_000_00,
         name_suffix: str = "",
+        use_ray: bool = False,
     ) -> None:
         self.max_memory = max_memory
         super().__init__(
@@ -305,6 +434,7 @@ class DeltalakeStorageManager(StorageManager):
             config_name=config_name,
             num_processes=num_processes,
             name_suffix=name_suffix,
+            use_ray=use_ray,
         )
 
     def split_exists(self, split: DatasetSplitType) -> bool:
@@ -318,11 +448,22 @@ class DeltalakeStorageManager(StorageManager):
             f"({'parallel' if self.num_processes > 1 else 'single'} mode)"
         )
 
-        writer: RayParallelDeltalakeWriter | SingleDeltalakeWriter
-        if self.num_processes > 1:
+        writer: (
+            RayParallelDeltalakeWriter
+            | MultiprocessingParallelDeltalakeWriter
+            | SingleDeltalakeWriter
+        )
+        if self.num_processes > 1 and self.use_ray:
             writer = RayParallelDeltalakeWriter(
                 data_dir=self.data_dir,
                 write_dir=write_dir,
+                num_workers=self.num_processes,
+                max_memory=self.max_memory,
+            )
+        elif self.num_processes > 1:
+            writer = MultiprocessingParallelDeltalakeWriter(
+                write_dir=write_dir,
+                data_dir=self.data_dir,
                 num_workers=self.num_processes,
                 max_memory=self.max_memory,
             )
@@ -358,7 +499,7 @@ class DeltalakeStorageManager(StorageManager):
             allowed_keys.update({"sample_id", "index"})
 
         reader_cls = LocalDeltalakeReader if streaming_mode else InMemoryDeltalakeReader
-        base_iterator: DeltalakeReader[BaseDataInstance] = reader_cls(
+        reader: DeltalakeReader[BaseDataInstance] = reader_cls(
             table_path=str(self.split_dir(split=split)),
             data_model=data_model,
             allowed_keys=allowed_keys,
@@ -366,9 +507,9 @@ class DeltalakeStorageManager(StorageManager):
             config_name=self.config_name,
         )
 
-        return SplitIterator(
+        return DeltalakeSplitIterator(
+            reader=reader,
             split=split,
-            base_iterator=base_iterator,
             output_transform=output_transform,
             data_model=data_model,
         )
@@ -554,3 +695,26 @@ class LocalDeltalakeReader(DeltalakeReader[T_BaseDataInstance]):
 
     def dataframe(self) -> pd.DataFrame:
         return self._dataset.to_table().to_pandas()
+
+
+class DeltalakeSplitIterator(IndexableSplitIterator[Any]):
+    """Concrete IndexableSplitIterator reading a split back from a Delta
+    table -- also forwards dataframe(), which DeltalakeReader supports
+    natively, and batches multi-index access via the reader's own
+    __getitems__ instead of looping one row at a time."""
+
+    def __init__(self, reader: DeltalakeReader[Any], **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self._reader = reader
+
+    def _raw_getitem(self, index: int) -> Any:
+        return self._reader[index]
+
+    def _raw_getitems(self, indices: list[int]) -> list[Any]:
+        return self._reader.__getitems__(indices)
+
+    def _raw_len(self) -> int:
+        return len(self._reader)
+
+    def dataframe(self) -> pd.DataFrame:
+        return self._reader.dataframe()

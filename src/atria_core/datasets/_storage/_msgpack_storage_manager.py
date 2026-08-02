@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import itertools
+import multiprocessing as mp
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import replace
 from pathlib import Path
 from typing import Any, ClassVar, Self, cast
@@ -12,7 +13,11 @@ import tqdm
 from datadings.writer import Writer
 
 from atria_core.datasets._common import FileStorageType
-from atria_core.datasets._split_iterators import InstanceTransform, SplitIterator
+from atria_core.datasets._split_iterators import (
+    IndexableSplitIterator,
+    InstanceTransform,
+    SplitIterator,
+)
 from atria_core.datasets._storage._msgpack_shard_list_dataset import (
     MsgpackShardListDataset,
 )
@@ -331,6 +336,92 @@ class RayParallelSplitWriter:
                 ray.shutdown()
 
 
+def _chunked(iterator: Iterator[Any], size: int) -> Iterator[list[Any]]:
+    while True:
+        chunk = list(itertools.islice(iterator, size))
+        if not chunk:
+            return
+        yield chunk
+
+
+_mp_worker_state: tuple[
+    type[BaseDataInstance], InstanceTransform[BaseDataInstance] | None, Path
+] | None = None
+
+
+def _init_mp_worker(
+    data_model: type[BaseDataInstance],
+    preprocess_transform: InstanceTransform[BaseDataInstance] | None,
+    split_dir: Path,
+) -> None:
+    global _mp_worker_state
+    _mp_worker_state = (data_model, preprocess_transform, split_dir)
+
+
+def _write_shard(shard_task: tuple[int, list[tuple[int, Any]]]) -> DatasetShardInfo | None:
+    """Runs in a worker process, dispatched via Pool.imap_unordered: each
+    task is a self-contained chunk that gets its own shard file -- no
+    persistent per-worker actor state needed, just a plain map."""
+    assert _mp_worker_state is not None, "Worker was not initialized"
+    data_model, preprocess_transform, split_dir = _mp_worker_state
+    shard_index, chunk = shard_task
+
+    shard_file_pattern = str(Path(split_dir) / f"{shard_index:06d}-%06d.msgpack")
+    writer = ShardWriterWorker(
+        data_model=data_model,
+        storage_type=FileStorageType.MSGPACK,
+        storage_file_pattern=shard_file_pattern,
+        max_shard_size=max(len(chunk), 1),
+        preprocess_transform=preprocess_transform,
+    ).load()
+
+    for idx, sample in chunk:
+        try:
+            writer.write(idx, sample)
+        except DuplicateKeyError:
+            logger.error(f"Duplicate key at index {idx}, skipping")
+        except Exception:
+            logger.exception(f"Error writing sample at index {idx}")
+
+    write_info = writer.close()
+    return write_info[0] if write_info else None
+
+
+class MultiprocessingParallelSplitWriter:
+    """Ray-free alternative to RayParallelSplitWriter: split the data into
+    fixed-size chunks up front, then map a self-contained "write this chunk
+    to its own shard" function over them with Pool.imap_unordered."""
+
+    def __init__(self, num_workers: int = 4, chunk_size: int = 1000) -> None:
+        self.num_workers = num_workers
+        self.chunk_size = chunk_size
+
+    def write_split(
+        self, split_iterator: SplitIterator[Any], split_dir: Path
+    ) -> list[DatasetShardInfo]:
+        split_name = split_iterator.split.value
+        logger.info(
+            f"Writing split {split_name} with {self.num_workers} multiprocessing workers..."
+        )
+
+        chunks = enumerate(_chunked(iter(split_iterator), self.chunk_size))
+        with mp.Pool(
+            processes=self.num_workers,
+            initializer=_init_mp_worker,
+            initargs=(split_iterator.data_model, split_iterator._tf, split_dir),
+        ) as pool:
+            write_info = [
+                info
+                for info in tqdm.tqdm(
+                    pool.imap_unordered(_write_shard, chunks),
+                    desc=f"Writing split {split_name}",
+                )
+                if info is not None and info.nsamples > 0
+            ]
+
+        return [replace(shard, shard=i + 1) for i, shard in enumerate(write_info)]
+
+
 class SingleSplitWriter:
     def __init__(self, max_shard_size: int = 100_000) -> None:
         self.max_shard_size = max_shard_size
@@ -373,6 +464,28 @@ class SingleSplitWriter:
         return [replace(shard, shard=i + 1) for i, shard in enumerate(write_info)]
 
 
+class MsgpackSplitIterator(IndexableSplitIterator[Any]):
+    """Concrete IndexableSplitIterator reading a split back from msgpack
+    shard files -- also forwards fetch_sample_by_id, which
+    MsgpackShardListDataset supports natively."""
+
+    def __init__(self, shard_dataset: MsgpackShardListDataset, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self._shard_dataset = shard_dataset
+
+    def _raw_getitem(self, index: int) -> Any:
+        return self._shard_dataset[index]
+
+    def _raw_len(self) -> int:
+        return len(self._shard_dataset)
+
+    def fetch_sample_by_id(self, sample_id: str) -> Any:
+        index, sample = self._shard_dataset.fetch_sample_by_id(sample_id)
+        if self._tf_enabled:
+            return self._tf(index, sample)
+        return sample
+
+
 class MsgpackStorageReadTransform:
     def __init__(
         self, data_model: type[BaseDataInstance], allowed_keys: set[str] | None = None
@@ -400,6 +513,7 @@ class MsgpackStorageManager(StorageManager):
         num_processes: int = 8,
         max_shard_size: int = 100_000,
         name_suffix: str = "",
+        use_ray: bool = False,
     ) -> None:
         self.max_shard_size = max_shard_size
         super().__init__(
@@ -408,6 +522,7 @@ class MsgpackStorageManager(StorageManager):
             config_name=config_name,
             num_processes=num_processes,
             name_suffix=name_suffix,
+            use_ray=use_ray,
         )
 
     def split_exists(self, split: DatasetSplitType) -> bool:
@@ -424,10 +539,19 @@ class MsgpackStorageManager(StorageManager):
             f"({'parallel' if self.num_processes > 1 else 'single'} mode)"
         )
 
-        writer: RayParallelSplitWriter | SingleSplitWriter
-        if self.num_processes > 1:
+        writer: (
+            RayParallelSplitWriter
+            | MultiprocessingParallelSplitWriter
+            | SingleSplitWriter
+        )
+        if self.num_processes > 1 and self.use_ray:
             writer = RayParallelSplitWriter(
                 num_workers=self.num_processes, max_shard_size=self.max_shard_size
+            )
+        elif self.num_processes > 1:
+            writer = MultiprocessingParallelSplitWriter(
+                num_workers=self.num_processes,
+                chunk_size=min(self.max_shard_size, 1000),
             )
         else:
             writer = SingleSplitWriter(max_shard_size=self.max_shard_size)
@@ -467,9 +591,9 @@ class MsgpackStorageManager(StorageManager):
             allowed_keys = allowed_keys.copy()
             allowed_keys.update({"sample_id", "index"})
 
-        return SplitIterator(
+        return MsgpackSplitIterator(
+            shard_dataset=MsgpackShardListDataset(self.split_files(split)),
             split=split,
-            base_iterator=MsgpackShardListDataset(self.split_files(split)),
             input_transform=MsgpackStorageReadTransform(
                 data_model=data_model, allowed_keys=allowed_keys
             ),

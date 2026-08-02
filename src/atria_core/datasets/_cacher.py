@@ -44,12 +44,14 @@ class Cacher:
         storage_type: FileStorageType,
         *,
         num_processes: int = 8,
+        use_ray: bool = False,
         store_artifacts: bool = True,
         resize_images: bool = False,
         image_max_size: int | tuple[int, int] | None = None,
     ) -> None:
         self._storage_type = storage_type
         self._num_processes = num_processes
+        self._use_ray = use_ray
         self._store_artifacts = store_artifacts
         self._resize_images = resize_images
         self._image_max_size = image_max_size
@@ -131,6 +133,7 @@ class Cacher:
             num_processes=self._num_processes,
             storage_dir=str(unique_path.parent),
             config_name=unique_path.name,
+            use_ray=self._use_ray,
         )
 
         if (

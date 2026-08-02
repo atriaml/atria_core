@@ -24,6 +24,7 @@ from atria_core.datasets import (
     DatasetInputTransform,
     DocumentDataset,
     FileStorageType,
+    IterableSplitIterator,
 )
 from atria_core.logger import get_logger
 from atria_core.registry import Registry
@@ -77,8 +78,9 @@ _CLASSES = [
 ]
 
 
-class _RawSplitIterator:
-    def __init__(self, split: DatasetSplitType, data_dir: str) -> None:
+class Tobacco3482SplitIterator(IterableSplitIterator[DocumentInstance]):
+    def __init__(self, split: DatasetSplitType, data_dir: str, **kwargs: Any) -> None:
+        super().__init__(split=split, **kwargs)
         if split == DatasetSplitType.train:
             split_file_path = Path(data_dir) / "train.txt"
         elif split == DatasetSplitType.test:
@@ -90,12 +92,12 @@ class _RawSplitIterator:
             shuffle(self.split_file_paths)
         self.image_data_dir = Path(data_dir) / _IMAGE_DATA_NAME
 
-    def __iter__(self) -> Iterator[tuple[Path, int]]:
+    def _raw_iter(self) -> Iterator[tuple[Path, int]]:
         for image_file_path in self.split_file_paths:
             label_index = _CLASSES.index(Path(image_file_path).parent.name)
             yield self.image_data_dir / image_file_path, label_index
 
-    def __len__(self) -> int:
+    def _raw_len(self) -> int:
         return len(self.split_file_paths)
 
 
@@ -116,7 +118,7 @@ class InputTransform(DatasetInputTransform[DocumentInstance, Tobacco3482Config])
 
 class Tobacco3482(DocumentDataset[Tobacco3482Config]):
     __input_transform__ = InputTransform
-    __split_iterator_cls__ = _RawSplitIterator
+    __split_iterator_cls__ = Tobacco3482SplitIterator
 
     def _download_urls(self) -> list[str]:
         return _DATA_URLS

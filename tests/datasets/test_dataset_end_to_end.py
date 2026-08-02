@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -8,7 +7,7 @@ from typing import Any
 from PIL import Image as PILImage
 from pydantic.dataclasses import dataclass as pydantic_dataclass
 
-from atria_core.datasets import Cacher, FileStorageType
+from atria_core.datasets import Cacher, FileStorageType, IndexableSplitIterator
 from atria_core.datasets._common import DatasetConfig
 from atria_core.datasets._dataset import DatasetInputTransform, ImageDataset
 from atria_core.registry import Registry
@@ -33,8 +32,21 @@ class _InputTransform(DatasetInputTransform[ImageInstance, SyntheticConfig]):
         )
 
 
+class SyntheticSplitIterator(IndexableSplitIterator[ImageInstance]):
+    def __init__(self, split: DatasetSplitType, data_dir: str, **kwargs: Any) -> None:
+        super().__init__(split=split, **kwargs)
+        self._count = 4 if split == DatasetSplitType.train else 2
+
+    def _raw_getitem(self, index: int) -> int:
+        return index
+
+    def _raw_len(self) -> int:
+        return self._count
+
+
 class SyntheticDataset(ImageDataset[SyntheticConfig]):
     __input_transform__ = _InputTransform
+    __split_iterator_cls__ = SyntheticSplitIterator
 
     def _download_urls(self) -> list[str]:
         return []
@@ -45,14 +57,17 @@ class SyntheticDataset(ImageDataset[SyntheticConfig]):
     def _available_splits(self, data_dir: str) -> list[DatasetSplitType]:
         return [DatasetSplitType.train, DatasetSplitType.test]
 
-    def _split_iterator(self, split: DatasetSplitType, data_dir: str) -> Iterable[int]:
-        count = 4 if split == DatasetSplitType.train else 2
-        return list(range(count))
-
 
 def _record(item: object) -> ImageInstance:
     assert isinstance(item, ImageInstance)
     return item
+
+
+def _mark_processed(sample: ImageInstance) -> ImageInstance:
+    """Module-level (picklable) transform -- multiprocessing.Pool pickles
+    task arguments, so closures/lambdas defined inside a test function
+    won't survive being sent to a worker process."""
+    return replace(sample, sample_id=f"processed-{sample.sample_id}")
 
 
 def test_build_module_constructs_dataset(tmp_path: Path) -> None:
@@ -99,9 +114,6 @@ def test_cache_is_reused_on_second_call(tmp_path: Path) -> None:
 def test_process_and_cache_applies_transform_at_write_time(tmp_path: Path) -> None:
     dataset = SyntheticConfig().build_module(data_dir=str(tmp_path))
 
-    def _mark_processed(sample: ImageInstance) -> ImageInstance:
-        return replace(sample, sample_id=f"processed-{sample.sample_id}")
-
     cached = Cacher(FileStorageType.MSGPACK, num_processes=1).process_and_cache(
         dataset, _mark_processed, data_dir=str(tmp_path)
     )
@@ -111,6 +123,23 @@ def test_process_and_cache_applies_transform_at_write_time(tmp_path: Path) -> No
         "processed-1",
         "processed-2",
         "processed-3",
+    }
+
+
+def test_cache_with_multiprocessing_num_processes_gt_1(tmp_path: Path) -> None:
+    dataset = SyntheticConfig().build_module(data_dir=str(tmp_path))
+
+    cached = Cacher(FileStorageType.MSGPACK, num_processes=2).cache(
+        dataset, data_dir=str(tmp_path)
+    )
+
+    assert len(cached.train) == 4
+    assert len(cached.test) == 2
+    assert {_record(sample).sample_id for sample in cached.train} == {
+        "0",
+        "1",
+        "2",
+        "3",
     }
 
 

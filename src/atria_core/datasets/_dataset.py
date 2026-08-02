@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import abstractmethod
-from collections.abc import Callable, Iterable
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Generic
 
@@ -54,8 +54,7 @@ class Dataset(
     __extract_downloads__ = True
     __data_model__: type[T_BaseDataInstance]
     __input_transform__: type[DatasetInputTransform[Any, Any]] = DatasetInputTransform
-    __split_iterator_type__: type[SplitIterator[Any]] = SplitIterator
-    __split_iterator_cls__: type[Any] | None = None
+    __split_iterator__: type[SplitIterator[Any]] | None = None
     __repr_fields__ = {"data_model", "split_iterators"}
 
     def __init__(
@@ -76,8 +75,12 @@ class Dataset(
         data_dir/downloaded_files are local variables used only to build
         _split_iterators, never stored as attributes."""
         super().__init__(config)
-        self._split_iterators: dict[DatasetSplitType, SplitIterator[T_BaseDataInstance]] = {}
-        resolved = _validate_data_dir(data_dir or _default_data_dir(type(self).__name__))
+        self._split_iterators: dict[
+            DatasetSplitType, SplitIterator[T_BaseDataInstance]
+        ] = {}
+        resolved = _validate_data_dir(
+            data_dir or _default_data_dir(type(self).__name__)
+        )
         self._custom_download(resolved, access_token)
         for s in self._available_splits(resolved):
             if split is not None and s != split:
@@ -125,18 +128,31 @@ class Dataset(
         ]
         | None = None,
     ) -> SplitIterator[T_BaseDataInstance]:
+        """Default: construct __split_iterator_cls__(split=split,
+        data_dir=data_dir, ...) directly -- the split iterator class the
+        user defines for their dataset (mirroring __input_transform__),
+        not a generic wrapper around a separately-defined raw iterator.
+        Subclasses whose raw source needs different construction args
+        (e.g. HuggingfaceDataset, which needs its HF DatasetBuilder state)
+        override this method directly instead of setting
+        __split_iterator_cls__."""
+        if self.__split_iterator__ is None:
+            raise NotImplementedError(
+                f"Class '{type(self).__name__}' must either set "
+                "__split_iterator_cls__ or override _build_split_iterator()."
+            )
         limits = {
             DatasetSplitType.train: self.config.max_train_samples,
             DatasetSplitType.validation: self.config.max_validation_samples,
             DatasetSplitType.test: self.config.max_test_samples,
         }
-        return self.__split_iterator_type__(
+        return self.__split_iterator__(  # type: ignore[call-arg]
             split=split,
+            data_dir=data_dir,
             data_model=self.data_model,
             input_transform=self.input_transform,
-            base_iterator=self._split_iterator(split, data_dir),  # type: ignore[arg-type]
-            max_len=limits[split],
             output_transform=output_transform,
+            max_len=limits[split],
         )
 
     @property
@@ -251,23 +267,6 @@ class Dataset(
     def _available_splits(self, data_dir: str) -> list[DatasetSplitType]:
         raise NotImplementedError(
             "Subclasses must implement the `_available_splits` method."
-        )
-
-    def _split_iterator(self, split: DatasetSplitType, data_dir: str) -> Iterable[Any]:
-        """Default: construct __split_iterator_cls__(split=split,
-        data_dir=data_dir) -- the common case, mirroring __input_transform__,
-        where the raw source is just a plain class taking those two args.
-        Subclasses whose raw source needs different construction (e.g.
-        HuggingfaceDataset, which queries a HF DatasetBuilder) override this
-        method directly instead of setting __split_iterator_cls__."""
-        if self.__split_iterator_cls__ is not None:
-            return self.__split_iterator_cls__(  # type: ignore[no-any-return]
-                split=split, data_dir=data_dir
-            )
-        raise NotImplementedError(
-            "Subclasses must implement the `_split_iterator` method, or set "
-            "`__split_iterator_cls__`, to provide a raw iterator for the "
-            "specified dataset split."
         )
 
 
