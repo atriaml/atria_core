@@ -1,30 +1,37 @@
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-from atria_core.datasets._constants import (
-    _DEFAULT_ATRIA_DATASETS_CACHE_DIR,
-    _DEFAULT_DOWNLOAD_PATH,
-)
-from atria_core.datasets._split_iterators import SplitIterator
+from atria_core.datasets._constants import _DEFAULT_ATRIA_DATASETS_CACHE_DIR
 from atria_core.logger import get_logger
 from atria_core.transforms.functional import image as image_functional
 from atria_core.types import (
     BaseDataInstance,
-    DatasetSplitType,
     Image,
     ImageInstance,
     PdfPage,
     SinglePageDocumentInstance,
 )
 
-if TYPE_CHECKING:
-    from atria_core.datasets._dataset import Dataset
-
 logger = get_logger(__name__)
+
+
+def transform_hash(transform: Callable[[Any], Any] | None) -> str | None:
+    """Storage layer doesn't know or care what a transform does -- it only
+    needs a stable identity to fold into the cache path. Transforms that
+    declare their own `.hash` (e.g. PreprocessTransform, ComposedTransform)
+    use that; arbitrary callables (e.g. a user's process_and_cache
+    transform) fall back to a hash of their repr."""
+    if transform is None:
+        return None
+    declared_hash = getattr(transform, "hash", None)
+    if declared_hash is not None:
+        return str(declared_hash)
+    return hashlib.md5(repr(transform).encode()).hexdigest()[:8]
 
 
 class ComposedTransform:
@@ -35,6 +42,11 @@ class ComposedTransform:
         for transform in self._transforms:
             sample = transform(sample)
         return sample
+
+    @property
+    def hash(self) -> str:
+        parts = [transform_hash(t) or "none" for t in self._transforms]
+        return hashlib.md5("|".join(parts).encode()).hexdigest()[:8]
 
 
 class PreprocessTransform:
@@ -53,6 +65,14 @@ class PreprocessTransform:
         self._materialize_content = materialize_content
         self._resize_images = resize_images
         self._image_max_size = image_max_size
+
+    @property
+    def hash(self) -> str:
+        return hashlib.md5(
+            f"materialize_content:{self._materialize_content}|"
+            f"resize_images:{self._resize_images}|"
+            f"image_max_size:{self._image_max_size}".encode()
+        ).hexdigest()[:8]
 
     def __call__(self, sample: BaseDataInstance) -> BaseDataInstance:
         if isinstance(sample, ImageInstance):
@@ -96,80 +116,5 @@ def _validate_data_dir(data_dir: str | Path) -> str:
     return str(data_dir)
 
 
-def _default_data_dir(dataset: Dataset[Any, Any]) -> str:
-    name = dataset.config.dataset_name or dataset.__class__.__name__
-    return str(_DEFAULT_ATRIA_DATASETS_CACHE_DIR / name)
-
-
-def _prepare_downloads(
-    dataset: Dataset[Any, Any], data_dir: str, access_token: str | None
-) -> dict[str, Path] | None:
-    from atria_core.datasets._dataset import Dataset as _Dataset
-    from atria_core.datasets._download._download_manager import AtriaDownloadManager
-
-    if dataset.__requires_access_token__ and access_token is None:
-        logger.warning(
-            "access_token must be passed to download this dataset. "
-            f"See `{dataset.metadata.homepage}` for instructions to get the access token"
-        )
-
-    if dataset._custom_download.__func__ is not _Dataset._custom_download:  # type: ignore[attr-defined]
-        dataset._custom_download(data_dir, access_token)
-        return None
-    download_dir = Path(data_dir) / _DEFAULT_DOWNLOAD_PATH
-    download_dir.mkdir(parents=True, exist_ok=True)
-    download_manager = AtriaDownloadManager(
-        data_dir=Path(data_dir), download_dir=download_dir
-    )
-    download_urls = dataset._download_urls()
-    if not download_urls:
-        return None
-    downloaded = download_manager.download_and_extract(
-        download_urls,
-        extract=dataset.__extract_downloads__,
-        access_token=access_token,
-    )
-    logger.info(f"Downloaded files {downloaded}")
-    return downloaded
-
-
-def _prepare_split(
-    dataset: Dataset[Any, Any],
-    split: DatasetSplitType,
-    data_dir: str,
-    split_iterator_type: type[SplitIterator[Any]],
-    materialize_content: bool = True,
-    resize_images: bool = False,
-    image_max_size: int | None = None,
-    user_transform: Callable[[Any], Any] | None = None,
-    for_cache: bool = False,
-    base_iterator: object | None = None,
-) -> SplitIterator[Any]:
-    """for_cache=True materializes content for shard/tar storage; either
-    way, base_iterator lets a caller reuse a raw iterator a prior call
-    already built instead of calling dataset._split_iterator(...) again."""
-    limits = {
-        DatasetSplitType.train: dataset.config.max_train_samples,
-        DatasetSplitType.validation: dataset.config.max_validation_samples,
-        DatasetSplitType.test: dataset.config.max_test_samples,
-    }
-    base_tf = PreprocessTransform(
-        materialize_content=materialize_content if for_cache else True,
-        resize_images=resize_images,
-        image_max_size=image_max_size,
-    )
-    output_transform: Callable[[Any], Any] = base_tf
-    if user_transform is not None:
-        output_transform = ComposedTransform([base_tf, user_transform])
-    return split_iterator_type(
-        split=split,
-        data_model=dataset.data_model,
-        input_transform=dataset.input_transform,
-        base_iterator=(
-            base_iterator
-            if base_iterator is not None
-            else dataset._split_iterator(split, data_dir)  # type: ignore[arg-type]
-        ),
-        max_len=limits[split],
-        output_transform=output_transform,
-    )
+def _default_data_dir(class_name: str) -> str:
+    return str(_DEFAULT_ATRIA_DATASETS_CACHE_DIR / class_name)

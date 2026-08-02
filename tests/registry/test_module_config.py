@@ -36,6 +36,7 @@ class Precision(enum.Enum):
 
 @pydantic_dataclass(frozen=True)
 class OptimizerConfig(ModuleConfig):
+
     lr: float = 1e-3
     precision: Precision = Precision.FP32
 

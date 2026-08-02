@@ -38,7 +38,7 @@ class ModuleConfig:
                 "Lists/dicts of configs or enums aren't supported."
             )
 
-    def build_module(self) -> Any:
+    def build_module(self, **kwargs: Any) -> Any:
         raise NotImplementedError(
             f"{type(self).__name__} must implement build_module() -- every config builds something."
         )

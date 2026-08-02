@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
 from PIL import Image as PILImage
 from pydantic.dataclasses import dataclass as pydantic_dataclass
 
-from atria_core.datasets import FileStorageType
+from atria_core.datasets import Cacher, FileStorageType
 from atria_core.datasets._common import DatasetConfig
 from atria_core.datasets._dataset import DatasetInputTransform, ImageDataset
 from atria_core.registry import Registry
@@ -19,10 +20,8 @@ _synthetic = Registry.group("test_dataset_end_to_end.synthetic")
 @_synthetic.register("synthetic")
 @pydantic_dataclass(frozen=True)
 class SyntheticConfig(DatasetConfig):
-    dataset_name: str = "synthetic"
-
-    def build_module(self) -> SyntheticDataset:
-        return SyntheticDataset(self)
+    def build_module(self, **kwargs: Any) -> SyntheticDataset:
+        return SyntheticDataset(self, **kwargs)
 
 
 class _InputTransform(DatasetInputTransform[ImageInstance, SyntheticConfig]):
@@ -43,7 +42,7 @@ class SyntheticDataset(ImageDataset[SyntheticConfig]):
     def _metadata(self) -> DatasetMetadata:
         return DatasetMetadata(description="synthetic test dataset")
 
-    def _available_splits(self) -> list[DatasetSplitType]:
+    def _available_splits(self, data_dir: str) -> list[DatasetSplitType]:
         return [DatasetSplitType.train, DatasetSplitType.test]
 
     def _split_iterator(self, split: DatasetSplitType, data_dir: str) -> Iterable[int]:
@@ -56,15 +55,13 @@ def _record(item: object) -> ImageInstance:
     return item
 
 
-def test_build_module_constructs_dataset() -> None:
-    dataset = SyntheticConfig().build_module()
+def test_build_module_constructs_dataset(tmp_path: Path) -> None:
+    dataset = SyntheticConfig().build_module(data_dir=str(tmp_path))
     assert isinstance(dataset, SyntheticDataset)
 
 
-def test_load_uncached_produces_live_split_iterators(tmp_path: Path) -> None:
-    dataset = SyntheticConfig().build_module()
-
-    dataset.load(data_dir=str(tmp_path))
+def test_build_module_produces_live_split_iterators(tmp_path: Path) -> None:
+    dataset = SyntheticConfig().build_module(data_dir=str(tmp_path))
 
     assert len(dataset.train) == 4
     assert len(dataset.test) == 2
@@ -72,12 +69,10 @@ def test_load_uncached_produces_live_split_iterators(tmp_path: Path) -> None:
 
 
 def test_cache_then_iterate_msgpack(tmp_path: Path) -> None:
-    dataset = SyntheticConfig().build_module()
+    dataset = SyntheticConfig().build_module(data_dir=str(tmp_path))
 
-    cached = dataset.cache(
-        data_dir=str(tmp_path),
-        cached_storage_type=FileStorageType.MSGPACK,
-        num_processes=1,
+    cached = Cacher(FileStorageType.MSGPACK, num_processes=1).cache(
+        dataset, data_dir=str(tmp_path)
     )
 
     assert len(cached.train) == 4
@@ -91,18 +86,36 @@ def test_cache_then_iterate_msgpack(tmp_path: Path) -> None:
 
 
 def test_cache_is_reused_on_second_call(tmp_path: Path) -> None:
-    dataset = SyntheticConfig().build_module()
-    first = dataset.cache(
-        data_dir=str(tmp_path),
-        cached_storage_type=FileStorageType.MSGPACK,
-        num_processes=1,
-    )
+    dataset = SyntheticConfig().build_module(data_dir=str(tmp_path))
+    cacher = Cacher(FileStorageType.MSGPACK, num_processes=1)
+    first = cacher.cache(dataset, data_dir=str(tmp_path))
 
-    dataset2 = SyntheticConfig().build_module()
-    second = dataset2.cache(
-        data_dir=str(tmp_path),
-        cached_storage_type=FileStorageType.MSGPACK,
-        num_processes=1,
-    )
+    dataset2 = SyntheticConfig().build_module(data_dir=str(tmp_path))
+    second = cacher.cache(dataset2, data_dir=str(tmp_path))
 
     assert first.data_dir == second.data_dir
+
+
+def test_process_and_cache_applies_transform_at_write_time(tmp_path: Path) -> None:
+    dataset = SyntheticConfig().build_module(data_dir=str(tmp_path))
+
+    def _mark_processed(sample: ImageInstance) -> ImageInstance:
+        return replace(sample, sample_id=f"processed-{sample.sample_id}")
+
+    cached = Cacher(FileStorageType.MSGPACK, num_processes=1).process_and_cache(
+        dataset, _mark_processed, data_dir=str(tmp_path)
+    )
+
+    assert {_record(sample).sample_id for sample in cached.train} == {
+        "processed-0",
+        "processed-1",
+        "processed-2",
+        "processed-3",
+    }
+
+
+def test_cacher_validate_cache_rejects_incomplete_snapshot(tmp_path: Path) -> None:
+    assert Cacher.validate_cache(tmp_path) is False
+
+    (tmp_path / "snapshot.yaml").write_text("dataset_class_name: Foo\n")
+    assert Cacher.validate_cache(tmp_path) is False

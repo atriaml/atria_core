@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Generic
 
@@ -12,6 +12,7 @@ from atria_core.datasets._common import (
 )
 from atria_core.datasets._constants import _DEFAULT_DOWNLOAD_PATH
 from atria_core.datasets._dataset import Dataset
+from atria_core.datasets._dataset_builders import _default_data_dir, _validate_data_dir
 from atria_core.logger import get_logger
 from atria_core.types import (
     DatasetMetadata,
@@ -32,10 +33,36 @@ class HuggingfaceDataset(
 ):
     __abstract__ = True
 
-    def __init__(self, config: T_HuggingfaceDatasetConfig) -> None:
-        super().__init__(config)
+    def __init__(
+        self,
+        config: T_HuggingfaceDatasetConfig,
+        *,
+        data_dir: str | None = None,
+        access_token: str | None = None,
+        split: DatasetSplitType | None = None,
+        train_transform: Callable[[T_BaseDataInstance], T_BaseDataInstance]
+        | None = None,
+        eval_transform: Callable[[T_BaseDataInstance], T_BaseDataInstance]
+        | None = None,
+    ) -> None:
+        """_metadata()/_hf_dataset_builder have no data_dir parameter of
+        their own (they can be invoked any time after construction, not
+        just during it), so unlike the base Dataset this subclass resolves
+        and stashes data_dir once here -- read-only afterward, never
+        reassigned, so this doesn't reintroduce post-construction mutation."""
         self.__hf_dataset_builder: datasets.DatasetBuilder | None = None
         self._hf_split_generators: dict[DatasetSplitType, Any] | None = None
+        self.__data_dir = _validate_data_dir(
+            data_dir or _default_data_dir(type(self).__name__)
+        )
+        super().__init__(
+            config,
+            data_dir=self.__data_dir,
+            access_token=access_token,
+            split=split,
+            train_transform=train_transform,
+            eval_transform=eval_transform,
+        )
 
     @property
     def _hf_dataset_builder(self) -> datasets.DatasetBuilder:
@@ -45,7 +72,7 @@ class HuggingfaceDataset(
             self.__hf_dataset_builder = load_dataset_builder(
                 self.config.hf_repo,
                 name=self.config.hf_config_name,
-                cache_dir=self._data_dir,
+                cache_dir=self.__data_dir,
                 storage_options={
                     "client_kwargs": {"timeout": aiohttp.ClientTimeout(total=3600)}
                 },
@@ -83,16 +110,12 @@ class HuggingfaceDataset(
             data_dir=data_dir, download_config=download_config, record_checksums=False
         )
 
-    def _available_splits(self) -> list[DatasetSplitType]:
+    def _available_splits(self, data_dir: str) -> list[DatasetSplitType]:
         if self._hf_split_generators is None:
-            assert self._data_dir is not None, (
-                "data_dir must be set before calling _available_splits(). "
-                "Use load() or cache() to build the dataset."
-            )
-            download_dir = Path(self._data_dir) / _DEFAULT_DOWNLOAD_PATH
+            download_dir = Path(data_dir) / _DEFAULT_DOWNLOAD_PATH
             download_dir.mkdir(parents=True, exist_ok=True)
             download_manager = self._prepare_download_manager(
-                self._data_dir, download_dir=str(download_dir)
+                data_dir, download_dir=str(download_dir)
             )
             hf_split_map = {
                 "train": DatasetSplitType.train,

@@ -20,8 +20,6 @@ class DatasetConfig(ModuleConfig):
     concrete dataset configs (e.g. Tobacco3482Config) are, each
     implementing its own build_module() returning its own dataset class."""
 
-    dataset_name: str | None = None
-    config_name: str = "default"
     max_train_samples: int | None = None
     max_validation_samples: int | None = None
     max_test_samples: int | None = None

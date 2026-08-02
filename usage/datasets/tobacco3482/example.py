@@ -1,5 +1,6 @@
 """Example: Tobacco3482 document classification dataset, end to end --
-build config -> build_module() -> cache() -> iterate train/test.
+build config -> build_module() -> Cacher(...).cache(dataset) -> iterate
+train/test.
 
 Phase-1 port note: OCR loading (the old `load_ocr` config flag) isn't
 carried over yet -- this only wires up the image classification path,
@@ -9,7 +10,7 @@ shape is separate follow-up work, not required to validate this port.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterator
 from pathlib import Path
 from random import shuffle
 from typing import Any
@@ -17,10 +18,12 @@ from typing import Any
 from pydantic.dataclasses import dataclass as pydantic_dataclass
 
 from atria_core.datasets import (
+    Cacher,
     Dataset,
     DatasetConfig,
     DatasetInputTransform,
     DocumentDataset,
+    FileStorageType,
 )
 from atria_core.logger import get_logger
 from atria_core.registry import Registry
@@ -99,10 +102,8 @@ class _RawSplitIterator:
 @datasets.register("tobacco3482")
 @pydantic_dataclass(frozen=True)
 class Tobacco3482Config(DatasetConfig):
-    dataset_name: str = "tobacco3482"
-
-    def build_module(self) -> Tobacco3482:
-        return Tobacco3482(self)
+    def build_module(self, **kwargs: Any) -> Tobacco3482:
+        return Tobacco3482(self, **kwargs)
 
 
 class InputTransform(DatasetInputTransform[DocumentInstance, Tobacco3482Config]):
@@ -115,6 +116,7 @@ class InputTransform(DatasetInputTransform[DocumentInstance, Tobacco3482Config])
 
 class Tobacco3482(DocumentDataset[Tobacco3482Config]):
     __input_transform__ = InputTransform
+    __split_iterator_cls__ = _RawSplitIterator
 
     def _download_urls(self) -> list[str]:
         return _DATA_URLS
@@ -128,20 +130,15 @@ class Tobacco3482(DocumentDataset[Tobacco3482Config]):
             dataset_labels=DatasetLabels(classification=_CLASSES),
         )
 
-    def _available_splits(self) -> list[DatasetSplitType]:
+    def _available_splits(self, data_dir: str) -> list[DatasetSplitType]:
         return [DatasetSplitType.train, DatasetSplitType.test]
-
-    def _split_iterator(
-        self, split: DatasetSplitType, data_dir: str
-    ) -> Iterable[tuple[Path, int]]:
-        return _RawSplitIterator(split=split, data_dir=data_dir)
 
 
 def main() -> None:
     dataset: Dataset[Tobacco3482Config, DocumentInstance] = (
         Tobacco3482Config().build_module()
     )
-    cached = dataset.cache()  # defaults to Delta Lake storage
+    cached = Cacher(FileStorageType.DELTALAKE).cache(dataset)
 
     logger.info("train samples: %d", len(cached.train))
     logger.info("test samples: %d", len(cached.test))
