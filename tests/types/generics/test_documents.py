@@ -22,6 +22,30 @@ def test_single_page_document_from_path(sample_image_path: Path) -> None:
     assert doc.image.size == (16, 12)
 
 
+def test_single_page_document_to_dict_from_dict_roundtrip_via_path(
+    sample_image_path: Path,
+) -> None:
+    doc = SinglePageDocument.from_image(sample_image_path, page_id=0)
+    data = doc.to_dict()
+    assert data["source_path"] == str(sample_image_path)
+    restored = SinglePageDocument.from_dict(data)
+    assert restored.source_path == str(sample_image_path)
+    assert restored.page_id == 0
+
+
+def test_single_page_document_to_dict_from_dict_roundtrip_via_embedded_bytes(
+    sample_image: PILImage.Image,
+) -> None:
+    doc = SinglePageDocument.from_image(sample_image, page_id=2)
+    data = doc.to_dict()
+    assert "image_bytes" in data
+    assert "source_path" not in data
+    restored = SinglePageDocument.from_dict(data)
+    assert restored.source_path is None
+    assert restored.page_id == 2
+    assert restored.image.size == sample_image.size
+
+
 def test_multi_page_document_num_pages(sample_pdf_path: Path) -> None:
     doc = MultiPageDocument.from_pdf(sample_pdf_path)
     assert doc.num_pages == 2

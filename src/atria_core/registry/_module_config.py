@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import dataclasses
 import enum
+import hashlib
+import json
 from typing import Any, Self
 
 from pydantic.dataclasses import dataclass as pydantic_dataclass
@@ -59,3 +61,11 @@ class ModuleConfig:
         from hydra.utils import instantiate
 
         return instantiate(data)  # type: ignore[no-any-return]
+
+    @property
+    def hash(self) -> str:
+        """Stable short hash of this config's field values -- e.g. for
+        deriving a unique on-disk cache path per distinct config."""
+        return hashlib.sha256(
+            json.dumps(self.to_dict(), sort_keys=True).encode()
+        ).hexdigest()[:8]

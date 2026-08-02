@@ -123,22 +123,42 @@ class SinglePageDocument(BaseDataModel):
         )
 
     def to_dict(self) -> dict[str, Any]:
-        if self.source_path is None:
-            raise ValueError(
-                "SinglePageDocument must have a source_path before to_dict() "
-                "-- materialize in-memory content to a file first (see ArtifactStore)."
-            )
+        """Path-backed pages serialize as a path reference (ArtifactStore's
+        row-based storage); pages with no source_path (e.g. constructed
+        directly from a PIL image) serialize as embedded bytes instead of
+        raising -- `image` is always eagerly populated here, unlike
+        `Image.content`, so there's no "not loaded yet" state to prefer."""
+        content = self.content.to_dict() if self.content is not None else None
+        if self.source_path is not None:
+            return {
+                "source_path": self.source_path,
+                "page_id": self.page_id,
+                "content": content,
+            }
+        from atria_core.types._utilities._image_encoding import _image_to_bytes
+
         return {
-            "source_path": self.source_path,
+            "image_bytes": _image_to_bytes(self.image),
             "page_id": self.page_id,
-            "content": self.content.to_dict() if self.content is not None else None,
+            "content": content,
         }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> SinglePageDocument:
         content = data.get("content")
+        doc_content = (
+            DocumentContent.from_dict(content) if content is not None else None
+        )
+        if "image_bytes" in data:
+            from atria_core.types._utilities._image_encoding import _bytes_to_image
+
+            return cls(
+                image=_bytes_to_image(data["image_bytes"]),
+                page_id=data.get("page_id"),
+                content=doc_content,
+            )
         return cls.from_image(
             source=data["source_path"],
             page_id=data.get("page_id"),
-            content=DocumentContent.from_dict(content) if content is not None else None,
+            content=doc_content,
         )

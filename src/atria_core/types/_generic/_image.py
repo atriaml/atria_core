@@ -36,7 +36,9 @@ class Image(BaseDataModel):
 
     def require_content(self) -> PILImage.Image:
         """Returns the loaded PIL image, or raises if load() hasn't been called."""
-        assert self.content is not None, "Image content is not loaded; call load() first"
+        assert self.content is not None, (
+            "Image content is not loaded; call load() first"
+        )
         return self.content
 
     # -------------------------------------
@@ -63,13 +65,27 @@ class Image(BaseDataModel):
         return (self.channels, *self.size)
 
     def to_dict(self) -> dict[str, Any]:
+        """File-backed images serialize as a path reference (ArtifactStore's
+        row-based storage); loaded-content images serialize as embedded
+        bytes (shard/tar-based storage, where bundling avoids many small
+        file reads) -- content takes priority when both are present, since
+        that's what `load()` was called for."""
+        if self.content is not None:
+            from atria_core.types._utilities._image_encoding import _image_to_bytes
+
+            return {"content_bytes": _image_to_bytes(self.content)}
         if self.file_path is None:
             raise ValueError(
-                "Image must be file-backed before to_dict() -- materialize "
-                "in-memory content to a file first (see ArtifactStore)."
+                "Image must be file-backed or have loaded content before "
+                "to_dict() -- materialize in-memory content to a file first "
+                "(see ArtifactStore) or call load()."
             )
         return {"file_path": self.file_path}
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Image:
+        if "content_bytes" in data:
+            from atria_core.types._utilities._image_encoding import _bytes_to_image
+
+            return cls(content=_bytes_to_image(data["content_bytes"]))
         return cls(file_path=data["file_path"])
