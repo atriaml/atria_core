@@ -28,17 +28,17 @@ class Compose:
 class IndexableSplitIterator(Sequence[T_Output], Generic[T_Output]):
     def __init__(
         self,
-        dataset: Sequence[Any],
+        base_iterator: Sequence[Any],
         transform: Callable[[Any], T_Output],
     ) -> None:
-        self._dataset = dataset
+        self._base_iterator = base_iterator
         self._transform = transform
 
     def __len__(self) -> int:
-        return len(self._dataset)
+        return len(self._base_iterator)
 
     def __getitem__(self, index: int) -> T_Output:  # type: ignore[override]
-        return self._transform(self._dataset[index])
+        return self._transform(self._base_iterator[index])
 
     def __getitems__(self, indices: list[int]) -> list[T_Output]:
         return [self[i] for i in indices]
@@ -47,7 +47,7 @@ class IndexableSplitIterator(Sequence[T_Output], Generic[T_Output]):
         self, transform: Callable[[T_Output], T_NewOutput]
     ) -> IndexableSplitIterator[T_NewOutput]:
         composed_transform = Compose(self._transform, transform)
-        return IndexableSplitIterator(self._dataset, composed_transform)
+        return IndexableSplitIterator(self._base_iterator, composed_transform)
 
     def __repr__(self) -> str:
         return f"IndexableSplitIterator(len={len(self)})"
@@ -56,20 +56,20 @@ class IndexableSplitIterator(Sequence[T_Output], Generic[T_Output]):
 class IterableSplitIterator(Iterable[T_Output], Generic[T_Output]):
     def __init__(
         self,
-        dataset: Iterable[Any],
+        base_iterator: Iterable[Any],
         transform: Callable[[Any], T_Output],
     ) -> None:
-        self._dataset = dataset
+        self._base_iterator = base_iterator
         self._transform = transform
 
     def __iter__(self) -> Iterator[T_Output]:
-        yield from map(self._transform, self._dataset)
+        yield from map(self._transform, self._base_iterator)
 
     def with_transform(
         self, transform: Callable[[T_Output], T_NewOutput]
     ) -> IterableSplitIterator[T_NewOutput]:
         composed_transform = Compose(self._transform, transform)
-        return IterableSplitIterator(self._dataset, composed_transform)
+        return IterableSplitIterator(self._base_iterator, composed_transform)
 
     def __repr__(self) -> str:
-        return f"IterableSplitIterator({self._dataset})"
+        return f"IterableSplitIterator({self._base_iterator})"

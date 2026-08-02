@@ -97,13 +97,13 @@ class Dataset(
 
             if isinstance(split_iterator, Sequence):
                 split_iterator = IndexableSplitIterator(
-                    dataset=split_iterator,
+                    base_iterator=split_iterator,
                     transform=input_transform,
                 )
 
             elif isinstance(split_iterator, Iterable):
                 split_iterator = IterableSplitIterator(
-                    dataset=split_iterator,
+                    base_iterator=split_iterator,
                     transform=input_transform,
                 )
             else:

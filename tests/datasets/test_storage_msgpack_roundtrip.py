@@ -24,7 +24,9 @@ def _record(item: object) -> _Record:
 
 def test_msgpack_write_read_roundtrip(tmp_path: Path) -> None:
     records = [_Record(sample_id=str(i)) for i in range(5)]
-    split_iterator = IndexableSplitIterator(dataset=records, transform=lambda x: x)
+    split_iterator = IndexableSplitIterator(
+        base_iterator=records, transform=lambda x: x
+    )
 
     storage_manager = StorageManager.create(
         FileStorageType.MSGPACK,
@@ -39,7 +41,9 @@ def test_msgpack_write_read_roundtrip(tmp_path: Path) -> None:
     assert storage_manager.split_exists(DatasetSplitType.train)
 
     raw_read_back = storage_manager.read_split(DatasetSplitType.train)
-    read_back = IndexableSplitIterator(dataset=raw_read_back, transform=_Record.from_dict)
+    read_back = IndexableSplitIterator(
+        base_iterator=raw_read_back, transform=_Record.from_dict
+    )
 
     assert len(read_back) == 5
     assert {_record(sample).sample_id for sample in read_back} == {
@@ -53,7 +57,9 @@ def test_msgpack_write_read_roundtrip(tmp_path: Path) -> None:
 
 def test_purge_split_removes_written_data(tmp_path: Path) -> None:
     records = [_Record(sample_id="0")]
-    split_iterator = IndexableSplitIterator(dataset=records, transform=lambda x: x)
+    split_iterator = IndexableSplitIterator(
+        base_iterator=records, transform=lambda x: x
+    )
     storage_manager = StorageManager.create(
         FileStorageType.MSGPACK,
         data_dir=tmp_path,

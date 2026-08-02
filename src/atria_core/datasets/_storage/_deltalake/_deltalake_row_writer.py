@@ -90,14 +90,24 @@ class ParquetSchema:
 
 
 def _hoist_bytes(data: dict[str, Any], artifacts_dir: Path, prefix: str) -> dict[str, Any]:
-    """Writes any raw bytes value out to its own file under artifacts_dir
-    and replaces it with a path reference, so parquet columns don't hold
-    huge binary blobs -- type-agnostic, no ArtifactStore object involved.
-    `content_bytes` is renamed to `file_path` to match how Image/PdfPage's
-    own from_dict() expects a materialized (unloaded) instance to look."""
+    """Writes a raw `content_bytes` value out to its own file under
+    artifacts_dir only when there's no `file_path` to fall back to -- if
+    the sample already references a file on disk, that reference is reused
+    as-is instead of needlessly duplicating the content. (Unconditionally
+    materializing every sample's bytes to artifacts would only matter for
+    a genuinely portable export -- e.g. uploading the dataset to S3 -- which
+    is out of scope here.) `content_bytes` is renamed to `file_path` to
+    match how Image/PdfPage's own from_dict() expects a materialized
+    (unloaded) instance to look."""
+    has_file_path = bool(data.get("file_path"))
     result: dict[str, Any] = {}
     for key, value in data.items():
+        if key == "file_path" and value is None:
+            # Superseded by the hoisted content_bytes path below, if any.
+            continue
         if isinstance(value, bytes):
+            if key == "content_bytes" and has_file_path:
+                continue
             path = artifacts_dir / f"{prefix}-{key}.bin"
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(value)
