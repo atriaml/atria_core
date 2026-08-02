@@ -48,13 +48,13 @@ class StorageManager(ABC):
         cls, cached_storage_type: FileStorageType
     ) -> type[StorageManager]:
         if cached_storage_type == FileStorageType.DELTALAKE:
-            from atria_core.datasets._storage._deltalake_storage_manager import (
+            from atria_core.datasets._storage._deltalake._deltalake_storage_manager import (
                 DeltalakeStorageManager,
             )
 
             return DeltalakeStorageManager
         elif cached_storage_type == FileStorageType.MSGPACK:
-            from atria_core.datasets._storage._msgpack_storage_manager import (
+            from atria_core.datasets._storage._msgpack._msgpack_storage_manager import (
                 MsgpackStorageManager,
             )
 

@@ -11,25 +11,18 @@ class Compose:
     """Plain class instead of a closure so composed transforms stay
     picklable -- stdlib pickle can't serialize nested functions, and
     multiprocessing writers need to send composed transforms to worker
-    processes."""
+    processes. Holds a flat list of transforms, flattening nested Compose
+    instances on construction."""
 
-    def __init__(
-        self,
-        first: Callable[[Any], Any],
-        second: Callable[[Any], Any],
-    ) -> None:
-        self.first = first
-        self.second = second
+    def __init__(self, *transforms: Callable[[Any], Any]) -> None:
+        self.transforms: list[Callable[[Any], Any]] = []
+        for t in transforms:
+            self.transforms.extend(t.transforms if isinstance(t, Compose) else [t])
 
     def __call__(self, value: Any) -> Any:
-        return self.second(self.first(value))
-
-
-def compose(
-    first: Callable[[Any], Any],
-    second: Callable[[Any], Any],
-) -> Callable[[Any], Any]:
-    return Compose(first, second)
+        for transform in self.transforms:
+            value = transform(value)
+        return value
 
 
 class IndexableSplitIterator(Sequence[T_Output], Generic[T_Output]):
@@ -53,7 +46,7 @@ class IndexableSplitIterator(Sequence[T_Output], Generic[T_Output]):
     def with_transform(
         self, transform: Callable[[T_Output], T_NewOutput]
     ) -> IndexableSplitIterator[T_NewOutput]:
-        composed_transform = compose(self._transform, transform)
+        composed_transform = Compose(self._transform, transform)
         return IndexableSplitIterator(self._dataset, composed_transform)
 
     def __repr__(self) -> str:
@@ -75,7 +68,7 @@ class IterableSplitIterator(Iterable[T_Output], Generic[T_Output]):
     def with_transform(
         self, transform: Callable[[T_Output], T_NewOutput]
     ) -> IterableSplitIterator[T_NewOutput]:
-        composed_transform = compose(self._transform, transform)
+        composed_transform = Compose(self._transform, transform)
         return IterableSplitIterator(self._dataset, composed_transform)
 
     def __repr__(self) -> str:

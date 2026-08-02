@@ -11,6 +11,8 @@ from pydantic.dataclasses import dataclass as pydantic_dataclass
 from atria_core.datasets import (
     DatasetConfig,
 )
+from atria_core.datasets._cacher import Cacher
+from atria_core.datasets._common import FileStorageType
 from atria_core.datasets._dataset import Dataset
 from atria_core.extractors._tesseract import TesseractExtractorConfig
 from atria_core.logger import get_logger
@@ -178,11 +180,13 @@ class Tobacco3482(Dataset[Tobacco3482Config, SinglePageDocumentInstance]):
 
 tobacco = Tobacco3482Config().build_module()
 transform = TesseractExtractorConfig().build()
-# cached = Cacher(storage_type=FileStorageType.MSGPACK).cache(tobacco)
-d = tobacco.split_iterator(DatasetSplitType.train)
-print(d)
-for x in d.with_transform(transform):
-    print(x.content.elements.word_bboxes())
-    print(x.content.elements.word_texts())
-    # print(x.to_dict())
-    break
+cached = Cacher(storage_type=FileStorageType.MSGPACK, use_ray=True).process_and_cache(
+    tobacco, transform=transform
+)
+# # d = tobacco.split_iterator(DatasetSplitType.train)
+# # print(d)
+# for x in d.with_transform(transform):
+#     print(x.content.elements.word_bboxes())
+#     print(x.content.elements.word_texts())
+#     # print(x.to_dict())
+#     break

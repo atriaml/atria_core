@@ -7,8 +7,10 @@ from typing import Any, Generic, TypeVar
 
 from pydantic.dataclasses import dataclass as pydantic_dataclass
 
-from atria_core.datasets._constants import _DEFAULT_DOWNLOAD_PATH
-from atria_core.datasets._dataset_builders import _default_data_dir, _validate_data_dir
+from atria_core.datasets._constants import (
+    _DEFAULT_ATRIA_DATASETS_CACHE_DIR,
+    _DEFAULT_DOWNLOAD_PATH,
+)
 from atria_core.datasets._split_iterators import (
     IndexableSplitIterator,
     IterableSplitIterator,
@@ -27,6 +29,24 @@ logger = get_logger(__name__)
 
 T_DatasetConfig = TypeVar("T_DatasetConfig", bound=ModuleConfig)
 T_BaseDataInstance = TypeVar("T_BaseDataInstance", bound=BaseDataInstance)
+
+
+def _validate_data_dir(data_dir: str | Path) -> str:
+    data_dir = Path(data_dir)
+    if data_dir.exists():
+        assert data_dir.is_dir(), (
+            f"Data directory `{data_dir.absolute()}` exists but is not a directory."
+        )
+    else:
+        logger.warning(
+            f"Data directory `{data_dir.absolute()}` does not exist. Creating it."
+        )
+        data_dir.mkdir(parents=True, exist_ok=True)
+    return str(data_dir)
+
+
+def _default_data_dir(class_name: str) -> str:
+    return str(_DEFAULT_ATRIA_DATASETS_CACHE_DIR / class_name)
 
 
 @pydantic_dataclass(frozen=True)
