@@ -2,73 +2,67 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PIL import Image as PILImage
+import pytest
 
-from atria_core.types import MultiPageDocument, SinglePageDocument
-
-
-def test_single_page_document_from_pil_image(sample_image: PILImage.Image) -> None:
-    doc = SinglePageDocument.from_image(sample_image)
-    assert doc.source_path is None
-    assert doc.image is sample_image
-    assert doc.page_id is None
-    assert doc.content is None
+from atria_core.types._generic._documents import PdfPage
 
 
-def test_single_page_document_from_path(sample_image_path: Path) -> None:
-    doc = SinglePageDocument.from_image(sample_image_path, page_id=0)
-    assert doc.source_path == str(sample_image_path)
-    assert doc.page_id == 0
-    assert doc.image.size == (16, 12)
+def test_construct_from_path_is_lazy(sample_pdf_path: Path) -> None:
+    page = PdfPage(file_path=str(sample_pdf_path), page_id=0)
+    assert page.file_path == str(sample_pdf_path)
+    assert page.content is None
 
 
-def test_single_page_document_to_dict_from_dict_roundtrip_via_path(
-    sample_image_path: Path,
-) -> None:
-    doc = SinglePageDocument.from_image(sample_image_path, page_id=0)
-    data = doc.to_dict()
-    assert data["source_path"] == str(sample_image_path)
-    restored = SinglePageDocument.from_dict(data)
-    assert restored.source_path == str(sample_image_path)
+def test_require_content_without_load_raises(sample_pdf_path: Path) -> None:
+    page = PdfPage(file_path=str(sample_pdf_path), page_id=0)
+    with pytest.raises(AssertionError):
+        page.require_content()
+
+
+def test_load_renders_page(sample_pdf_path: Path) -> None:
+    page = PdfPage(file_path=str(sample_pdf_path), page_id=0)
+    loaded = page.load()
+    assert loaded.content is not None
+    assert loaded.file_path == page.file_path
+    assert loaded.page_id == 0
+
+
+def test_load_is_idempotent_when_already_loaded(sample_pdf_path: Path) -> None:
+    page = PdfPage(file_path=str(sample_pdf_path), page_id=0).load()
+    loaded = page.load()
+    assert loaded is page
+
+
+def test_to_dict_from_dict_roundtrip_via_file_path(sample_pdf_path: Path) -> None:
+    page = PdfPage(file_path=str(sample_pdf_path), page_id=1, dpi=150)
+    data = page.to_dict()
+    assert data == {"file_path": str(sample_pdf_path), "page_id": 1, "dpi": 150}
+    restored = PdfPage.from_dict(data)
+    assert restored.file_path == str(sample_pdf_path)
+    assert restored.page_id == 1
+    assert restored.dpi == 150
+    assert restored.content is None
+
+
+def test_to_dict_from_dict_roundtrip_via_embedded_bytes(sample_pdf_path: Path) -> None:
+    page = PdfPage(file_path=str(sample_pdf_path), page_id=0).load()
+    data = page.to_dict()
+    assert "content_bytes" in data
+    assert "file_path" not in data
+    restored = PdfPage.from_dict(data)
+    assert restored.file_path is None
+    assert restored.content is not None
     assert restored.page_id == 0
 
 
-def test_single_page_document_to_dict_from_dict_roundtrip_via_embedded_bytes(
-    sample_image: PILImage.Image,
-) -> None:
-    doc = SinglePageDocument.from_image(sample_image, page_id=2)
-    data = doc.to_dict()
-    assert "image_bytes" in data
-    assert "source_path" not in data
-    restored = SinglePageDocument.from_dict(data)
-    assert restored.source_path is None
-    assert restored.page_id == 2
-    assert restored.image.size == sample_image.size
+def test_to_dict_without_path_or_content_raises() -> None:
+    with pytest.raises(AssertionError):
+        PdfPage().to_dict()
 
 
-def test_multi_page_document_num_pages(sample_pdf_path: Path) -> None:
-    doc = MultiPageDocument.from_pdf(sample_pdf_path)
-    assert doc.num_pages == 2
-
-
-def test_multi_page_document_get_page(sample_pdf_path: Path) -> None:
-    doc = MultiPageDocument.from_pdf(sample_pdf_path)
-    page = doc.get_page(0)
-    assert isinstance(page, SinglePageDocument)
-    assert page.page_id == 0
-    assert page.source_path == str(sample_pdf_path)
-
-
-def test_multi_page_document_iteration(sample_pdf_path: Path) -> None:
-    doc = MultiPageDocument.from_pdf(sample_pdf_path)
-    pages = list(doc)
-    assert len(pages) == 2
-    assert [p.page_id for p in pages] == [0, 1]
-
-
-def test_multi_page_document_equality(sample_pdf_path: Path) -> None:
-    a = MultiPageDocument.from_pdf(sample_pdf_path)
-    b = MultiPageDocument.from_pdf(sample_pdf_path)
-    c = MultiPageDocument.from_pdf(sample_pdf_path, dpi=100)
+def test_equality_by_field() -> None:
+    a = PdfPage(file_path="/some/doc.pdf", page_id=0)
+    b = PdfPage(file_path="/some/doc.pdf", page_id=0)
+    c = PdfPage(file_path="/some/doc.pdf", page_id=1)
     assert a == b
     assert a != c

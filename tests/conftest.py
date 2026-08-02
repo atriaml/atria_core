@@ -96,7 +96,9 @@ def native_text_pdf_path(tmp_path: Path) -> Path:
         text_obj = pdfium_raw.FPDFPageObj_NewTextObj(pdf.raw, b"Helvetica", 14)
         utf16 = text.encode("utf-16-le") + b"\x00\x00"
         buf = ctypes.create_string_buffer(utf16)
-        pdfium_raw.FPDFText_SetText(text_obj, ctypes.cast(buf, ctypes.POINTER(ctypes.c_ushort)))
+        pdfium_raw.FPDFText_SetText(
+            text_obj, ctypes.cast(buf, ctypes.POINTER(ctypes.c_ushort))
+        )
         pdfium_raw.FPDFPageObj_Transform(text_obj, 1, 0, 0, 1, 20, y)
         pdfium_raw.FPDFPage_InsertObject(page.raw, text_obj)
         y -= 30

@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PIL.Image import Image as PILImage
-
 from atria_core.types import Image, ResourceLoader
 
 
@@ -26,13 +24,6 @@ class ArtifactStore:
         path = self.artifacts_dir / f"{key}.png"
         image.require_content().save(path)
         return Image.from_source(str(path))
-
-    def materialize_page_image(self, key: str, image: PILImage) -> str:
-        """Same as materialize_image, but for a raw PIL image (as held by
-        SinglePageDocument, which doesn't wrap it in an `Image`)."""
-        path = self.artifacts_dir / f"{key}.png"
-        image.save(path)
-        return str(path)
 
     def materialize_pdf(self, key: str, source_path: str) -> str:
         """Copies the PDF at source_path into this store, returns the new path."""

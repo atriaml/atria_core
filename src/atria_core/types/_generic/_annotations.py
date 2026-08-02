@@ -123,7 +123,11 @@ class ObjectDetectionAnnotation(BaseDataModel):
     def __post_init__(self) -> None:
         if self.labels is not None and self.labels.size > 0:
             if bool(np.any((self.labels < 0) | (self.labels >= len(self.label_map)))):
-                bad = int(self.labels[(self.labels < 0) | (self.labels >= len(self.label_map))][0])
+                bad = int(
+                    self.labels[
+                        (self.labels < 0) | (self.labels >= len(self.label_map))
+                    ][0]
+                )
                 raise ValueError(
                     f"Invalid object label index {bad}. "
                     f"Label map contains only {len(self.label_map)} labels."
@@ -229,7 +233,9 @@ class ObjectDetectionAnnotation(BaseDataModel):
             segmentations=_array("segmentations", np.float64),
             segmentation_lengths=_array("segmentation_lengths", np.int64),
             iscrowd=_array("iscrowd", np.bool_),
-            bbox_mode=BoundingBoxMode(data.get("bbox_mode", BoundingBoxMode.XYXY.value)),
+            bbox_mode=BoundingBoxMode(
+                data.get("bbox_mode", BoundingBoxMode.XYXY.value)
+            ),
             normalized=data.get("normalized", False),
         )
 

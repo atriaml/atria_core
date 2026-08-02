@@ -10,11 +10,10 @@ from PIL import Image as PILImage
 from atria_core.types import (
     BaseDataInstance,
     DocumentContent,
-    DocumentInstance,
     ElementArray,
     ImageInstance,
-    MultiPageDocument,
-    SinglePageDocument,
+    MultiPageDocumentInstance,
+    SinglePageDocumentInstance,
 )
 from atria_core.visualizers import (
     visualize,
@@ -66,10 +65,11 @@ def test_visualize_image_instance_output_name_includes_classification_label(
 
 
 def test_visualize_document_instance_image_sourced_saves_png(tmp_path: Path) -> None:
-    document = SinglePageDocument.from_image(
-        make_image().require_content(), content=make_document_content()
+    instance = SinglePageDocumentInstance.from_image(
+        make_image().require_content(),
+        sample_id="d1",
+        content=make_document_content(),
     )
-    instance = DocumentInstance(sample_id="d1", document=document)
 
     path = visualize_document_instance(instance, str(tmp_path))
 
@@ -80,21 +80,16 @@ def test_visualize_document_instance_image_sourced_saves_png(tmp_path: Path) -> 
 def test_visualize_document_instance_pdf_page_draws_on_pdf_directly(
     tmp_path: Path, sample_pdf_path: Path
 ) -> None:
-    document = MultiPageDocument.from_pdf(sample_pdf_path).get_page(0)
     elements = ElementArray.from_words(
         ["hello", "world"], [[0.1, 0.1, 0.3, 0.2], [0.35, 0.1, 0.6, 0.2]]
     )
-    document = SinglePageDocument(
-        image=document.image,
-        source_path=document.source_path,
-        page_id=document.page_id,
-        content=DocumentContent(elements=elements),
+    instance = SinglePageDocumentInstance.from_pdf(
+        sample_pdf_path, page_id=0, content=DocumentContent(elements=elements)
     )
-    instance = DocumentInstance(sample_id="p1", document=document)
 
     path = visualize_document_instance(instance, str(tmp_path))
 
-    assert path == tmp_path / "p1.pdf"
+    assert path == tmp_path / f"{instance.sample_id}.pdf"
     reopened = pymupdf.open(str(path))
     assert len(reopened) == 1
     assert len(reopened[0].get_drawings()) > 0
@@ -103,22 +98,24 @@ def test_visualize_document_instance_pdf_page_draws_on_pdf_directly(
 def test_visualize_document_instance_multi_page_reexports_all_pages(
     tmp_path: Path, sample_pdf_path: Path
 ) -> None:
-    document = MultiPageDocument.from_pdf(sample_pdf_path)
-    instance = DocumentInstance(sample_id="m1", document=document)
+    instance = MultiPageDocumentInstance(
+        sample_id="m1", source_path=str(sample_pdf_path)
+    )
 
     path = visualize_document_instance(instance, str(tmp_path))
 
     assert path == tmp_path / "m1.pdf"
     reopened = pymupdf.open(str(path))
-    assert len(reopened) == document.num_pages
+    assert len(reopened) == instance.num_pages
 
 
 def test_visualize_dispatches_by_instance_type(tmp_path: Path) -> None:
     image_instance = ImageInstance(sample_id="s1", image=make_image())
     assert visualize(image_instance, str(tmp_path)) == tmp_path / "s1.png"
 
-    document = SinglePageDocument.from_image(make_image().require_content())
-    document_instance = DocumentInstance(sample_id="d1", document=document)
+    document_instance = SinglePageDocumentInstance.from_image(
+        make_image().require_content(), sample_id="d1"
+    )
     assert visualize(document_instance, str(tmp_path)) == tmp_path / "d1.png"
 
 

@@ -10,10 +10,10 @@ from atria_core.logger import get_logger
 from atria_core.types import (
     DocumentContent,
     ElementArray,
-    MultiPageDocument,
+    MultiPageDocumentInstance,
     OCRLevel,
     ResourceLoader,
-    SinglePageDocument,
+    SinglePageDocumentInstance,
 )
 
 logger = get_logger(__name__)
@@ -23,20 +23,21 @@ class PdfNativeExtractor:
     """Reads a PDF's embedded text layer directly via pdfplumber, instead of
     OCR-ing a rasterized page. Doesn't fit ContentExtractor's per-image
     `_extract()` contract -- it needs the PDF's text layer, not pixels -- so
-    it's its own class, called on a whole MultiPageDocument (mirroring
+    it's its own class, called on a whole MultiPageDocumentInstance (mirroring
     ContentExtractor.__call__'s "operates on documents" shape).
 
-    Each page is still rasterized via `MultiPageDocument.get_page()` (so the
-    resulting SinglePageDocument has the `.image` every other extractor
-    produces); what's skipped is running OCR against those pixels, since the
-    text is already known.
+    Each page comes from `MultiPageDocumentInstance.get_page()`, which is
+    lazy -- its `PdfPage` visual isn't rendered here, since text extraction
+    never touches pixels; whatever loads the visual later renders on demand.
     """
 
     def __init__(self, x_tolerance: float = 1.0, y_tolerance: float = 1.0) -> None:
         self.x_tolerance = x_tolerance
         self.y_tolerance = y_tolerance
 
-    def __call__(self, document: MultiPageDocument) -> list[SinglePageDocument]:
+    def __call__(
+        self, document: MultiPageDocumentInstance
+    ) -> list[SinglePageDocumentInstance]:
         import pdfplumber
 
         pdf_bytes = ResourceLoader.for_uri(document.source_path).load_bytes()

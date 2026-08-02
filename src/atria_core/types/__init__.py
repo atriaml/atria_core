@@ -19,7 +19,11 @@ if TYPE_CHECKING:
         TaskType as TaskType,
     )
     from ._data_instance._base import BaseDataInstance as BaseDataInstance
-    from ._data_instance._document_instance import DocumentInstance as DocumentInstance
+    from ._data_instance._document_instance import (
+        DocumentInstance as DocumentInstance,
+        MultiPageDocumentInstance as MultiPageDocumentInstance,
+        SinglePageDocumentInstance as SinglePageDocumentInstance,
+    )
     from ._data_instance._image_instance import ImageInstance as ImageInstance
     from ._datasets import (
         DatasetLabels as DatasetLabels,
@@ -29,10 +33,7 @@ if TYPE_CHECKING:
         SplitInfo as SplitInfo,
     )
     from ._generic._doc_content import DocumentContent as DocumentContent
-    from ._generic._documents import (
-        MultiPageDocument as MultiPageDocument,
-        SinglePageDocument as SinglePageDocument,
-    )
+    from ._generic._documents import PdfPage as PdfPage
     from ._generic._elements import ElementArray as ElementArray, OCRLevel as OCRLevel
     from ._generic._annotated_object import AnnotatedObject as AnnotatedObject
     from ._generic._bounding_box import BoundingBoxMode as BoundingBoxMode
@@ -66,7 +67,11 @@ __getattr__, __dir__, __all__ = lazy.attach(
             "TaskType",
         ],
         "_data_instance._base": ["BaseDataInstance"],
-        "_data_instance._document_instance": ["DocumentInstance"],
+        "_data_instance._document_instance": [
+            "DocumentInstance",
+            "MultiPageDocumentInstance",
+            "SinglePageDocumentInstance",
+        ],
         "_data_instance._image_instance": ["ImageInstance"],
         "_datasets": [
             "DatasetLabels",
@@ -76,7 +81,7 @@ __getattr__, __dir__, __all__ = lazy.attach(
             "SplitInfo",
         ],
         "_generic._doc_content": ["DocumentContent"],
-        "_generic._documents": ["MultiPageDocument", "SinglePageDocument"],
+        "_generic._documents": ["PdfPage"],
         "_generic._elements": ["ElementArray", "OCRLevel"],
         "_generic._annotated_object": ["AnnotatedObject"],
         "_generic._bounding_box": ["BoundingBoxMode"],

@@ -32,7 +32,9 @@ def _hierarchy() -> ElementArray:
 
 
 def test_from_words_flat() -> None:
-    ea = ElementArray.from_words(["hello", "world"], [[0.1, 0.1, 0.3, 0.2], [0.35, 0.1, 0.6, 0.2]])
+    ea = ElementArray.from_words(
+        ["hello", "world"], [[0.1, 0.1, 0.3, 0.2], [0.35, 0.1, 0.6, 0.2]]
+    )
     assert list(ea.levels) == [OCRLevel.word.value, OCRLevel.word.value]
     assert list(ea.parent_ids) == [-1, -1]
     assert ea.joined_text() == "hello world"
@@ -72,7 +74,9 @@ def test_to_dict_from_dict_roundtrip() -> None:
 
 def test_rejects_length_mismatch() -> None:
     with pytest.raises(ValueError, match="expected"):
-        ElementArray(bboxes=np.zeros((2, 4)), texts=np.array(["only one"], dtype=object))
+        ElementArray(
+            bboxes=np.zeros((2, 4)), texts=np.array(["only one"], dtype=object)
+        )
 
 
 def test_rejects_unnormalized_bbox() -> None:

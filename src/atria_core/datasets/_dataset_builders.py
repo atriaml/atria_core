@@ -15,11 +15,11 @@ from atria_core.transforms.functional import image as image_functional
 from atria_core.types import (
     BaseDataInstance,
     DatasetSplitType,
-    DocumentInstance,
     Image,
     ImageInstance,
+    PdfPage,
+    SinglePageDocumentInstance,
 )
-from atria_core.types._generic._documents import SinglePageDocument
 
 if TYPE_CHECKING:
     from atria_core.datasets._dataset import Dataset
@@ -56,25 +56,20 @@ class PreprocessTransform:
 
     def __call__(self, sample: BaseDataInstance) -> BaseDataInstance:
         if isinstance(sample, ImageInstance):
-            return replace(sample, image=self._process_image(sample.image))
-        if isinstance(sample, DocumentInstance) and isinstance(
-            sample.document, SinglePageDocument
-        ):
-            return replace(sample, document=self._process_document(sample.document))
+            processed = self._process_visual(sample.image)
+            assert isinstance(processed, Image)
+            return replace(sample, image=processed)
+        if isinstance(sample, SinglePageDocumentInstance):
+            return replace(sample, visual=self._process_visual(sample.visual))
         return sample
 
-    def _process_image(self, image: Image) -> Image:
+    def _process_visual(self, visual: Image | PdfPage) -> Image | PdfPage:
         if self._materialize_content:
-            image = image.load()
-        if self._resize_images and image.content is not None:
-            image = self._resize(image)
-        return image
-
-    def _process_document(self, document: SinglePageDocument) -> SinglePageDocument:
-        if not self._resize_images:
-            return document
-        resized = self._resize(Image.from_source(document.image))
-        return replace(document, image=resized.require_content())
+            visual = visual.load()
+        if self._resize_images and visual.content is not None:
+            resized = self._resize(Image.from_source(visual.content))
+            visual = replace(visual, content=resized.require_content())
+        return visual
 
     def _resize(self, image: Image) -> Image:
         assert self._image_max_size is not None

@@ -43,6 +43,8 @@ def check_segmentation_array(value: np.ndarray) -> None:
     """Validates an already-constructed segmentation array: shape (P, 2).
     See check_bbox_array."""
     if not isinstance(value, np.ndarray):
-        raise TypeError(f"segmentation must be a numpy array, got {type(value).__name__}")
+        raise TypeError(
+            f"segmentation must be a numpy array, got {type(value).__name__}"
+        )
     if value.ndim != 2 or value.shape[1] != 2:
         raise ValueError(f"segmentation must have shape (P, 2), got {value.shape}")

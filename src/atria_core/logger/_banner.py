@@ -41,7 +41,9 @@ class EnvInfo:
 
     def format(self) -> str:
         """Render as a single "key=value ..." line."""
-        return " ".join(f"{field.name}={getattr(self, field.name)}" for field in fields(self))
+        return " ".join(
+            f"{field.name}={getattr(self, field.name)}" for field in fields(self)
+        )
 
 
 @cache

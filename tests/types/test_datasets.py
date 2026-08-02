@@ -40,7 +40,12 @@ def fake_huggingface_datasets():
 
 
 def make_shard(**overrides) -> DatasetShardInfo:
-    kwargs = {"url": "s3://bucket/shard-0.tar", "shard": 0, "nsamples": 10, "filesize": 100}
+    kwargs = {
+        "url": "s3://bucket/shard-0.tar",
+        "shard": 0,
+        "nsamples": 10,
+        "filesize": 100,
+    }
     kwargs.update(overrides)
     return DatasetShardInfo(**kwargs)
 
@@ -67,7 +72,10 @@ def test_dataset_shard_info_to_dict_from_dict_roundtrip() -> None:
 
 
 def test_split_info_from_shard_info_list_aggregates() -> None:
-    shards = [make_shard(nsamples=10, filesize=100), make_shard(nsamples=5, filesize=50)]
+    shards = [
+        make_shard(nsamples=10, filesize=100),
+        make_shard(nsamples=5, filesize=50),
+    ]
     split_info = SplitInfo.from_shard_info_list(shards)
     assert split_info.num_bytes == 150
     assert split_info.num_examples == 15
@@ -88,7 +96,9 @@ def test_dataset_labels_to_dict_from_dict_roundtrip() -> None:
     assert restored == labels
 
 
-def test_dataset_labels_infer_from_huggingface_features(fake_huggingface_datasets) -> None:
+def test_dataset_labels_infer_from_huggingface_features(
+    fake_huggingface_datasets,
+) -> None:
     features = {"label": FakeClassLabel(["cat", "dog"])}
     labels = DatasetLabels._infer_from_huggingface_features(features)
     assert labels.classification == ["cat", "dog"]

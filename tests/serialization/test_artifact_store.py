@@ -9,7 +9,9 @@ from atria_core.serialization import ArtifactStore
 from atria_core.types import Image
 
 
-def test_materialize_image_writes_file_and_returns_unloaded_image(tmp_path: Path) -> None:
+def test_materialize_image_writes_file_and_returns_unloaded_image(
+    tmp_path: Path,
+) -> None:
     store = ArtifactStore(tmp_path)
     original = PILImage.new("RGB", (5, 5), color="red")
     result = store.materialize_image("s1", Image.from_source(original))
@@ -21,15 +23,6 @@ def test_materialize_image_writes_file_and_returns_unloaded_image(tmp_path: Path
 
     result = result.load()
     assert np.array_equal(np.array(original), np.array(result.require_content()))
-
-
-def test_materialize_page_image_writes_file(tmp_path: Path) -> None:
-    store = ArtifactStore(tmp_path)
-    original = PILImage.new("RGB", (4, 4), color="blue")
-    path = store.materialize_page_image("p1", original)
-
-    assert Path(path) == tmp_path / "artifacts" / "p1.png"
-    assert np.array_equal(np.array(original), np.array(PILImage.open(path)))
 
 
 def test_materialize_pdf_copies_bytes(tmp_path: Path, sample_pdf_path: Path) -> None:

@@ -30,8 +30,8 @@ from atria_core.types import (
     DatasetMetadata,
     DatasetSplitType,
     DocumentInstance,
+    SinglePageDocumentInstance,
 )
-from atria_core.types._generic._documents import SinglePageDocument
 
 logger = get_logger(__name__)
 
@@ -108,10 +108,7 @@ class Tobacco3482Config(DatasetConfig):
 class InputTransform(DatasetInputTransform[DocumentInstance, Tobacco3482Config]):
     def __call__(self, *args: Any, **kwargs: Any) -> DocumentInstance:
         image_file_path, label_index = args[0]
-        return DocumentInstance(
-            sample_id=Path(image_file_path).name,
-            document=SinglePageDocument.from_image(image_file_path),
-        ).add_annotation(
+        return SinglePageDocumentInstance.from_image(image_file_path).add_annotation(
             ClassificationAnnotation(label=label_index, label_map=_CLASSES)
         )
 

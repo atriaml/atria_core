@@ -7,14 +7,15 @@ from typing import Any
 from atria_core.serialization._artifact_store import ArtifactStore
 from atria_core.types import (
     BaseDataInstance,
-    DocumentInstance,
     ImageInstance,
-    MultiPageDocument,
-    SinglePageDocument,
+    MultiPageDocumentInstance,
+    PdfPage,
+    SinglePageDocumentInstance,
 )
 
 _IMAGE_INSTANCE = "image_instance"
-_DOCUMENT_INSTANCE = "document_instance"
+_SINGLE_PAGE_DOCUMENT_INSTANCE = "single_page_document_instance"
+_MULTI_PAGE_DOCUMENT_INSTANCE = "multi_page_document_instance"
 
 
 class RowCodec:
@@ -31,11 +32,14 @@ class RowCodec:
                 instance, image=store.materialize_image(key, instance.image)
             )
             row_type = _IMAGE_INSTANCE
-        elif isinstance(instance, DocumentInstance):
+        elif isinstance(instance, SinglePageDocumentInstance):
+            instance = RowCodec._materialize_single_page(key, instance, store)
+            row_type = _SINGLE_PAGE_DOCUMENT_INSTANCE
+        elif isinstance(instance, MultiPageDocumentInstance):
             instance = replace(
-                instance, document=RowCodec._materialize_document(key, instance.document, store)
+                instance, source_path=store.materialize_pdf(key, instance.source_path)
             )
-            row_type = _DOCUMENT_INSTANCE
+            row_type = _MULTI_PAGE_DOCUMENT_INSTANCE
         else:
             raise TypeError(f"Unsupported instance type: {type(instance).__name__}")
 
@@ -50,18 +54,20 @@ class RowCodec:
         data = json.loads(row["data_json"])
         if row["type"] == _IMAGE_INSTANCE:
             return ImageInstance.from_dict(data)
-        if row["type"] == _DOCUMENT_INSTANCE:
-            return DocumentInstance.from_dict(data)
+        if row["type"] == _SINGLE_PAGE_DOCUMENT_INSTANCE:
+            return SinglePageDocumentInstance.from_dict(data)
+        if row["type"] == _MULTI_PAGE_DOCUMENT_INSTANCE:
+            return MultiPageDocumentInstance.from_dict(data)
         raise ValueError(f"Unknown instance type: {row['type']!r}")
 
     @staticmethod
-    def _materialize_document(
-        key: str,
-        document: SinglePageDocument | MultiPageDocument,
-        store: ArtifactStore,
-    ) -> SinglePageDocument | MultiPageDocument:
-        if isinstance(document, MultiPageDocument):
-            return replace(document, source_path=store.materialize_pdf(key, document.source_path))
-
-        path = store.materialize_page_image(key, document.image)
-        return replace(document, source_path=path)
+    def _materialize_single_page(
+        key: str, instance: SinglePageDocumentInstance, store: ArtifactStore
+    ) -> SinglePageDocumentInstance:
+        if isinstance(instance.visual, PdfPage):
+            assert instance.visual.file_path is not None
+            copied_path = store.materialize_pdf(key, instance.visual.file_path)
+            return replace(
+                instance, visual=replace(instance.visual, file_path=copied_path)
+            )
+        return replace(instance, visual=store.materialize_image(key, instance.visual))

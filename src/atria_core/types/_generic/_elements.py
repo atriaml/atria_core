@@ -59,7 +59,9 @@ class ElementArray(BaseDataModel):
             if arr is None:
                 continue
             if n is not None and len(arr) != n:
-                raise ValueError(f"{name} has length {len(arr)}, expected {n} (len(texts))")
+                raise ValueError(
+                    f"{name} has length {len(arr)}, expected {n} (len(texts))"
+                )
 
         if self.bboxes is not None and self.bboxes.size:
             if self.bboxes.max() > 1.0 or self.bboxes.min() < 0.0:
@@ -121,7 +123,9 @@ class ElementArray(BaseDataModel):
         """(N, 4) box of each element's parent; roots (and any element whose
         parent isn't present, e.g. after `at()`) fall back to their own box."""
         if self.bboxes is None or self.ids is None or self.parent_ids is None:
-            raise ValueError("ids/parent_ids/bboxes are required to gather parent boxes")
+            raise ValueError(
+                "ids/parent_ids/bboxes are required to gather parent boxes"
+            )
         if len(self) == 0:
             return np.empty((0, 4))
 
@@ -130,7 +134,9 @@ class ElementArray(BaseDataModel):
         pos = np.clip(np.searchsorted(sorted_ids, self.parent_ids), 0, len(order) - 1)
         rows = order[pos]
         out = self.bboxes[rows].copy()
-        missing = (self.parent_ids == _ROOT_PARENT) | (sorted_ids[pos] != self.parent_ids)
+        missing = (self.parent_ids == _ROOT_PARENT) | (
+            sorted_ids[pos] != self.parent_ids
+        )
         out[missing] = self.bboxes[missing]
         return out
 
@@ -152,7 +158,9 @@ class ElementArray(BaseDataModel):
     def to_dict(self) -> dict[str, Any]:
         return {
             "ids": self.ids.tolist() if self.ids is not None else None,
-            "parent_ids": self.parent_ids.tolist() if self.parent_ids is not None else None,
+            "parent_ids": self.parent_ids.tolist()
+            if self.parent_ids is not None
+            else None,
             "levels": self.levels.tolist() if self.levels is not None else None,
             "bboxes": self.bboxes.tolist() if self.bboxes is not None else None,
             "texts": self.texts.tolist() if self.texts is not None else None,

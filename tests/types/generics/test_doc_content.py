@@ -5,7 +5,9 @@ from tests.types.builders import make_document_content, make_element_array
 
 
 def test_derives_text_from_elements() -> None:
-    content = make_document_content(elements=make_element_array(texts=["hello", "world"]))
+    content = make_document_content(
+        elements=make_element_array(texts=["hello", "world"])
+    )
     assert content.text == "hello world"
 
 
@@ -21,7 +23,9 @@ def test_no_elements_no_text() -> None:
 
 
 def test_to_dict_from_dict_roundtrip() -> None:
-    content = make_document_content(elements=make_element_array(texts=["hello", "world"]))
+    content = make_document_content(
+        elements=make_element_array(texts=["hello", "world"])
+    )
     data = content.to_dict()
     restored = DocumentContent.from_dict(data)
     assert restored.to_dict() == data

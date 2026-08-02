@@ -8,11 +8,10 @@ from PIL import Image as PILImage
 from atria_core.serialization import DatasetReader, DatasetWriter
 from atria_core.types import (
     AnnotationType,
-    DocumentInstance,
     Image,
     ImageInstance,
-    MultiPageDocument,
-    SinglePageDocument,
+    MultiPageDocumentInstance,
+    SinglePageDocumentInstance,
 )
 from tests.types.builders import make_classification_annotation
 
@@ -24,7 +23,8 @@ def test_image_instance_dataset_roundtrip(tmp_path: Path) -> None:
             image=Image.from_source(PILImage.new("RGB", (8, 6), color="red")),
         ).add_annotation(make_classification_annotation()),
         ImageInstance(
-            sample_id="s2", image=Image.from_source(PILImage.new("RGB", (8, 6), color="blue"))
+            sample_id="s2",
+            image=Image.from_source(PILImage.new("RGB", (8, 6), color="blue")),
         ),
     ]
 
@@ -52,8 +52,7 @@ def test_image_instance_dataset_roundtrip(tmp_path: Path) -> None:
 
 def test_document_instance_single_page_dataset_roundtrip(tmp_path: Path) -> None:
     original_image = PILImage.new("RGB", (10, 5), color="green")
-    document = SinglePageDocument.from_image(original_image)
-    instances = [DocumentInstance(sample_id="d1", document=document)]
+    instances = [SinglePageDocumentInstance.from_image(original_image, sample_id="d1")]
 
     DatasetWriter(tmp_path).write(instances)
     assert (tmp_path / "artifacts" / "d1.png").exists()
@@ -61,15 +60,35 @@ def test_document_instance_single_page_dataset_roundtrip(tmp_path: Path) -> None
     restored = list(DatasetReader(tmp_path))
     assert len(restored) == 1
     loaded = restored[0]
-    assert isinstance(loaded.document, SinglePageDocument)
-    assert np.array_equal(np.array(original_image), np.array(loaded.document.image))
+    assert isinstance(loaded, SinglePageDocumentInstance)
+    assert np.array_equal(
+        np.array(original_image), np.array(loaded.load().require_content())
+    )
+
+
+def test_document_instance_single_pdf_page_dataset_roundtrip(
+    tmp_path: Path, sample_pdf_path: Path
+) -> None:
+    instances = [SinglePageDocumentInstance.from_pdf(sample_pdf_path, page_id=0)]
+
+    DatasetWriter(tmp_path).write(instances)
+    assert (tmp_path / "artifacts" / f"{instances[0].key}.pdf").exists()
+
+    restored = list(DatasetReader(tmp_path))
+    assert len(restored) == 1
+    loaded = restored[0]
+    assert isinstance(loaded, SinglePageDocumentInstance)
+    assert loaded.page_id == 0
+    assert loaded.load().require_content().size[0] > 0
 
 
 def test_document_instance_multi_page_dataset_roundtrip(
     tmp_path: Path, sample_pdf_path: Path
 ) -> None:
-    document = MultiPageDocument.from_pdf(sample_pdf_path)
-    instances = [DocumentInstance(sample_id="m1", document=document)]
+    document = MultiPageDocumentInstance(
+        sample_id="m1", source_path=str(sample_pdf_path)
+    )
+    instances = [document]
 
     out_dir = tmp_path / "dataset"
     DatasetWriter(out_dir).write(instances)
@@ -78,13 +97,15 @@ def test_document_instance_multi_page_dataset_roundtrip(
     restored = list(DatasetReader(out_dir))
     assert len(restored) == 1
     loaded = restored[0]
-    assert isinstance(loaded.document, MultiPageDocument)
-    assert loaded.document.num_pages == document.num_pages
+    assert isinstance(loaded, MultiPageDocumentInstance)
+    assert loaded.num_pages == document.num_pages
 
 
 def test_dataset_roundtrip_preserves_sample_order(tmp_path: Path) -> None:
     instances = [
-        ImageInstance(sample_id=f"s{i}", image=Image.from_source(PILImage.new("RGB", (4, 4))))
+        ImageInstance(
+            sample_id=f"s{i}", image=Image.from_source(PILImage.new("RGB", (4, 4)))
+        )
         for i in range(5)
     ]
     DatasetWriter(tmp_path).write(instances)

@@ -28,7 +28,10 @@ class BaseDataInstance(BaseDataModel):
 
     @property
     def key(self) -> str:
-        return self.sample_id.replace(".", "_").replace("/", "_")
+        # "#" is a URI fragment delimiter -- ResourceLoader.for_uri would
+        # otherwise silently truncate a path built from this key at that
+        # character (e.g. a multi-page document's "name#page_id" sample_id).
+        return self.sample_id.replace(".", "_").replace("/", "_").replace("#", "_")
 
     # -------------------------------------
     # Annotation helpers
@@ -64,7 +67,9 @@ class BaseDataInstance(BaseDataModel):
         self, annotation_type: Literal[AnnotationType.layout_analysis]
     ) -> LayoutAnalysisAnnotation | None: ...
 
-    def get_annotation_by_type(self, annotation_type: AnnotationType) -> Annotation | None:
+    def get_annotation_by_type(
+        self, annotation_type: AnnotationType
+    ) -> Annotation | None:
         return self._annotations.get(annotation_type.value)
 
     # -------------------------------------

@@ -13,7 +13,7 @@ from PIL import Image as PILImage
 from atria_core.transforms import functional as F
 from atria_core.types import (
     Image,
-    MultiPageDocument,
+    MultiPageDocumentInstance,
     RemoteResourceLoader,
     ResourceLoader,
 )
@@ -63,14 +63,17 @@ def test_fetch_process_use_remote_image(tmp_path: Path, http_server: str) -> Non
 def test_fetch_remote_multi_page_pdf(
     tmp_path: Path, http_server: str, sample_pdf_path: Path
 ) -> None:
-    """Use case C, PDF variant: a MultiPageDocument sourced from a URL rather
-    than a local path -- bytes are fetched fresh each time a page renders."""
+    """Use case C, PDF variant: a MultiPageDocumentInstance sourced from a URL
+    rather than a local path -- bytes are fetched fresh each time a page
+    renders."""
     remote_pdf = tmp_path / "remote.pdf"
     remote_pdf.write_bytes(sample_pdf_path.read_bytes())
 
-    document = MultiPageDocument.from_pdf(f"{http_server}/remote.pdf")
+    document = MultiPageDocumentInstance(
+        sample_id="remote", source_path=f"{http_server}/remote.pdf"
+    )
     assert document.num_pages == 2
 
     page = document.get_page(0)
     assert page.page_id == 0
-    assert page.image.size[0] > 0
+    assert page.visual.load().require_content().size[0] > 0

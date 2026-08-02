@@ -10,10 +10,11 @@ from atria_core.types import (
     AnnotationType,
     DocumentContent,
     DocumentInstance,
-    MultiPageDocument,
+    MultiPageDocumentInstance,
     OCRLevel,
+    PdfPage,
     ResourceLoader,
-    SinglePageDocument,
+    SinglePageDocumentInstance,
 )
 from atria_core.visualizers._drawers._image import ImageDrawer
 from atria_core.visualizers._drawers._pdf import PdfDrawer
@@ -41,7 +42,9 @@ def _words_to_draw(
         return None
 
     bboxes = (
-        content.elements.segment_bboxes(OCRLevel.word) if draw_segment_bboxes else words.bboxes
+        content.elements.segment_bboxes(OCRLevel.word)
+        if draw_segment_bboxes
+        else words.bboxes
     )
     texts = words.texts.tolist() if words.texts is not None else None
 
@@ -55,25 +58,26 @@ def _words_to_draw(
 
 
 def _visualize_document_image(
-    instance: DocumentInstance,
-    document: SinglePageDocument,
+    instance: SinglePageDocumentInstance,
     output_dir: str,
     *,
     draw_segment_bboxes: bool,
     draw_word_labels: bool,
     style: DrawStyle,
 ) -> Path:
-    image = document.image.copy().convert("RGB")
+    image = instance.load().require_content().copy().convert("RGB")
     prepared = _words_to_draw(
         instance,
-        document.content,
+        instance.content,
         draw_segment_bboxes=draw_segment_bboxes,
         draw_word_labels=draw_word_labels,
     )
     if prepared is not None:
         bboxes, texts, labels = prepared
         scale = np.array([image.width, image.height, image.width, image.height])
-        ImageDrawer().draw(image, bboxes * scale, texts=texts, labels=labels, style=style)
+        ImageDrawer().draw(
+            image, bboxes * scale, texts=texts, labels=labels, style=style
+        )
 
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     path = Path(output_dir) / f"{output_name(instance)}.png"
@@ -83,26 +87,27 @@ def _visualize_document_image(
 
 
 def _visualize_document_pdf_page(
-    instance: DocumentInstance,
-    document: SinglePageDocument,
+    instance: SinglePageDocumentInstance,
     output_dir: str,
     *,
     draw_segment_bboxes: bool,
     draw_word_labels: bool,
     style: DrawStyle,
 ) -> Path:
-    assert document.source_path is not None and document.page_id is not None
-    pdf_bytes = ResourceLoader.for_uri(document.source_path).load_bytes()
+    assert (
+        isinstance(instance.visual, PdfPage) and instance.visual.file_path is not None
+    )
+    pdf_bytes = ResourceLoader.for_uri(instance.visual.file_path).load_bytes()
     source_doc = pymupdf.open(stream=pdf_bytes, filetype="pdf")  # type: ignore[no-untyped-call]
     out_doc = pymupdf.open()  # type: ignore[no-untyped-call]
     out_doc.insert_pdf(  # type: ignore[no-untyped-call]
-        source_doc, from_page=document.page_id, to_page=document.page_id
+        source_doc, from_page=instance.visual.page_id, to_page=instance.visual.page_id
     )
     page = out_doc[0]
 
     prepared = _words_to_draw(
         instance,
-        document.content,
+        instance.content,
         draw_segment_bboxes=draw_segment_bboxes,
         draw_word_labels=draw_word_labels,
     )
@@ -121,15 +126,13 @@ def _visualize_document_pdf_page(
 
 
 def _visualize_multi_page_document(
-    instance: DocumentInstance,
-    document: MultiPageDocument,
-    output_dir: str,
+    instance: MultiPageDocumentInstance, output_dir: str
 ) -> Path:
-    # MultiPageDocument carries no per-page DocumentContent -- there's
+    # MultiPageDocumentInstance carries no per-page DocumentContent -- there's
     # nothing page-specific to draw yet, so this just re-saves a valid
     # multi-page PDF rather than raising. See _drawers/ for the drawing
     # infrastructure a future per-page-content shape would plug into.
-    pdf_bytes = ResourceLoader.for_uri(document.source_path).load_bytes()
+    pdf_bytes = ResourceLoader.for_uri(instance.source_path).load_bytes()
     source_doc = pymupdf.open(stream=pdf_bytes, filetype="pdf")  # type: ignore[no-untyped-call]
 
     Path(output_dir).mkdir(parents=True, exist_ok=True)
@@ -147,20 +150,13 @@ def visualize_document_instance(
     draw_word_labels: bool = True,
     style: DrawStyle = DEFAULT_STYLE,
 ) -> Path:
-    document = instance.document
+    if isinstance(instance, MultiPageDocumentInstance):
+        return _visualize_multi_page_document(instance, output_dir)
 
-    if isinstance(document, MultiPageDocument):
-        return _visualize_multi_page_document(instance, document, output_dir)
-
-    is_pdf_page = (
-        document.source_path is not None
-        and document.source_path.lower().endswith(".pdf")
-        and document.page_id is not None
-    )
-    if is_pdf_page:
+    assert isinstance(instance, SinglePageDocumentInstance)
+    if isinstance(instance.visual, PdfPage):
         return _visualize_document_pdf_page(
             instance,
-            document,
             output_dir,
             draw_segment_bboxes=draw_segment_bboxes,
             draw_word_labels=draw_word_labels,
@@ -168,7 +164,6 @@ def visualize_document_instance(
         )
     return _visualize_document_image(
         instance,
-        document,
         output_dir,
         draw_segment_bboxes=draw_segment_bboxes,
         draw_word_labels=draw_word_labels,

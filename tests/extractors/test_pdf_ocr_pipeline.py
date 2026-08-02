@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from atria_core.extractors import TesseractExtractorConfig
-from atria_core.types import DocumentInstance, MultiPageDocument
+from atria_core.types import MultiPageDocumentInstance
 
 pytestmark = pytest.mark.skipif(
     shutil.which("tesseract") is None, reason="tesseract binary not installed"
@@ -15,25 +15,22 @@ pytestmark = pytest.mark.skipif(
 
 def test_local_pdf_to_ocr_populated_document_instances(text_pdf_path: Path) -> None:
     """End-to-end use case B: user points a dataset at a local PDF, extracts
-    OCR per page, and gets back DocumentInstances with content populated --
-    no atria_datasets involved, just the pieces atria_core provides."""
-    document = MultiPageDocument.from_pdf(text_pdf_path)
+    OCR per page, and gets back SinglePageDocumentInstances with content
+    populated -- no atria_datasets involved, just the pieces atria_core
+    provides."""
+    document = MultiPageDocumentInstance(
+        sample_id=text_pdf_path.stem, source_path=str(text_pdf_path)
+    )
     extractor = TesseractExtractorConfig().build()
 
-    instances = [
-        DocumentInstance(
-            sample_id=f"{text_pdf_path.stem}_page_{page.page_id}",
-            document=extractor(page),
-        )
-        for page in document
-    ]
+    instances = [extractor(page) for page in document]
 
     assert len(instances) == 2
     for instance in instances:
-        assert instance.document.content is not None
-        assert instance.document.content.text is not None
+        assert instance.content is not None
+        assert instance.content.text is not None
 
-    recognized = " ".join(i.document.content.text.upper() for i in instances)
+    recognized = " ".join(i.content.text.upper() for i in instances)
     assert "HELLO" in recognized
     assert "WORLD" in recognized
     assert "SECOND" in recognized
@@ -42,10 +39,13 @@ def test_local_pdf_to_ocr_populated_document_instances(text_pdf_path: Path) -> N
 
 def test_single_page_pdf_source_ocr_roundtrip(text_pdf_path: Path) -> None:
     """Same flow but going through a single page pulled directly off the
-    MultiPageDocument, mirroring how a dataset would process one sample."""
+    MultiPageDocumentInstance, mirroring how a dataset would process one
+    sample."""
     from atria_core.types import OCRLevel
 
-    document = MultiPageDocument.from_pdf(text_pdf_path)
+    document = MultiPageDocumentInstance(
+        sample_id=text_pdf_path.stem, source_path=str(text_pdf_path)
+    )
     page = document.get_page(0)
 
     extracted = TesseractExtractorConfig().build()(page)

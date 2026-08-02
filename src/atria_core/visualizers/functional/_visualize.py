@@ -12,7 +12,9 @@ from atria_core.types import (
 
 
 def output_name(instance: BaseDataInstance) -> str:
-    classification_annotation = instance.get_annotation_by_type(AnnotationType.classification)
+    classification_annotation = instance.get_annotation_by_type(
+        AnnotationType.classification
+    )
     if classification_annotation is None:
         return instance.sample_id
     return f"{instance.sample_id}_label={classification_annotation.label_name}"

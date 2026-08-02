@@ -96,7 +96,9 @@ def make_object_detection_annotation(**overrides: Any) -> ObjectDetectionAnnotat
     return ObjectDetectionAnnotation(**kwargs)
 
 
-def make_pil_image(size: tuple[int, int] = (16, 12), color: str = "white") -> PILImage.Image:
+def make_pil_image(
+    size: tuple[int, int] = (16, 12), color: str = "white"
+) -> PILImage.Image:
     return PILImage.new("RGB", size, color=color)
 
 

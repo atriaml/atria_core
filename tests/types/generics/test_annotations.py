@@ -49,7 +49,9 @@ def test_entity_labeling_annotation_serialize_word_labels() -> None:
 
 
 def test_question_answering_annotation_roundtrip() -> None:
-    ann = make_question_answering_annotation(qa_pairs=[make_qa_pair(), make_qa_pair(id=2)])
+    ann = make_question_answering_annotation(
+        qa_pairs=[make_qa_pair(), make_qa_pair(id=2)]
+    )
     data = ann.to_dict()
     restored = QuestionAnsweringAnnotation.from_dict(data)
     assert restored == ann
@@ -93,9 +95,7 @@ def test_object_detection_annotation_segmentation_padding_mixed_objects() -> Non
     assert {k: v for k, v in restored_data.items() if k != "segmentations"} == {
         k: v for k, v in data.items() if k != "segmentations"
     }
-    assert np.array_equal(
-        restored.segmentations, ann.segmentations, equal_nan=True
-    )
+    assert np.array_equal(restored.segmentations, ann.segmentations, equal_nan=True)
     restored_objects = restored.to_objects()
     assert restored_objects[1].segmentation is None
     assert restored_objects[2].segmentation.shape == (2, 2)

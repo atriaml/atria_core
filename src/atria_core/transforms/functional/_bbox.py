@@ -62,7 +62,9 @@ def unnormalize(container: Container, width: float, height: float) -> Container:
 
 def switch_mode(container: Container) -> Container:
     mode = container.bbox_mode
-    new_mode = BoundingBoxMode.XYWH if mode == BoundingBoxMode.XYXY else BoundingBoxMode.XYXY
+    new_mode = (
+        BoundingBoxMode.XYWH if mode == BoundingBoxMode.XYXY else BoundingBoxMode.XYXY
+    )
 
     def _switch(boxes: np.ndarray) -> np.ndarray:
         x1, y1, a, b = boxes[:, 0], boxes[:, 1], boxes[:, 2], boxes[:, 3]
@@ -81,7 +83,9 @@ def _apply(
     mode: BoundingBoxMode,
 ) -> Container:
     batches = container.box_batches()
-    transformed = {name: fn(boxes) for name, boxes in batches.items() if boxes is not None}
+    transformed = {
+        name: fn(boxes) for name, boxes in batches.items() if boxes is not None
+    }
     if not transformed:
         return container
     return container.with_box_batches(transformed, normalized=normalized, mode=mode)

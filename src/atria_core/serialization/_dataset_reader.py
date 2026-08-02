@@ -11,9 +11,8 @@ from atria_core.types import BaseDataInstance
 
 class DatasetReader:
     """Reads a directory written by DatasetWriter back into BaseDataInstance
-    objects. ImageInstance's Image stays lazy (content loads on Image.load());
-    DocumentInstance's SinglePageDocument loads its page image eagerly, same
-    as SinglePageDocument.from_image does everywhere else in this library."""
+    objects. Both ImageInstance's Image and SinglePageDocumentInstance's
+    visual (Image or PdfPage) stay lazy -- content loads on .load()."""
 
     def __init__(self, directory: str | Path) -> None:
         self.directory = Path(directory)
