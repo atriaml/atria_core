@@ -15,14 +15,14 @@ from atria_core.datasets._constants import (
     _DEFAULT_SNAPSHOT_PATH,
 )
 from atria_core.datasets._dataset_builders import (
-    ComposedTransform,
     PreprocessTransform,
     _default_data_dir,
     _validate_data_dir,
     transform_hash,
 )
+from atria_core.datasets._split_iterators import compose
 from atria_core.logger import get_logger
-from atria_core.types import BaseDataInstance, DatasetSplitType
+from atria_core.types import DatasetSplitType
 
 if TYPE_CHECKING:
     from atria_core.datasets._dataset import Dataset
@@ -30,14 +30,25 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
+def _infer_data_model(dataset: Dataset[Any, Any]) -> type[Any]:
+    """No __data_model__ declaration exists in the new Dataset design --
+    infer the sample class from an actual sample instead."""
+    for split_iterator in dataset.split_iterators.values():
+        for sample in split_iterator:
+            return type(sample)
+    raise ValueError(
+        f"Cannot infer data_model for {type(dataset).__name__}: every split is empty."
+    )
+
+
 class Cacher:
     """Applied from the outside to a Dataset: builds-or-reuses an on-disk
     cached snapshot and returns a CachedDataset handle for reading it back.
-    Never touches the passed-in dataset's own already-built split iterators
-    or user transforms -- it drives its own build via the dataset's hooks,
-    using its own materialization settings (store_artifacts/resize_images/
-    image_max_size), which are the only things that determine what gets
-    persisted."""
+    Since Dataset.__init__ always eagerly builds every split iterator up
+    front, Cacher just takes the dataset's own already-built
+    dataset.split_iterators (which already have the input transform
+    applied) and layers a write-time transform on top via
+    .with_transform(...) -- no need to re-download or rebuild anything."""
 
     def __init__(
         self,
@@ -62,14 +73,12 @@ class Cacher:
         *,
         data_dir: str | None = None,
         split: DatasetSplitType | None = None,
-        access_token: str | None = None,
         overwrite_existing: bool = False,
     ) -> CachedDataset[Any]:
         return self._cache(
             dataset,
             data_dir=data_dir,
             split=split,
-            access_token=access_token,
             overwrite_existing=overwrite_existing,
             transform=None,
         )
@@ -81,7 +90,6 @@ class Cacher:
         *,
         data_dir: str | None = None,
         split: DatasetSplitType | None = None,
-        access_token: str | None = None,
         overwrite_existing: bool = False,
     ) -> CachedDataset[Any]:
         """Like cache(), but writes transform(sample) for each sample the
@@ -92,7 +100,6 @@ class Cacher:
             dataset,
             data_dir=data_dir,
             split=split,
-            access_token=access_token,
             overwrite_existing=overwrite_existing,
             transform=transform,
         )
@@ -103,29 +110,25 @@ class Cacher:
         *,
         data_dir: str | None,
         split: DatasetSplitType | None,
-        access_token: str | None,
         overwrite_existing: bool,
         transform: Callable[[Any], Any] | None,
     ) -> CachedDataset[Any]:
         from atria_core.datasets._storage._storage_manager import StorageManager
 
-        resolved_data_dir = _validate_data_dir(
-            data_dir or _default_data_dir(type(dataset).__name__)
-        )
-
-        base_transform = PreprocessTransform(
+        materialize = PreprocessTransform(
             materialize_content=self._store_artifacts,
             resize_images=self._resize_images,
             image_max_size=self._image_max_size,
         )
-        output_transform = (
-            ComposedTransform([base_transform, transform])
-            if transform is not None
-            else base_transform
+        write_transform = (
+            compose(materialize, transform) if transform is not None else materialize
         )
 
+        resolved_data_dir = _validate_data_dir(
+            data_dir or _default_data_dir(type(dataset).__name__)
+        )
         unique_path = self._compute_cache_path(
-            dataset, resolved_data_dir, output_transform
+            dataset, resolved_data_dir, write_transform
         )
         storage_manager = StorageManager.create(
             self._storage_type,
@@ -144,9 +147,9 @@ class Cacher:
             logger.info(f"Loading existing cached dataset from {unique_path}")
             return CachedDataset(unique_path)
 
-        dataset._download(resolved_data_dir, access_token)
+        data_model = _infer_data_model(dataset)
 
-        for s in dataset._available_splits(resolved_data_dir):
+        for s, split_iterator in dataset.split_iterators.items():
             if split is not None and s != split:
                 continue
 
@@ -161,11 +164,10 @@ class Cacher:
                 )
                 continue
 
-            split_iterator = dataset._build_split_iterator(
-                s, resolved_data_dir, output_transform=output_transform
-            )
             logger.info(f"Caching split [{s.value}] to {storage_manager.storage_dir}")
-            storage_manager.write_split(split_iterator=split_iterator)
+            storage_manager.write_split(
+                s, split_iterator.with_transform(write_transform)
+            )
 
         Cacher._save_dataset_info(
             str(storage_manager.storage_dir),
@@ -177,7 +179,7 @@ class Cacher:
             storage_dir=storage_manager.storage_dir,
             config_name=storage_manager.config_name,
             config_hash=dataset.config.hash,
-            data_model=dataset.data_model,
+            data_model=data_model,
             storage_type=self._storage_type,
             dataset_class_name=type(dataset).__name__,
         )
@@ -187,13 +189,12 @@ class Cacher:
         self,
         dataset: Dataset[Any, Any],
         data_dir: str,
-        output_transform: Callable[[Any], Any],
+        write_transform: Callable[[Any], Any],
     ) -> Path:
         """Single source of truth for cache uniqueness -- Cacher's job, not
         StorageManager's. Folds the dataset config hash, this dataset
         class's name, the storage backend's prefix, and a hash of whatever
-        is actually being written per-sample (output_transform, which may
-        include a process_and_cache transform) into the cache directory
+        is actually being written per-sample into the cache directory
         name, so different backends/materialization settings/process
         transforms never collide."""
         from atria_core.datasets._storage._storage_manager import StorageManager
@@ -204,7 +205,7 @@ class Cacher:
             f"{storage_manager_cls.storage_prefix}/"
             f"{type(dataset).__name__}-{dataset.config.hash}"
         )
-        hash_ = transform_hash(output_transform)
+        hash_ = transform_hash(write_transform)
         if hash_ is not None:
             config_name += f"-{hash_}"
         return storage_dir / config_name
@@ -258,7 +259,7 @@ class Cacher:
         storage_dir: Path | str,
         config_name: str,
         config_hash: str,
-        data_model: type[BaseDataInstance],
+        data_model: type[Any],
         storage_type: FileStorageType,
         dataset_class_name: str,
     ) -> None:

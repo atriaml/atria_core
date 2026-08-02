@@ -62,7 +62,7 @@ class Dataset(
         data_dir: str,
         split: DatasetSplitType | None = None,
         access_token: str | None = None,
-    ):
+    ) -> None:
         self._download(data_dir, access_token)
         input_transform = self._build_input_transform()
         self._split_iterators = {}
@@ -120,24 +120,12 @@ class Dataset(
             raise ValueError(f"Split '{split}' does not exist for this dataset.")
         return self._split_iterators[split]
 
-    def split_iterator_with_transform(
-        self,
-        split: DatasetSplitType,
-        transform: Callable[[T_BaseDataInstance], Any],
-    ) -> (
-        IndexableSplitIterator[T_BaseDataInstance]
-        | IterableSplitIterator[T_BaseDataInstance]
-    ):
-        if split not in self._split_iterators:
-            raise ValueError(f"Split '{split}' does not exist for this dataset.")
-        return map(transform, self._split_iterators[split])
-
     @abstractmethod
     def _build_split_iterator(
         self,
         split: DatasetSplitType,
         data_dir: str,
-    ) -> Sequence | Iterable:
+    ) -> Sequence[Any] | Iterable[Any]:
         pass
 
     @abstractmethod

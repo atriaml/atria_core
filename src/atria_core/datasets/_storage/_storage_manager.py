@@ -2,14 +2,13 @@ from __future__ import annotations
 
 import shutil
 from abc import ABC, abstractmethod
-from collections.abc import Callable
+from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import Any, ClassVar
 
 from atria_core.datasets._common import FileStorageType
-from atria_core.datasets._split_iterators import SplitIterator
 from atria_core.logger import get_logger
-from atria_core.types import BaseDataInstance, DatasetSplitType
+from atria_core.types import DatasetSplitType
 
 logger = get_logger(__name__)
 
@@ -19,7 +18,9 @@ class StorageManager(ABC):
     at a given storage_dir/config_name. Deciding *what* that path should be
     (cache uniqueness -- dataset config hash, transform hash, storage
     backend) is Cacher's job, not this class's; StorageManager only knows
-    how to store what it's told, where it's told.
+    how to store what it's told, where it's told. Split iterators no
+    longer carry their own split identity, so `split` is always an
+    explicit parameter here.
     """
 
     storage_prefix: ClassVar[str]
@@ -43,7 +44,9 @@ class StorageManager(ABC):
         self._setup_directories()
 
     @classmethod
-    def resolve_class(cls, cached_storage_type: FileStorageType) -> type[StorageManager]:
+    def resolve_class(
+        cls, cached_storage_type: FileStorageType
+    ) -> type[StorageManager]:
         if cached_storage_type == FileStorageType.DELTALAKE:
             from atria_core.datasets._storage._deltalake_storage_manager import (
                 DeltalakeStorageManager,
@@ -109,15 +112,15 @@ class StorageManager(ABC):
             logger.info(f"Purging dataset split {split.value} from storage {split_dir}")
             shutil.rmtree(split_dir)
 
-    def write_split(self, split_iterator: SplitIterator[Any]) -> None:
+    def write_split(self, split: DatasetSplitType, split_iterator: Any) -> None:
         try:
-            self._write_split_internal(split_iterator)
+            self._write_split_internal(split, split_iterator)
         except (Exception, KeyboardInterrupt) as e:
-            self.purge_split(split_iterator.split)
+            self.purge_split(split)
             error_msg = (
                 "KeyboardInterrupt detected. Stopping dataset preparation..."
                 if isinstance(e, KeyboardInterrupt)
-                else f"Error while writing dataset split {split_iterator.split.value} to storage. Cleaning up..."
+                else f"Error while writing dataset split {split.value} to storage. Cleaning up..."
             )
             raise type(e)(error_msg) from e
 
@@ -126,18 +129,14 @@ class StorageManager(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def _write_split_internal(self, split_iterator: SplitIterator[Any]) -> None:
+    def _write_split_internal(
+        self, split: DatasetSplitType, split_iterator: Any
+    ) -> None:
         raise NotImplementedError
 
     @abstractmethod
-    def read_split(
-        self,
-        split: DatasetSplitType,
-        data_model: type[BaseDataInstance],
-        output_transform: Callable[
-            [BaseDataInstance], BaseDataInstance | list[BaseDataInstance]
-        ]
-        | None = None,
-        allowed_keys: set[str] | None = None,
-    ) -> SplitIterator[Any]:
+    def read_split(self, split: DatasetSplitType) -> Sequence[Any] | Iterable[Any]:
+        """Returns the *raw*, undecoded split contents (plain dicts) --
+        decoding into data_model instances happens through Dataset's own
+        generic input-transform wrapping, not here."""
         raise NotImplementedError

@@ -7,14 +7,29 @@ T_Output = TypeVar("T_Output")
 T_NewOutput = TypeVar("T_NewOutput")
 
 
+class Compose:
+    """Plain class instead of a closure so composed transforms stay
+    picklable -- stdlib pickle can't serialize nested functions, and
+    multiprocessing writers need to send composed transforms to worker
+    processes."""
+
+    def __init__(
+        self,
+        first: Callable[[Any], Any],
+        second: Callable[[Any], Any],
+    ) -> None:
+        self.first = first
+        self.second = second
+
+    def __call__(self, value: Any) -> Any:
+        return self.second(self.first(value))
+
+
 def compose(
     first: Callable[[Any], Any],
     second: Callable[[Any], Any],
 ) -> Callable[[Any], Any]:
-    def composed(value: Any) -> Any:
-        return second(first(value))
-
-    return composed
+    return Compose(first, second)
 
 
 class IndexableSplitIterator(Sequence[T_Output], Generic[T_Output]):
@@ -29,7 +44,7 @@ class IndexableSplitIterator(Sequence[T_Output], Generic[T_Output]):
     def __len__(self) -> int:
         return len(self._dataset)
 
-    def __getitem__(self, index: int) -> T_Output:
+    def __getitem__(self, index: int) -> T_Output:  # type: ignore[override]
         return self._transform(self._dataset[index])
 
     def __getitems__(self, indices: list[int]) -> list[T_Output]:
@@ -40,6 +55,9 @@ class IndexableSplitIterator(Sequence[T_Output], Generic[T_Output]):
     ) -> IndexableSplitIterator[T_NewOutput]:
         composed_transform = compose(self._transform, transform)
         return IndexableSplitIterator(self._dataset, composed_transform)
+
+    def __repr__(self) -> str:
+        return f"IndexableSplitIterator(len={len(self)})"
 
 
 class IterableSplitIterator(Iterable[T_Output], Generic[T_Output]):
@@ -59,3 +77,6 @@ class IterableSplitIterator(Iterable[T_Output], Generic[T_Output]):
     ) -> IterableSplitIterator[T_NewOutput]:
         composed_transform = compose(self._transform, transform)
         return IterableSplitIterator(self._dataset, composed_transform)
+
+    def __repr__(self) -> str:
+        return f"IterableSplitIterator({self._dataset})"

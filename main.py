@@ -12,6 +12,7 @@ from atria_core.datasets import (
     DatasetConfig,
 )
 from atria_core.datasets._dataset import Dataset
+from atria_core.extractors._tesseract import TesseractExtractorConfig
 from atria_core.logger import get_logger
 from atria_core.registry import Registry
 from atria_core.types import (
@@ -175,14 +176,13 @@ class Tobacco3482(Dataset[Tobacco3482Config, SinglePageDocumentInstance]):
         return InputTransform()
 
 
-class TestTransform:
-    def __call__(self, input: SinglePageDocumentInstance) -> int:
-        return 1
-
-
 tobacco = Tobacco3482Config().build_module()
-split_iterators = tobacco._split_iterators
+transform = TesseractExtractorConfig().build()
+# cached = Cacher(storage_type=FileStorageType.MSGPACK).cache(tobacco)
 d = tobacco.split_iterator(DatasetSplitType.train)
-for x in d.with_transform(TestTransform()):
-    print(x)
+print(d)
+for x in d.with_transform(transform):
+    print(x.content.elements.word_bboxes())
+    print(x.content.elements.word_texts())
+    # print(x.to_dict())
     break

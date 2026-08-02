@@ -140,6 +140,22 @@ class ElementArray(BaseDataModel):
         out[missing] = self.bboxes[missing]
         return out
 
+    def word_bboxes(self) -> np.ndarray:
+        """(M, 4) boxes of every word in this array, in order. If the array has
+        no words, returns an empty (0, 4) array."""
+        if self.levels is None or self.bboxes is None:
+            return np.empty((0, 4))
+        mask = self.levels == OCRLevel.word.value
+        return np.asarray(self.bboxes[mask])
+
+    def word_texts(self) -> list[str]:
+        """List of every word's text in this array, in order. If the array has
+        no words, returns an empty list."""
+        if self.levels is None or self.texts is None:
+            return []
+        mask = self.levels == OCRLevel.word.value
+        return [t for t in self.texts[mask].tolist() if t]
+
     def segment_bboxes(self, level: OCRLevel = OCRLevel.line) -> np.ndarray:
         """(M, 4) enclosing box of each `level` element's parent -- the
         replacement for a stored `segment_bbox` field. Call on the full

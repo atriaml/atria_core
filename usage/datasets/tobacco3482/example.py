@@ -1,6 +1,6 @@
 """Example: Tobacco3482 document classification dataset, end to end --
-build config -> build_module() -> Cacher(...).cache(dataset) -> iterate
-train/test.
+build config -> build_module() -> iterate live, then Cacher(...).cache(dataset)
+-> iterate cached.
 
 Phase-1 port note: OCR loading (the old `load_ocr` config flag) isn't
 carried over yet -- this only wires up the image classification path,
@@ -10,22 +10,14 @@ shape is separate follow-up work, not required to validate this port.
 
 from __future__ import annotations
 
+from collections.abc import Callable, Sequence
+from pathlib import Path
+from random import shuffle
 from typing import Any
-from zipfile import Path
 
-from numpy.random import shuffle
 from pydantic.dataclasses import dataclass as pydantic_dataclass
 
-from atria_core.datasets import (
-    Cacher,
-    Dataset,
-    DatasetConfig,
-    DatasetInputTransform,
-    DocumentDataset,
-    FileStorageType,
-    IterableSplitIterator,
-)
-from atria_core.datasets._split_iterators import IndexableSplitIterator
+from atria_core.datasets import Cacher, Dataset, DatasetConfig, FileStorageType
 from atria_core.logger import get_logger
 from atria_core.registry import Registry
 from atria_core.types import (
@@ -33,7 +25,6 @@ from atria_core.types import (
     DatasetLabels,
     DatasetMetadata,
     DatasetSplitType,
-    DocumentInstance,
     SinglePageDocumentInstance,
 )
 
@@ -85,17 +76,37 @@ class Tobacco3482Config(DatasetConfig):
         return Tobacco3482(self, **kwargs)
 
 
-class InputTransform(DatasetInputTransform[DocumentInstance]):
-    def __call__(self, *args: Any, **kwargs: Any) -> DocumentInstance:
-        image_file_path, label_index = args[0]
+class InputTransform:
+    def __call__(self, input: tuple[Path, int]) -> SinglePageDocumentInstance:
+        image_file_path, label_index = input
         return SinglePageDocumentInstance.from_image(image_file_path).add_annotation(
             ClassificationAnnotation(label=label_index, label_map=_CLASSES)
         )
 
 
-class Tobacco3482(DocumentDataset[Tobacco3482Config]):
-    __input_transform__ = InputTransform
+class SplitIterator(Sequence[tuple[Path, int]]):
+    def __init__(self, data_dir: str, split: DatasetSplitType) -> None:
+        if split == DatasetSplitType.train:
+            split_file_path = Path(data_dir) / "train.txt"
+        elif split == DatasetSplitType.test:
+            split_file_path = Path(data_dir) / "test.txt"
+        else:
+            raise ValueError(f"Unsupported split: {split}")
+        with open(split_file_path) as f:
+            self.split_file_paths = f.read().splitlines()
+            shuffle(self.split_file_paths)
+        self.image_data_dir = Path(data_dir) / _IMAGE_DATA_NAME
 
+    def __getitem__(self, index: int) -> tuple[Path, int]:
+        image_file_path = self.split_file_paths[index]
+        label_index = _CLASSES.index(Path(image_file_path).parent.name)
+        return self.image_data_dir / image_file_path, label_index
+
+    def __len__(self) -> int:
+        return len(self.split_file_paths)
+
+
+class Tobacco3482(Dataset[Tobacco3482Config, SinglePageDocumentInstance]):
     def _download_urls(self) -> list[str]:
         return _DATA_URLS
 
@@ -112,32 +123,28 @@ class Tobacco3482(DocumentDataset[Tobacco3482Config]):
         return [DatasetSplitType.train, DatasetSplitType.test]
 
     def _build_split_iterator(
-        self, split: DatasetSplitType, data_dir: str, **kwargs: Any
-    ) -> IterableSplitIterator[DocumentInstance]:
-        if split == DatasetSplitType.train:
-            split_file_path = Path(data_dir) / "train.txt"
-        elif split == DatasetSplitType.test:
-            split_file_path = Path(data_dir) / "test.txt"
-        else:
-            raise ValueError(f"Unsupported split: {split}")
-        with open(split_file_path) as f:
-            self.split_file_paths = f.read().splitlines()
-            shuffle(self.split_file_paths)
-        self.image_data_dir = Path(data_dir) / _IMAGE_DATA_NAME
-        return IndexableSplitIterator(self._raw_iter(), self._raw_len())
+        self, split: DatasetSplitType, data_dir: str
+    ) -> SplitIterator:
+        return SplitIterator(data_dir=data_dir, split=split)
+
+    def _build_input_transform(self) -> Callable[[Any], SinglePageDocumentInstance]:
+        return InputTransform()
 
 
 def main() -> None:
-    dataset: Dataset[Tobacco3482Config, DocumentInstance] = (
-        Tobacco3482Config().build_module()
-    )
+    dataset = Tobacco3482Config().build_module()
+
+    train_iterator = dataset.split_iterator(DatasetSplitType.train)
+    logger.info("train samples (live): %d", len(train_iterator))
+    logger.info("first train sample (live): %s", train_iterator[0])
+
     cached = Cacher(FileStorageType.DELTALAKE).cache(dataset)
 
-    logger.info("train samples: %d", len(cached.train))
-    logger.info("test samples: %d", len(cached.test))
-
-    sample = cached.train[0]
-    logger.info("first train sample: %s", sample)
+    cached_train = cached.split_iterator(DatasetSplitType.train)
+    cached_test = cached.split_iterator(DatasetSplitType.test)
+    logger.info("train samples (cached): %d", len(cached_train))
+    logger.info("test samples (cached): %d", len(cached_test))
+    logger.info("first train sample (cached): %s", cached_train[0])
 
 
 if __name__ == "__main__":

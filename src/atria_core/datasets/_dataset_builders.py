@@ -23,30 +23,23 @@ logger = get_logger(__name__)
 def transform_hash(transform: Callable[[Any], Any] | None) -> str | None:
     """Storage layer doesn't know or care what a transform does -- it only
     needs a stable identity to fold into the cache path. Transforms that
-    declare their own `.hash` (e.g. PreprocessTransform, ComposedTransform)
-    use that; arbitrary callables (e.g. a user's process_and_cache
-    transform) fall back to a hash of their repr."""
+    declare their own `.hash` (e.g. PreprocessTransform) use that; a
+    Compose (from _split_iterators) is hashed recursively over its
+    first/second so composing transforms doesn't collapse to a
+    non-deterministic id(); arbitrary callables (e.g. a user's
+    process_and_cache transform) fall back to a hash of their repr."""
     if transform is None:
         return None
+    from atria_core.datasets._split_iterators import Compose
+
+    if isinstance(transform, Compose):
+        first_hash = transform_hash(transform.first) or "none"
+        second_hash = transform_hash(transform.second) or "none"
+        return hashlib.md5(f"{first_hash}|{second_hash}".encode()).hexdigest()[:8]
     declared_hash = getattr(transform, "hash", None)
     if declared_hash is not None:
         return str(declared_hash)
     return hashlib.md5(repr(transform).encode()).hexdigest()[:8]
-
-
-class ComposedTransform:
-    def __init__(self, transforms: list[Callable[[Any], Any]]) -> None:
-        self._transforms = transforms
-
-    def __call__(self, sample: BaseDataInstance) -> BaseDataInstance:
-        for transform in self._transforms:
-            sample = transform(sample)
-        return sample
-
-    @property
-    def hash(self) -> str:
-        parts = [transform_hash(t) or "none" for t in self._transforms]
-        return hashlib.md5("|".join(parts).encode()).hexdigest()[:8]
 
 
 class PreprocessTransform:

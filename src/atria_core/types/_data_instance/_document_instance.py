@@ -17,8 +17,7 @@ from atria_core.types._utilities._url_fetchers import ResourceLoader
 @dataclass(frozen=True, repr=False)
 class DocumentInstance(BaseDataInstance):
     """Abstract base -- only SinglePageDocumentInstance/MultiPageDocumentInstance
-    are ever constructed. Shared only for isinstance checks and typing
-    (e.g. DocumentDataset.__data_model__)."""
+    are ever constructed. Shared only for isinstance checks and typing."""
 
 
 @dataclass(frozen=True, repr=False)
