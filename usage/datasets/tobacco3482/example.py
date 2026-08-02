@@ -10,11 +10,10 @@ shape is separate follow-up work, not required to validate this port.
 
 from __future__ import annotations
 
-from collections.abc import Iterator
-from pathlib import Path
-from random import shuffle
 from typing import Any
+from zipfile import Path
 
+from numpy.random import shuffle
 from pydantic.dataclasses import dataclass as pydantic_dataclass
 
 from atria_core.datasets import (
@@ -26,6 +25,7 @@ from atria_core.datasets import (
     FileStorageType,
     IterableSplitIterator,
 )
+from atria_core.datasets._split_iterators import IndexableSplitIterator
 from atria_core.logger import get_logger
 from atria_core.registry import Registry
 from atria_core.types import (
@@ -78,29 +78,6 @@ _CLASSES = [
 ]
 
 
-class Tobacco3482SplitIterator(IterableSplitIterator[DocumentInstance]):
-    def __init__(self, split: DatasetSplitType, data_dir: str, **kwargs: Any) -> None:
-        super().__init__(split=split, **kwargs)
-        if split == DatasetSplitType.train:
-            split_file_path = Path(data_dir) / "train.txt"
-        elif split == DatasetSplitType.test:
-            split_file_path = Path(data_dir) / "test.txt"
-        else:
-            raise ValueError(f"Unsupported split: {split}")
-        with open(split_file_path) as f:
-            self.split_file_paths = f.read().splitlines()
-            shuffle(self.split_file_paths)
-        self.image_data_dir = Path(data_dir) / _IMAGE_DATA_NAME
-
-    def _raw_iter(self) -> Iterator[tuple[Path, int]]:
-        for image_file_path in self.split_file_paths:
-            label_index = _CLASSES.index(Path(image_file_path).parent.name)
-            yield self.image_data_dir / image_file_path, label_index
-
-    def _raw_len(self) -> int:
-        return len(self.split_file_paths)
-
-
 @datasets.register("tobacco3482")
 @pydantic_dataclass(frozen=True)
 class Tobacco3482Config(DatasetConfig):
@@ -108,7 +85,7 @@ class Tobacco3482Config(DatasetConfig):
         return Tobacco3482(self, **kwargs)
 
 
-class InputTransform(DatasetInputTransform[DocumentInstance, Tobacco3482Config]):
+class InputTransform(DatasetInputTransform[DocumentInstance]):
     def __call__(self, *args: Any, **kwargs: Any) -> DocumentInstance:
         image_file_path, label_index = args[0]
         return SinglePageDocumentInstance.from_image(image_file_path).add_annotation(
@@ -118,7 +95,6 @@ class InputTransform(DatasetInputTransform[DocumentInstance, Tobacco3482Config])
 
 class Tobacco3482(DocumentDataset[Tobacco3482Config]):
     __input_transform__ = InputTransform
-    __split_iterator_cls__ = Tobacco3482SplitIterator
 
     def _download_urls(self) -> list[str]:
         return _DATA_URLS
@@ -134,6 +110,21 @@ class Tobacco3482(DocumentDataset[Tobacco3482Config]):
 
     def _available_splits(self, data_dir: str) -> list[DatasetSplitType]:
         return [DatasetSplitType.train, DatasetSplitType.test]
+
+    def _build_split_iterator(
+        self, split: DatasetSplitType, data_dir: str, **kwargs: Any
+    ) -> IterableSplitIterator[DocumentInstance]:
+        if split == DatasetSplitType.train:
+            split_file_path = Path(data_dir) / "train.txt"
+        elif split == DatasetSplitType.test:
+            split_file_path = Path(data_dir) / "test.txt"
+        else:
+            raise ValueError(f"Unsupported split: {split}")
+        with open(split_file_path) as f:
+            self.split_file_paths = f.read().splitlines()
+            shuffle(self.split_file_paths)
+        self.image_data_dir = Path(data_dir) / _IMAGE_DATA_NAME
+        return IndexableSplitIterator(self._raw_iter(), self._raw_len())
 
 
 def main() -> None:

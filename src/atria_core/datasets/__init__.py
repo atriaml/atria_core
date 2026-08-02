@@ -7,10 +7,10 @@ import lazy_loader as lazy
 if TYPE_CHECKING:
     from ._cached_dataset import CachedDataset as CachedDataset
     from ._cacher import Cacher as Cacher
-    from ._common import DatasetConfig as DatasetConfig
+    from ._dataset import DatasetConfig as DatasetConfig
     from ._common import DatasetLoadingMode as DatasetLoadingMode
     from ._common import FileStorageType as FileStorageType
-    from ._common import HuggingfaceDatasetConfig as HuggingfaceDatasetConfig
+    from ._hf_dataset import HuggingfaceDatasetConfig as HuggingfaceDatasetConfig
     from ._dataset import Dataset as Dataset
     from ._dataset import DatasetInputTransform as DatasetInputTransform
     from ._dataset import DocumentDataset as DocumentDataset
@@ -34,24 +34,22 @@ __getattr__, __dir__, __all__ = lazy.attach(
         "_cached_dataset": ["CachedDataset"],
         "_cacher": ["Cacher"],
         "_common": [
-            "DatasetConfig",
             "DatasetLoadingMode",
             "FileStorageType",
-            "HuggingfaceDatasetConfig",
         ],
         "_dataset": [
             "Dataset",
             "DatasetInputTransform",
             "DocumentDataset",
             "ImageDataset",
+            "DatasetConfig",
         ],
         "_dataset_builders": ["ComposedTransform", "PreprocessTransform"],
         "_exceptions": ["ConfigurationNotFoundError", "SplitNotFoundError"],
         "_hf_dataset": [
             "HFSplitIterator",
             "HuggingfaceDataset",
-            "HuggingfaceDocumentDataset",
-            "HuggingfaceImageDataset",
+            "HuggingfaceDatasetConfig",
         ],
         "_split_iterators": [
             "IndexableSplitIterator",

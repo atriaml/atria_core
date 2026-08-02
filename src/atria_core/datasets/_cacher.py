@@ -144,7 +144,7 @@ class Cacher:
             logger.info(f"Loading existing cached dataset from {unique_path}")
             return CachedDataset(unique_path)
 
-        dataset._custom_download(resolved_data_dir, access_token)
+        dataset._download(resolved_data_dir, access_token)
 
         for s in dataset._available_splits(resolved_data_dir):
             if split is not None and s != split:
