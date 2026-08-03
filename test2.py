@@ -5,5 +5,5 @@ from atria_core.types._generic._annotations import (
 )
 
 image = ImageInstance(sample_id="s1", image=None)
-image.add_annotation(ClassificationAnnotation(label=0, label_map=["label1", "label2"]))
+image.add_annotation(ClassificationAnnotation(label_value=0, label_name="label1"))
 ann = image.get_annotation_by_type(AnnotationType.classification)

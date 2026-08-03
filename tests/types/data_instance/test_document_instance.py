@@ -127,7 +127,7 @@ def test_multi_page_get_page_propagates_annotations(sample_pdf_path: Path) -> No
 
     instance = MultiPageDocumentInstance(
         sample_id="m1", source_path=str(sample_pdf_path)
-    ).add_annotation(ClassificationAnnotation(label=0, label_map=["a", "b"]))
+    ).add_annotation(ClassificationAnnotation(label_value=0, label_name="a"))
 
     page = instance.get_page(0)
 

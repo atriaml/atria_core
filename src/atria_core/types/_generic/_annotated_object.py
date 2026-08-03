@@ -20,8 +20,9 @@ class AnnotatedObject(BaseDataModel):
     counterpart to ObjectDetectionAnnotation's array-backed storage -- build
     a list of these and pass it to ObjectDetectionAnnotation.from_objects()."""
 
-    label: int
+    label_value: int
     bbox: np.ndarray
+    label_name: str | None = None
     segmentation: np.ndarray | None = None
     iscrowd: bool = False
 
@@ -32,7 +33,8 @@ class AnnotatedObject(BaseDataModel):
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "label": self.label,
+            "label_value": self.label_value,
+            "label_name": self.label_name,
             "bbox": self.bbox.tolist(),
             "segmentation": self.segmentation.tolist()
             if self.segmentation is not None
@@ -44,7 +46,8 @@ class AnnotatedObject(BaseDataModel):
     def from_dict(cls, data: dict[str, Any]) -> AnnotatedObject:
         segmentation = data.get("segmentation")
         return cls(
-            label=data["label"],
+            label_value=data["label_value"],
+            label_name=data["label_name"],
             bbox=as_bbox_array(data["bbox"]),
             segmentation=as_segmentation_array(segmentation)
             if segmentation is not None

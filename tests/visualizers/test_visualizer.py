@@ -56,7 +56,7 @@ def test_visualize_image_instance_output_name_includes_classification_label(
     tmp_path: Path,
 ) -> None:
     instance = ImageInstance(sample_id="s1", image=make_image()).add_annotation(
-        make_classification_annotation(label=1)
+        make_classification_annotation(label_value=1, label_name="dog")
     )
 
     path = visualize_image_instance(instance, str(tmp_path))

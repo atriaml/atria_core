@@ -58,7 +58,9 @@ def test_construct_repr_eq_generic_types() -> None:
     )
 
     bbox = (0.1, 0.1, 0.5, 0.5)
-    annotated_object = AnnotatedObject(label=1, bbox=np.asarray(bbox, dtype=np.float64))
+    annotated_object = AnnotatedObject(
+        label_value=1, bbox=np.asarray(bbox, dtype=np.float64)
+    )
     elements = ElementArray.from_words(["hello"], [bbox])
     doc_content = DocumentContent(elements=elements)
     qa_pair = QAPair(id=0, question_text="what?", answer_text="this", start=0, end=4)

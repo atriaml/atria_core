@@ -12,7 +12,9 @@ from atria_core.types._generic._annotations import (
     EntityLabelingAnnotation,
     LayoutAnalysisAnnotation,
     ObjectDetectionAnnotation,
+    OCRAnnotation,
     QuestionAnsweringAnnotation,
+    TranscriptionAnnotation,
 )
 
 
@@ -66,6 +68,14 @@ class BaseDataInstance(BaseDataModel):
     def get_annotation_by_type(
         self, annotation_type: Literal[AnnotationType.layout_analysis]
     ) -> LayoutAnalysisAnnotation | None: ...
+    @overload
+    def get_annotation_by_type(
+        self, annotation_type: Literal[AnnotationType.transcription]
+    ) -> TranscriptionAnnotation | None: ...
+    @overload
+    def get_annotation_by_type(
+        self, annotation_type: Literal[AnnotationType.ocr]
+    ) -> OCRAnnotation | None: ...
 
     def get_annotation_by_type(
         self, annotation_type: AnnotationType

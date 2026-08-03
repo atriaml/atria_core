@@ -114,6 +114,33 @@ class Dataset(
             self._split_iterators[dataset_split] = split_iterator
 
     @property
+    def train(
+        self,
+    ) -> (
+        IndexableSplitIterator[T_BaseDataInstance]
+        | IterableSplitIterator[T_BaseDataInstance]
+    ):
+        return self.split_iterator(DatasetSplitType.train)
+
+    @property
+    def validation(
+        self,
+    ) -> (
+        IndexableSplitIterator[T_BaseDataInstance]
+        | IterableSplitIterator[T_BaseDataInstance]
+    ):
+        return self.split_iterator(DatasetSplitType.validation)
+
+    @property
+    def test(
+        self,
+    ) -> (
+        IndexableSplitIterator[T_BaseDataInstance]
+        | IterableSplitIterator[T_BaseDataInstance]
+    ):
+        return self.split_iterator(DatasetSplitType.test)
+
+    @property
     def metadata(self) -> DatasetMetadata:
         return self._metadata()
 

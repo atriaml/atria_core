@@ -86,3 +86,5 @@ pyrightconfig.json
 
 # Local scripts / config files
 *.env
+main.py
+test2.py

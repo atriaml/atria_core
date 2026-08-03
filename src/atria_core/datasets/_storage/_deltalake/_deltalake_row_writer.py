@@ -14,6 +14,8 @@ from atria_core.logger import get_logger
 
 logger = get_logger(__name__)
 
+_INLINE_BYTES_LIMIT = 1_048_576  # 1 MiB (1024 * 1024)
+
 
 class ParquetSchema:
     """Flattens a sample's to_dict() output into real parquet columns
@@ -89,34 +91,47 @@ class ParquetSchema:
         return pa.schema([pa.field(k, v, nullable=True) for k, v in columns.items()])
 
 
-def _hoist_bytes(data: dict[str, Any], artifacts_dir: Path, prefix: str) -> dict[str, Any]:
-    """Writes a raw `content_bytes` value out to its own file under
-    artifacts_dir only when there's no `file_path` to fall back to -- if
-    the sample already references a file on disk, that reference is reused
-    as-is instead of needlessly duplicating the content. (Unconditionally
-    materializing every sample's bytes to artifacts would only matter for
-    a genuinely portable export -- e.g. uploading the dataset to S3 -- which
-    is out of scope here.) `content_bytes` is renamed to `file_path` to
-    match how Image/PdfPage's own from_dict() expects a materialized
-    (unloaded) instance to look."""
+def _hoist_bytes(
+    data: dict[str, Any],
+    artifacts_dir: Path,
+    prefix: str,
+) -> dict[str, Any]:
+    """Writes large `bytes` values out to artifact files.
+
+    Small byte strings are kept inline. `content_bytes` is only materialized
+    when it exceeds the inline limit and there is no existing `file_path`.
+    If `file_path` already exists, it is reused instead of duplicating the
+    content.
+    """
     has_file_path = bool(data.get("file_path"))
     result: dict[str, Any] = {}
+
     for key, value in data.items():
         if key == "file_path" and value is None:
             # Superseded by the hoisted content_bytes path below, if any.
             continue
+
         if isinstance(value, bytes):
             if key == "content_bytes" and has_file_path:
                 continue
+
+            if len(value) <= _INLINE_BYTES_LIMIT:
+                result[key] = value
+                continue
+
             path = artifacts_dir / f"{prefix}-{key}.bin"
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(value)
+
             new_key = "file_path" if key == "content_bytes" else key
             result[new_key] = str(path)
+
         elif isinstance(value, dict):
             result[key] = _hoist_bytes(value, artifacts_dir, f"{prefix}-{key}")
+
         else:
             result[key] = value
+
     return result
 
 

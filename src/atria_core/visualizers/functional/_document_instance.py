@@ -16,6 +16,7 @@ from atria_core.types import (
     ResourceLoader,
     SinglePageDocumentInstance,
 )
+from atria_core.types._generic._annotations import OCRAnnotation
 from atria_core.visualizers._drawers._image import ImageDrawer
 from atria_core.visualizers._drawers._pdf import PdfDrawer
 from atria_core.visualizers._drawers._style import DEFAULT_STYLE, DrawStyle
@@ -34,27 +35,33 @@ def _words_to_draw(
     """Word-level bboxes (still normalized [0,1]), texts, and optional
     entity-labeling labels -- shared prep for both the image and PDF
     drawing targets, which each scale these to their own coordinate space."""
-    if content is None or content.elements is None:
+    ocr_ann: OCRAnnotation = instance.get_annotation_by_type(AnnotationType.ocr)
+    if (content is None or content.elements is None) and ocr_ann is None:
         return None
 
-    words = content.elements.at(OCRLevel.word)
-    if words.bboxes is None or len(words) == 0:
-        return None
+    if content is None:
+        ocr_ann_texts = ocr_ann.texts.tolist() if ocr_ann.texts is not None else None
+        ocr_ann_bboxes = ocr_ann.bboxes
+        return ocr_ann_bboxes, ocr_ann_texts, None
+    else:
+        words = content.elements.at(OCRLevel.word)
+        if words.bboxes is None or len(words) == 0:
+            return None
 
-    bboxes = (
-        content.elements.segment_bboxes(OCRLevel.word)
-        if draw_segment_bboxes
-        else words.bboxes
-    )
-    texts = words.texts.tolist() if words.texts is not None else None
+        bboxes = (
+            content.elements.segment_bboxes(OCRLevel.word)
+            if draw_segment_bboxes
+            else words.bboxes
+        )
+        texts = words.texts.tolist() if words.texts is not None else None
 
-    labels = None
-    if draw_word_labels:
-        ann = instance.get_annotation_by_type(AnnotationType.entity_labeling)
-        if ann is not None:
-            labels = ann.label_names
+        labels = None
+        if draw_word_labels:
+            ann = instance.get_annotation_by_type(AnnotationType.entity_labeling)
+            if ann is not None:
+                labels = ann.label_names
 
-    return bboxes, texts, labels
+        return bboxes, texts, labels
 
 
 def _visualize_document_image(
@@ -74,9 +81,15 @@ def _visualize_document_image(
     )
     if prepared is not None:
         bboxes, texts, labels = prepared
-        scale = np.array([image.width, image.height, image.width, image.height])
+        if np.all((bboxes > 0.0) & (bboxes < 1.0)):
+            scale = np.array(
+                [image.width, image.height, image.width, image.height],
+                dtype=np.float64,
+            )
+            bboxes = bboxes * scale
+
         ImageDrawer().draw(
-            image, bboxes * scale, texts=texts, labels=labels, style=style
+            image, bboxes.tolist(), texts=texts, labels=labels, style=style
         )
 
     Path(output_dir).mkdir(parents=True, exist_ok=True)

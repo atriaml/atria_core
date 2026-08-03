@@ -6,7 +6,12 @@ from typing import TYPE_CHECKING, Any, Generic
 import aiohttp
 from pydantic.dataclasses import dataclass as pydantic_dataclass
 
-from atria_core.datasets._dataset import Dataset, DatasetConfig, T_BaseDataInstance
+from atria_core.datasets._dataset import (
+    Dataset,
+    DatasetConfig,
+    T_BaseDataInstance,
+    T_DatasetConfig,
+)
 from atria_core.logger import get_logger
 from atria_core.types import DatasetMetadata, DatasetSplitType
 
@@ -24,15 +29,28 @@ _HF_SPLIT_MAP = {
 
 @pydantic_dataclass(frozen=True)
 class HuggingfaceDatasetConfig(DatasetConfig):
-    hf_repo: str = ""
-    hf_config_name: str = ""
+    config_name: str
 
 
 class HuggingfaceDataset(
-    Dataset[HuggingfaceDatasetConfig, T_BaseDataInstance],
-    Generic[T_BaseDataInstance],
+    Dataset[T_DatasetConfig, T_BaseDataInstance],
+    Generic[T_DatasetConfig, T_BaseDataInstance],
 ):
     __abstract__ = True
+
+    def __init__(
+        self,
+        repo: str,
+        config: T_DatasetConfig,
+        *,
+        data_dir: str | None = None,
+        access_token: str | None = None,
+        split: DatasetSplitType | None = None,
+    ) -> None:
+        self._repo = repo
+        super().__init__(
+            config, data_dir=data_dir, access_token=access_token, split=split
+        )
 
     def _download(
         self, data_dir: str, access_token: str | None = None
@@ -46,16 +64,14 @@ class HuggingfaceDataset(
         from datasets import load_dataset_builder
 
         self._builder: datasets.DatasetBuilder = load_dataset_builder(
-            self.config.hf_repo,
-            name=self.config.hf_config_name,
+            self._repo,
+            name=self.config.config_name,
             cache_dir=data_dir,
             storage_options={
                 "client_kwargs": {"timeout": aiohttp.ClientTimeout(total=3600)}
             },
         )
-        self._download_manager = self._prepare_download_manager(
-            data_dir, access_token
-        )
+        self._download_manager = self._prepare_download_manager(data_dir, access_token)
         self._hf_split_generators = {
             _HF_SPLIT_MAP[sg.name]: sg
             for sg in self._builder._split_generators(self._download_manager)
@@ -81,7 +97,7 @@ class HuggingfaceDataset(
         )
         if "packaged_modules" in str(self._builder.__module__):
             return datasets.DownloadManager(
-                dataset_name=self.config.hf_config_name,
+                dataset_name=self.config.config_name,
                 data_dir=data_dir,
                 download_config=download_config,
                 record_checksums=False,

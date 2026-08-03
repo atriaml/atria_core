@@ -44,6 +44,8 @@ if TYPE_CHECKING:
         LayoutAnalysisAnnotation as LayoutAnalysisAnnotation,
         QuestionAnsweringAnnotation as QuestionAnsweringAnnotation,
         ObjectDetectionAnnotation as ObjectDetectionAnnotation,
+        TranscriptionAnnotation as TranscriptionAnnotation,
+        OCRAnnotation as OCRAnnotation,
         AnnotationType as AnnotationType,
     )
     from ._generic._image import Image as Image
@@ -92,6 +94,8 @@ __getattr__, __dir__, __all__ = lazy.attach(
             "LayoutAnalysisAnnotation",
             "QuestionAnsweringAnnotation",
             "ObjectDetectionAnnotation",
+            "TranscriptionAnnotation",
+            "OCRAnnotation",
             "AnnotationType",
         ],
         "_generic._image": ["Image"],

@@ -175,12 +175,3 @@ class ShardWriterWorker:
             self._writer.close()
             self._writer = None
         return self._write_info
-
-
-def safe_write(writer: ShardWriterWorker, idx: int, raw_item: Any) -> None:
-    try:
-        writer.write(idx, raw_item)
-    except DuplicateKeyError:
-        logger.error(f"Duplicate key at index {idx}, skipping")
-    except Exception:
-        logger.exception(f"Error writing sample at index {idx}")

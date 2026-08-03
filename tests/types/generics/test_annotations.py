@@ -5,46 +5,40 @@ import pytest
 
 from atria_core.types._generic._annotations import (
     AnnotationType,
-    ClassificationAnnotation,
-    EntityLabelingAnnotation,
     LayoutAnalysisAnnotation,
     ObjectDetectionAnnotation,
+    OCRAnnotation,
     QuestionAnsweringAnnotation,
+    TranscriptionAnnotation,
 )
 from tests.types.builders import (
     make_annotated_object,
     make_classification_annotation,
     make_entity_labeling_annotation,
     make_object_detection_annotation,
+    make_ocr_annotation,
     make_qa_pair,
     make_question_answering_annotation,
+    make_transcription_annotation,
 )
 
 
 def test_classification_annotation_label_name() -> None:
-    ann = make_classification_annotation(label=1, label_map=["cat", "dog"])
+    ann = make_classification_annotation(label_value=1, label_name="dog")
     assert ann.label_name == "dog"
 
 
-def test_classification_annotation_rejects_out_of_range_label() -> None:
-    with pytest.raises(ValueError, match="Invalid label index"):
-        ClassificationAnnotation(label=5, label_map=["cat", "dog"])
-
-
 def test_entity_labeling_annotation_label_names() -> None:
-    ann = make_entity_labeling_annotation(word_labels=[0, 1], label_map=["O", "B-ENT"])
-    assert ann.label_names == ["O", "B-ENT"]
-
-
-def test_entity_labeling_annotation_rejects_out_of_range_label() -> None:
-    with pytest.raises(ValueError, match="Invalid word label index"):
-        EntityLabelingAnnotation(word_labels=[0, 9], label_map=["O", "B-ENT"])
+    ann = make_entity_labeling_annotation(
+        word_label_values=[0, 1], word_label_names=["O", "B-ENT"]
+    )
+    assert ann.word_label_names == ["O", "B-ENT"]
 
 
 def test_entity_labeling_annotation_serialize_word_labels() -> None:
     import json
 
-    ann = make_entity_labeling_annotation(word_labels=[0, 1, 0])
+    ann = make_entity_labeling_annotation(word_label_values=[0, 1, 0])
     assert json.loads(ann.serialize_word_labels()) == [0, 1, 0]
 
 
@@ -58,14 +52,18 @@ def test_question_answering_annotation_roundtrip() -> None:
 
 
 def test_object_detection_annotation_from_objects_and_to_objects() -> None:
-    objects = [make_annotated_object(label=0), make_annotated_object(label=1)]
-    ann = ObjectDetectionAnnotation.from_objects(objects, label_map=["cat", "dog"])
+    objects = [
+        make_annotated_object(label_value=0, label_name="cat"),
+        make_annotated_object(label_value=1, label_name="dog"),
+    ]
+    ann = ObjectDetectionAnnotation.from_objects(objects)
 
-    assert list(ann.labels) == [0, 1]
+    assert list(ann.label_values) == [0, 1]
     assert ann.bboxes.shape == (2, 4)
 
     back = ann.to_objects()
-    assert [o.label for o in back] == [0, 1]
+    assert [o.label_value for o in back] == [0, 1]
+    assert [o.label_name for o in back] == ["cat", "dog"]
 
 
 def test_object_detection_annotation_segmentation_padding_mixed_objects() -> None:
@@ -73,10 +71,10 @@ def test_object_detection_annotation_segmentation_padding_mixed_objects() -> Non
     # segmentations must pad to the max point count and track real lengths.
     objects = [
         make_annotated_object(segmentation=[[0.1, 0.1], [0.2, 0.2], [0.3, 0.1]]),
-        make_annotated_object(label=1),  # no segmentation
+        make_annotated_object(label_value=1),  # no segmentation
         make_annotated_object(segmentation=[[0.0, 0.0], [0.05, 0.05]]),
     ]
-    ann = ObjectDetectionAnnotation.from_objects(objects, label_map=["a", "b"])
+    ann = ObjectDetectionAnnotation.from_objects(objects)
 
     assert ann.segmentations.shape == (3, 3, 2)
     assert list(ann.segmentation_lengths) == [3, 0, 2]
@@ -103,8 +101,7 @@ def test_object_detection_annotation_segmentation_padding_mixed_objects() -> Non
 
 def test_object_detection_annotation_roundtrip() -> None:
     ann = ObjectDetectionAnnotation.from_objects(
-        [make_annotated_object(), make_annotated_object(label=1)],
-        label_map=["cat", "dog"],
+        [make_annotated_object(), make_annotated_object(label_value=1)]
     )
     data = ann.to_dict()
     restored = ObjectDetectionAnnotation.from_dict(data)
@@ -112,18 +109,44 @@ def test_object_detection_annotation_roundtrip() -> None:
 
 
 def test_object_detection_annotation_no_objects() -> None:
-    ann = ObjectDetectionAnnotation(label_map=["a"])
+    ann = ObjectDetectionAnnotation()
     assert ann.to_objects() == []
     data = ann.to_dict()
-    assert data["labels"] is None
+    assert data["label_values"] is None
     restored = ObjectDetectionAnnotation.from_dict(data)
-    assert restored.labels is None
+    assert restored.label_values is None
 
 
 def test_layout_analysis_annotation_type() -> None:
-    ann = LayoutAnalysisAnnotation(label_map=["a"])
+    ann = LayoutAnalysisAnnotation()
     assert ann.type == AnnotationType.layout_analysis.value
     assert ann.to_dict()["type"] == "layout_analysis"
+
+
+def test_transcription_annotation_roundtrip() -> None:
+    ann = make_transcription_annotation(text="hello world")
+    data = ann.to_dict()
+    restored = TranscriptionAnnotation.from_dict(data)
+    assert restored == ann
+    assert restored.text == "hello world"
+
+
+def test_ocr_annotation_roundtrip() -> None:
+    ann = make_ocr_annotation(
+        bboxes=np.array([[0.1, 0.1, 0.5, 0.5]]), texts=np.array(["hello"], dtype=object)
+    )
+    data = ann.to_dict()
+    restored = OCRAnnotation.from_dict(data)
+    assert restored.to_dict() == data
+    assert restored.texts.tolist() == ["hello"]
+
+
+def test_ocr_annotation_rejects_mismatched_bboxes_and_texts() -> None:
+    with pytest.raises(AssertionError):
+        OCRAnnotation(
+            bboxes=np.array([[0.1, 0.1, 0.5, 0.5]]),
+            texts=np.array(["a", "b"], dtype=object),
+        )
 
 
 @pytest.mark.parametrize(
@@ -133,7 +156,9 @@ def test_layout_analysis_annotation_type() -> None:
         lambda: make_entity_labeling_annotation(),
         lambda: make_question_answering_annotation(),
         lambda: make_object_detection_annotation(),
-        lambda: LayoutAnalysisAnnotation(label_map=["a"]),
+        lambda: LayoutAnalysisAnnotation(),
+        lambda: make_transcription_annotation(),
+        lambda: make_ocr_annotation(),
     ],
 )
 def test_annotation_to_dict_from_dict_roundtrip(maker) -> None:

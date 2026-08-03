@@ -10,6 +10,7 @@ import numpy as np
 from atria_core.types._base_data_model import BaseDataModel
 from atria_core.types._generic._annotated_object import AnnotatedObject
 from atria_core.types._generic._bounding_box import BoundingBoxMode
+from atria_core.types._generic._elements import OCRLevel
 from atria_core.types._generic._qa_pair import QAPair
 
 
@@ -19,67 +20,52 @@ class AnnotationType(str, enum.Enum):
     question_answering = "question_answering"
     object_detection = "object_detection"
     layout_analysis = "layout_analysis"
+    ocr = "ocr"
+    transcription = "transcription"
 
 
 @dataclass(frozen=True, repr=False)
 class ClassificationAnnotation(BaseDataModel):
     type = AnnotationType.classification.value
 
-    label: int
-    label_map: list[str]
-
-    def __post_init__(self) -> None:
-        if self.label < 0 or self.label >= len(self.label_map):
-            raise ValueError(
-                f"Invalid label index {self.label}. "
-                f"Label map contains only {len(self.label_map)} labels."
-            )
-
-    @property
-    def label_name(self) -> str:
-        return self.label_map[self.label]
+    label_value: int
+    label_name: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {"type": self.type, "label": self.label, "label_map": self.label_map}
+        return {
+            "type": self.type,
+            "label_value": self.label_value,
+            "label_name": self.label_name,
+        }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> ClassificationAnnotation:
-        return cls(label=data["label"], label_map=data["label_map"])
+        return cls(label_value=data["label_value"], label_name=data["label_name"])
 
 
 @dataclass(frozen=True, repr=False)
 class EntityLabelingAnnotation(BaseDataModel):
     type = AnnotationType.entity_labeling.value
 
-    word_labels: list[int]
-    label_map: list[str]
-
-    def __post_init__(self) -> None:
-        if self.word_labels:
-            max_label = max(self.word_labels)
-            if max_label >= len(self.label_map):
-                raise ValueError(
-                    f"Invalid word label index {max_label}. "
-                    f"Label map contains only {len(self.label_map)} labels."
-                )
-
-    @property
-    def label_names(self) -> list[str]:
-        return [self.label_map[label] for label in self.word_labels]
+    word_label_values: list[int]
+    word_label_names: list[str]
 
     def serialize_word_labels(self) -> str:
-        return json.dumps(self.word_labels)
+        return json.dumps(self.word_label_values)
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "type": self.type,
-            "word_labels": self.word_labels,
-            "label_map": self.label_map,
+            "word_label_values": self.word_label_values,
+            "word_label_names": self.word_label_names,
         }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> EntityLabelingAnnotation:
-        return cls(word_labels=list(data["word_labels"]), label_map=data["label_map"])
+        return cls(
+            word_label_values=list(data["word_label_values"]),
+            word_label_names=data["word_label_names"],
+        )
 
 
 @dataclass(frozen=True, repr=False)
@@ -111,8 +97,8 @@ class ObjectDetectionAnnotation(BaseDataModel):
 
     type = AnnotationType.object_detection.value
 
-    label_map: list[str]
-    labels: np.ndarray | None = None
+    label_values: np.ndarray | None = None
+    label_names: np.ndarray | None = None
     bboxes: np.ndarray | None = None
     segmentations: np.ndarray | None = None  # (N, P_max, 2), NaN-padded
     segmentation_lengths: np.ndarray | None = None  # (N,) real point count per object
@@ -120,28 +106,10 @@ class ObjectDetectionAnnotation(BaseDataModel):
     bbox_mode: BoundingBoxMode = BoundingBoxMode.XYXY
     normalized: bool = False
 
-    def __post_init__(self) -> None:
-        if self.labels is not None and self.labels.size > 0:
-            if bool(np.any((self.labels < 0) | (self.labels >= len(self.label_map)))):
-                bad = int(
-                    self.labels[
-                        (self.labels < 0) | (self.labels >= len(self.label_map))
-                    ][0]
-                )
-                raise ValueError(
-                    f"Invalid object label index {bad}. "
-                    f"Label map contains only {len(self.label_map)} labels."
-                )
-
     @classmethod
-    def from_objects(
-        cls, objects: list[AnnotatedObject], label_map: list[str]
-    ) -> ObjectDetectionAnnotation:
+    def from_objects(cls, objects: list[AnnotatedObject]) -> ObjectDetectionAnnotation:
         """The human-readable construction path: build one AnnotatedObject
         per detection, then stack them into this annotation's arrays."""
-        if not objects:
-            return cls(label_map=label_map)
-
         segmentations = None
         segmentation_lengths = None
         polygons = [o.segmentation for o in objects]
@@ -156,8 +124,8 @@ class ObjectDetectionAnnotation(BaseDataModel):
             segmentation_lengths = lengths
 
         return cls(
-            label_map=label_map,
-            labels=np.array([o.label for o in objects]),
+            label_values=np.array([o.label_value for o in objects]),
+            label_names=np.array([o.label_name for o in objects]),
             bboxes=np.stack([o.bbox for o in objects]),
             segmentations=segmentations,
             segmentation_lengths=segmentation_lengths,
@@ -166,9 +134,9 @@ class ObjectDetectionAnnotation(BaseDataModel):
 
     def to_objects(self) -> list[AnnotatedObject]:
         """The human-readable view: one AnnotatedObject per row."""
-        if self.labels is None or self.bboxes is None:
+        if self.label_values is None or self.bboxes is None:
             return []
-        n = len(self.labels)
+        n = len(self.label_values)
         iscrowd = self.iscrowd if self.iscrowd is not None else np.zeros(n, dtype=bool)
 
         def _segmentation(i: int) -> np.ndarray | None:
@@ -179,7 +147,8 @@ class ObjectDetectionAnnotation(BaseDataModel):
 
         return [
             AnnotatedObject(
-                label=int(self.labels[i]),
+                label_value=int(self.label_values[i]),
+                label_name=str(self.label_names[i]),
                 bbox=self.bboxes[i],
                 segmentation=_segmentation(i),
                 iscrowd=bool(iscrowd[i]),
@@ -206,8 +175,12 @@ class ObjectDetectionAnnotation(BaseDataModel):
     def to_dict(self) -> dict[str, Any]:
         return {
             "type": self.type,
-            "label_map": self.label_map,
-            "labels": self.labels.tolist() if self.labels is not None else None,
+            "label_names": self.label_names.tolist()
+            if self.label_names is not None
+            else None,
+            "label_values": self.label_values.tolist()
+            if self.label_values is not None
+            else None,
             "bboxes": self.bboxes.tolist() if self.bboxes is not None else None,
             "segmentations": self.segmentations.tolist()
             if self.segmentations is not None
@@ -227,8 +200,8 @@ class ObjectDetectionAnnotation(BaseDataModel):
             return np.asarray(value, dtype=dtype) if value is not None else None
 
         return cls(
-            label_map=data["label_map"],
-            labels=_array("labels", np.int64),
+            label_names=_array("label_names", object),
+            label_values=_array("label_values", np.int64),
             bboxes=_array("bboxes", np.float64),
             segmentations=_array("segmentations", np.float64),
             segmentation_lengths=_array("segmentation_lengths", np.int64),
@@ -245,12 +218,69 @@ class LayoutAnalysisAnnotation(ObjectDetectionAnnotation):
     type = AnnotationType.layout_analysis.value
 
 
+@dataclass(frozen=True, repr=False)
+class TranscriptionAnnotation(BaseDataModel):
+    type = AnnotationType.transcription.value
+
+    text: str | None = None
+
+    def __post_init__(self):
+        assert isinstance(self.text, str | None)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "type": self.type,
+            "text": self.text,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> TranscriptionAnnotation:
+        return cls(
+            text=data.get("text"),
+        )
+
+
+@dataclass(frozen=True, repr=False, eq=False)
+class OCRAnnotation(BaseDataModel):
+    type = AnnotationType.ocr.value
+
+    level: OCRLevel = OCRLevel.word
+    bboxes: np.ndarray | None = None
+    texts: np.ndarray | None = None
+
+    def __post_init__(self):
+        assert isinstance(self.bboxes, np.ndarray | None)
+        assert isinstance(self.texts, np.ndarray | None)
+        if self.bboxes is not None and self.texts is not None:
+            assert len(self.bboxes) == len(self.texts)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "type": self.type,
+            "bboxes": self.bboxes.tolist() if self.bboxes is not None else None,
+            "texts": self.texts.tolist() if self.texts is not None else None,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> OCRAnnotation:
+        def _array(key: str, dtype: type) -> np.ndarray | None:
+            value = data.get(key)
+            return np.asarray(value, dtype=dtype) if value is not None else None
+
+        return cls(
+            bboxes=_array("bboxes", np.float64),
+            texts=_array("texts", object),
+        )
+
+
 Annotation = (
     ClassificationAnnotation
     | EntityLabelingAnnotation
     | QuestionAnsweringAnnotation
     | ObjectDetectionAnnotation
     | LayoutAnalysisAnnotation
+    | TranscriptionAnnotation
+    | OCRAnnotation
 )
 
 #: type string -> class, for BaseDataInstance's annotation dict (de)serialization.
@@ -260,4 +290,6 @@ ANNOTATION_TYPES: dict[str, type[Annotation]] = {
     AnnotationType.question_answering.value: QuestionAnsweringAnnotation,
     AnnotationType.object_detection.value: ObjectDetectionAnnotation,
     AnnotationType.layout_analysis.value: LayoutAnalysisAnnotation,
+    AnnotationType.transcription.value: TranscriptionAnnotation,
+    AnnotationType.ocr.value: OCRAnnotation,
 }

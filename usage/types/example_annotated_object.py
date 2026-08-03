@@ -1,7 +1,9 @@
 """Example: Creating and using AnnotatedObject (object detection)."""
 
+import numpy as np
+
 from atria_core.logger import get_logger
-from atria_core.types import AnnotatedObject, BoundingBox, BoundingBoxMode, Label
+from atria_core.types import AnnotatedObject
 
 logger = get_logger(__name__)
 
@@ -9,12 +11,9 @@ logger = get_logger(__name__)
 def main() -> None:
     # Create an annotated object (e.g., detected person)
     person = AnnotatedObject(
-        label=Label(value=1, name="person"),
-        bbox=BoundingBox(
-            value=[100.0, 150.0, 300.0, 400.0],
-            mode=BoundingBoxMode.XYXY,
-            normalized=False,
-        ),
+        label_value=1,
+        label_name="person",
+        bbox=np.asarray([100.0, 150.0, 300.0, 400.0]),
         iscrowd=False,
     )
 
@@ -24,35 +23,34 @@ def main() -> None:
     # Create multiple annotated objects
     annotated_objects = [
         AnnotatedObject(
-            label=Label(value=1, name="person"),
-            bbox=BoundingBox(
-                value=[50.0, 60.0, 150.0, 300.0], mode=BoundingBoxMode.XYXY
-            ),
+            label_value=1,
+            label_name="person",
+            bbox=np.asarray([50.0, 60.0, 150.0, 300.0]),
         ),
         AnnotatedObject(
-            label=Label(value=2, name="car"),
-            bbox=BoundingBox(
-                value=[200.0, 250.0, 450.0, 400.0], mode=BoundingBoxMode.XYXY
-            ),
+            label_value=2,
+            label_name="car",
+            bbox=np.asarray([200.0, 250.0, 450.0, 400.0]),
         ),
         AnnotatedObject(
-            label=Label(value=1, name="person"),
-            bbox=BoundingBox(
-                value=[500.0, 100.0, 600.0, 350.0], mode=BoundingBoxMode.XYXY
+            label_value=1,
+            label_name="person",
+            bbox=np.asarray([500.0, 100.0, 600.0, 350.0]),
+            segmentation=np.asarray(
+                [[500.0, 100.0], [600.0, 100.0], [600.0, 350.0], [500.0, 350.0]]
             ),
-            segmentation=[[500.0, 100.0, 600.0, 100.0, 600.0, 350.0, 500.0, 350.0]],
         ),
     ]
 
     logger.info("All annotations:\n%s", annotated_objects)
 
     # Convert to dict
-    bbox_dict = person.model_dump()
-    logger.info("Serialized: %s", bbox_dict)
+    person_dict = person.to_dict()
+    logger.info("Serialized: %s", person_dict)
 
-    # Serialize to JSON
-    bbox_json = person.model_dump_json()
-    logger.info("As JSON: %s", bbox_json)
+    # Round-trip
+    restored = AnnotatedObject.from_dict(person_dict)
+    logger.info("Restored: %s", restored)
 
 
 if __name__ == "__main__":

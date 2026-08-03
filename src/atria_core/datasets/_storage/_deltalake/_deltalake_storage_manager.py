@@ -60,7 +60,7 @@ class DeltalakeStorageManager(StorageManager):
             f"({'parallel' if self.num_processes > 1 else 'single'} mode)"
         )
 
-        dataset = split_iterator._dataset
+        dataset = split_iterator._base_iterator
         transform = split_iterator._transform
 
         writer: (

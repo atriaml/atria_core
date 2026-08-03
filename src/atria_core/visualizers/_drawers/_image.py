@@ -52,7 +52,8 @@ def _draw_bbox_rectangle(
     style: DrawStyle,
 ) -> None:
     outline_color = (*color, 255)
-    draw.rectangle(tuple(bbox.tolist()), outline=outline_color, width=style.bbox_width)
+    xy = bbox.tolist() if isinstance(bbox, np.ndarray) else bbox
+    draw.rectangle(tuple(xy), outline=outline_color, width=style.bbox_width)
 
 
 def _draw_text_label(

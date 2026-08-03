@@ -35,8 +35,8 @@ def test_get_annotation_by_type_returns_none_when_missing() -> None:
 
 
 def test_add_annotation_returns_new_instance_and_replaces_same_type() -> None:
-    first = make_classification_annotation(label=0)
-    second = make_classification_annotation(label=1)
+    first = make_classification_annotation(label_value=0)
+    second = make_classification_annotation(label_value=1)
     instance = BaseDataInstance(sample_id="s1")
 
     with_first = instance.add_annotation(first)

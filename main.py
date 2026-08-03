@@ -127,7 +127,9 @@ class InputTransform:
     def __call__(self, input: tuple[Path, int]) -> SinglePageDocumentInstance:
         image_file_path, label_index = input
         return SinglePageDocumentInstance.from_image(image_file_path).add_annotation(
-            ClassificationAnnotation(label=label_index, label_map=_CLASSES)
+            ClassificationAnnotation(
+                label_value=label_index, label_name=_CLASSES[label_index]
+            )
         )
 
 

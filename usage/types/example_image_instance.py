@@ -1,20 +1,16 @@
 """Example: Creating and using ImageInstance (image classification/detection)."""
 
+import numpy as np
 from PIL import Image as PILImage
 
 from atria_core.logger import get_logger
 from atria_core.types import (
     AnnotatedObject,
-    BoundingBox,
-    BoundingBoxMode,
     Image,
     ImageInstance,
-    Label,
-)
-from atria_core.types._generic._annotations import (
-    ClassificationAnnotation,
     ObjectDetectionAnnotation,
 )
+from atria_core.types._generic._annotations import ClassificationAnnotation
 
 logger = get_logger(__name__)
 
@@ -29,46 +25,37 @@ def main() -> None:
             file_path="/data/images/sample.jpg",
             content=pil_img,
         ),
-        annotations=[ClassificationAnnotation(label=Label(value=1, name="cat"))],
-    )
+    ).add_annotation(ClassificationAnnotation(label_value=1, label_name="cat"))
 
     logger.info("Example Image Instance:\n%s", img_instance)
 
     # Create an image instance with object detection annotations
+    detection_annotation = ObjectDetectionAnnotation.from_objects(
+        [
+            AnnotatedObject(
+                label_value=1,
+                label_name="person",
+                bbox=np.asarray([100.0, 200.0, 250.0, 500.0]),
+            ),
+            AnnotatedObject(
+                label_value=2,
+                label_name="car",
+                bbox=np.asarray([400.0, 300.0, 800.0, 600.0]),
+            ),
+            AnnotatedObject(
+                label_value=1,
+                label_name="person",
+                bbox=np.asarray([1200.0, 250.0, 1350.0, 550.0]),
+            ),
+        ]
+    )
     img_instance_with_det_annotations = ImageInstance(
         sample_id="img_002",
         image=Image(
             file_path="/data/images/street.jpg",
             content=PILImage.new("RGB", (1920, 1080)),
         ),
-        annotations=[
-            ObjectDetectionAnnotation(
-                annotated_objects=[
-                    AnnotatedObject(
-                        label=Label(value=1, name="person"),
-                        bbox=BoundingBox(
-                            value=[100.0, 200.0, 250.0, 500.0],
-                            mode=BoundingBoxMode.XYXY,
-                        ),
-                    ),
-                    AnnotatedObject(
-                        label=Label(value=2, name="car"),
-                        bbox=BoundingBox(
-                            value=[400.0, 300.0, 800.0, 600.0],
-                            mode=BoundingBoxMode.XYXY,
-                        ),
-                    ),
-                    AnnotatedObject(
-                        label=Label(value=1, name="person"),
-                        bbox=BoundingBox(
-                            value=[1200.0, 250.0, 1350.0, 550.0],
-                            mode=BoundingBoxMode.XYXY,
-                        ),
-                    ),
-                ]
-            ),
-        ],
-    )
+    ).add_annotation(detection_annotation)
 
     logger.info(
         "Example Image Instance with Object Annotations:\n%s",

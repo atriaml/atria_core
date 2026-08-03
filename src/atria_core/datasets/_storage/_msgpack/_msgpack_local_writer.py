@@ -10,7 +10,6 @@ import tqdm
 
 from atria_core.datasets._storage._msgpack._msgpack_shard_writer import (
     ShardWriterWorker,
-    safe_write,
 )
 from atria_core.logger import get_logger
 from atria_core.types import DatasetShardInfo
@@ -40,12 +39,18 @@ def _init_mp_worker(
     _mp_worker_state = (shard_index, writer)
 
 
-def _write_shard(sample: tuple[int, Any]) -> None:
+def _write_shard(sample: tuple[int, Any]) -> tuple[int, str | None]:
     assert _mp_worker_state is not None
 
     _, writer = _mp_worker_state
     idx, raw_item = sample
-    safe_write(writer, idx, raw_item)
+
+    try:
+        writer.write(idx, raw_item)
+        return idx, None
+    except Exception as e:
+        logger.exception(f"Worker failed on sample {idx}")
+        return idx, repr(e)
 
 
 def _finish_worker(_: int) -> DatasetShardInfo | None:
@@ -82,18 +87,27 @@ class MultiprocessingParallelSplitWriter:
             index_queue.put(i)
 
         total = len(dataset) if isinstance(dataset, Sequence) else None
+        errors: list[tuple[int, str]] = []
 
         with mp.Pool(
             processes=self.num_workers,
             initializer=_init_mp_worker,
             initargs=(index_queue, transform, split_dir),
         ) as pool:
-            for _ in tqdm.tqdm(
+            for idx, error in tqdm.tqdm(
                 pool.imap_unordered(_write_shard, enumerate(dataset)),
                 total=total,
                 desc=f"Writing split {split_name}",
             ):
-                pass
+                if error is not None:
+                    errors.append((idx, error))
+
+                    if len(errors) > 10:
+                        pool.terminate()
+                        raise RuntimeError(
+                            f"Too many failed samples ({len(errors)}). "
+                            f"First failures: {errors[:10]}"
+                        )
 
             write_info = pool.map(_finish_worker, range(self.num_workers))
 
@@ -125,7 +139,7 @@ class SingleSplitWriter:
         for idx, raw_item in tqdm.tqdm(
             enumerate(dataset), desc=f"Writing split {split_name}"
         ):
-            safe_write(writer, idx, raw_item)
+            writer.write(idx, raw_item)
 
         write_info = writer.close()
         return self._finalize_shards(write_info)

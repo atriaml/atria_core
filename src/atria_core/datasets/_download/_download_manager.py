@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import shutil
+from dataclasses import dataclass
 from pathlib import Path
 
 import tqdm
@@ -13,6 +14,12 @@ from atria_core.types._utilities._repr import RepresentationMixin
 logger = get_logger(__name__)
 
 
+@dataclass
+class UrlSpec:
+    url: str
+    url_ext: str
+
+
 class AtriaDownloadManager(RepresentationMixin):
     def __init__(self, data_dir: Path, download_dir: Path) -> None:
         self.data_dir = data_dir
@@ -20,20 +27,42 @@ class AtriaDownloadManager(RepresentationMixin):
 
     def _prepare_urls_and_dirs(
         self,
-        data_urls: str | list[str] | dict[str, str],
+        data_urls: str | list[str] | dict[str, str] | list[UrlSpec],
         access_token: str | None = None,
     ) -> list[DownloadFileInfo]:
-        if isinstance(data_urls, str):
-            data_urls = [data_urls]
-        if isinstance(data_urls, list):
-            if any(x.startswith("https://drive.google.com/") for x in data_urls):
-                raise ValueError(
-                    "Google Drive URLs are not supported in list format. Use dictionary format instead."
-                )
-            data_urls = {Path(url).name: url for url in data_urls}
-        assert isinstance(data_urls, dict), (
-            f"data_urls must be a list or a dictionary, got {data_urls}"
+        is_url_spec = (
+            isinstance(data_urls, list)
+            and len(data_urls) > 0
+            and isinstance(data_urls[0], UrlSpec)
         )
+        if is_url_spec:
+            download_file_infos = []
+            for url_spec in data_urls:
+                download_file_infos.append(
+                    DownloadFileInfo(
+                        url=url_spec.url.format(access_token=access_token)
+                        if access_token is not None and "{access_token}" in url_spec.url
+                        else url_spec.url,
+                        rel_output_file_path=Path(url_spec.url).name,
+                        data_dir=self.data_dir,
+                        download_dir=self.download_dir,
+                        url_ext=url_spec.url_ext,
+                    )
+                )
+            return download_file_infos
+
+        if not is_url_spec:
+            if isinstance(data_urls, str):
+                data_urls = [data_urls]
+            if isinstance(data_urls, list):
+                if any(x.startswith("https://drive.google.com/") for x in data_urls):
+                    raise ValueError(
+                        "Google Drive URLs are not supported in list format. Use dictionary format instead."
+                    )
+                data_urls = {Path(url).name: url for url in data_urls}
+            assert isinstance(data_urls, dict), (
+                f"data_urls must be a list or a dictionary, got {data_urls}"
+            )
         download_file_infos = []
         for download_path, url in data_urls.items():
             if isinstance(url, tuple):

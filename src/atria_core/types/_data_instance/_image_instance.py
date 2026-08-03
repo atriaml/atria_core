@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any
+from dataclasses import dataclass, replace
+from typing import Any, Self
 
 from atria_core.types._data_instance._base import BaseDataInstance
 from atria_core.types._generic._image import Image
@@ -10,6 +10,9 @@ from atria_core.types._generic._image import Image
 @dataclass(frozen=True, repr=False)
 class ImageInstance(BaseDataInstance):
     image: Image
+
+    def load(self) -> Self:
+        return replace(self, image=self.image.load())
 
     def to_dict(self) -> dict[str, Any]:
         return {

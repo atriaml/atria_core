@@ -10,7 +10,9 @@ from atria_core.types._generic._annotations import (
     ClassificationAnnotation,
     EntityLabelingAnnotation,
     ObjectDetectionAnnotation,
+    OCRAnnotation,
     QuestionAnsweringAnnotation,
+    TranscriptionAnnotation,
 )
 from atria_core.types._generic._bounding_box import as_bbox_array, as_segmentation_array
 from atria_core.types._generic._doc_content import DocumentContent
@@ -43,7 +45,7 @@ def make_document_content(**overrides: Any) -> DocumentContent:
 
 
 def make_annotated_object(**overrides: Any) -> AnnotatedObject:
-    kwargs: dict[str, Any] = {"label": 0, "bbox": make_bounding_box()}
+    kwargs: dict[str, Any] = {"label_value": 0, "bbox": make_bounding_box()}
     kwargs.update(overrides)
     # AnnotatedObject requires real numpy arrays (it only validates, it
     # doesn't coerce) -- this builder accepts plain lists for convenience
@@ -69,13 +71,16 @@ def make_qa_pair(**overrides: Any) -> QAPair:
 
 
 def make_classification_annotation(**overrides: Any) -> ClassificationAnnotation:
-    kwargs: dict[str, Any] = {"label": 0, "label_map": ["cat", "dog"]}
+    kwargs: dict[str, Any] = {"label_value": 0, "label_name": "cat"}
     kwargs.update(overrides)
     return ClassificationAnnotation(**kwargs)
 
 
 def make_entity_labeling_annotation(**overrides: Any) -> EntityLabelingAnnotation:
-    kwargs: dict[str, Any] = {"word_labels": [0, 1, 0], "label_map": ["O", "B-ENT"]}
+    kwargs: dict[str, Any] = {
+        "word_label_values": [0, 1, 0],
+        "word_label_names": ["O", "B-ENT", "O"],
+    }
     kwargs.update(overrides)
     return EntityLabelingAnnotation(**kwargs)
 
@@ -88,12 +93,27 @@ def make_question_answering_annotation(**overrides: Any) -> QuestionAnsweringAnn
 
 def make_object_detection_annotation(**overrides: Any) -> ObjectDetectionAnnotation:
     kwargs: dict[str, Any] = {
-        "label_map": ["cat", "dog"],
-        "labels": np.array([0]),
+        "label_values": np.array([0]),
+        "label_names": np.array(["cat"], dtype=object),
         "bboxes": np.stack([make_bounding_box()]),
     }
     kwargs.update(overrides)
     return ObjectDetectionAnnotation(**kwargs)
+
+
+def make_transcription_annotation(**overrides: Any) -> TranscriptionAnnotation:
+    kwargs: dict[str, Any] = {"text": "hello world"}
+    kwargs.update(overrides)
+    return TranscriptionAnnotation(**kwargs)
+
+
+def make_ocr_annotation(**overrides: Any) -> OCRAnnotation:
+    kwargs: dict[str, Any] = {
+        "bboxes": np.stack([make_bounding_box()]),
+        "texts": np.array(["hello"], dtype=object),
+    }
+    kwargs.update(overrides)
+    return OCRAnnotation(**kwargs)
 
 
 def make_pil_image(

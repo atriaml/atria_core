@@ -38,3 +38,6 @@ class RegistryGroup:
 
     def items(self) -> ItemsView[str, type[ModuleConfig]]:
         return self._store.items()
+
+    def list(self) -> list[str]:
+        return list(self._store.keys())
