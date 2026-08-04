@@ -11,9 +11,9 @@ from atria_core.datasets._common import FileStorageType
 from atria_core.datasets._constants import (
     _DEFAULT_ATRIA_DATASETS_CONFIG_PATH,
     _DEFAULT_ATRIA_DATASETS_METADATA_PATH,
-    _DEFAULT_SNAPSHOT_PATH,
 )
 from atria_core.datasets._dataset import Dataset, DatasetConfig, T_BaseDataInstance
+from atria_core.datasets._snapshot import DatasetSnapshot
 from atria_core.datasets._storage._storage_manager import StorageManager
 from atria_core.logger import get_logger
 from atria_core.registry import ModuleConfig
@@ -37,7 +37,9 @@ _SafeTupleLoader.add_constructor(
 )
 
 
-class CachedDataset(Dataset[DatasetConfig, T_BaseDataInstance], Generic[T_BaseDataInstance]):
+class CachedDataset(
+    Dataset[DatasetConfig, T_BaseDataInstance], Generic[T_BaseDataInstance]
+):
     """A Dataset subclass reading back from an on-disk cache instead of a
     live source -- same shape as HuggingfaceDataset (which reads from a HF
     builder instead of a live source): _download no-ops, _available_splits/
@@ -48,13 +50,10 @@ class CachedDataset(Dataset[DatasetConfig, T_BaseDataInstance], Generic[T_BaseDa
     def __init__(self, path: Path | str) -> None:
         self._path = Path(path)
 
-        snapshot_file = self._path / _DEFAULT_SNAPSHOT_PATH
-        with open(snapshot_file) as f:
-            snapshot_data = yaml.load(f, Loader=_SafeTupleLoader)
-        assert snapshot_data is not None, f"Snapshot file is empty: {snapshot_file}"
-        self._snapshot_data = snapshot_data
+        self._snapshot = DatasetSnapshot.load(self._path)
+        self._snapshot_data = self._snapshot.to_dict()
 
-        fqn = snapshot_data["data_model"]
+        fqn = self._snapshot.data_model
         module_name, class_name = fqn.rsplit(".", 1)
         module = importlib.import_module(module_name)
         self._data_model_cls: type[T_BaseDataInstance] = getattr(module, class_name)
@@ -88,6 +87,24 @@ class CachedDataset(Dataset[DatasetConfig, T_BaseDataInstance], Generic[T_BaseDa
     @property
     def config_hash(self) -> str:
         return str(self._snapshot_data["config_hash"])
+
+    @property
+    def snapshot(self) -> DatasetSnapshot:
+        return self._snapshot
+
+    @classmethod
+    def discover(cls, base_dir: Path | str) -> list[CachedDataset[Any]]:
+        """Open every valid cached dataset found recursively under a directory."""
+        datasets = []
+        for snapshot in DatasetSnapshot.discover(base_dir):
+            assert snapshot.path is not None
+            try:
+                datasets.append(cls(snapshot.path))
+            except (OSError, ImportError, AttributeError, ValueError, AssertionError):
+                logger.warning(
+                    "Ignoring unreadable dataset snapshot at %s", snapshot.path
+                )
+        return datasets
 
     def _download(
         self, data_dir: str, access_token: str | None = None

@@ -40,6 +40,8 @@ class ElementArray(BaseDataModel):
     texts: np.ndarray | None = None  # dtype=object, elements are str
     confs: np.ndarray | None = None
     angles: np.ndarray | None = None
+    segmentations: np.ndarray | None = None  # (N, P_max, 2), NaN-padded
+    segmentation_lengths: np.ndarray | None = None  # (N,) real point count per element
 
     def __post_init__(self) -> None:
         if self.texts is not None and not isinstance(self.texts, np.ndarray):
@@ -55,6 +57,8 @@ class ElementArray(BaseDataModel):
             ("bboxes", self.bboxes),
             ("confs", self.confs),
             ("angles", self.angles),
+            ("segmentations", self.segmentations),
+            ("segmentation_lengths", self.segmentation_lengths),
         ):
             if arr is None:
                 continue
@@ -85,18 +89,40 @@ class ElementArray(BaseDataModel):
             )
 
     @classmethod
-    def from_words(cls, texts: list[str], bboxes: Any) -> ElementArray:
+    def from_words(
+        cls,
+        texts: list[str],
+        bboxes: Any,
+        segmentations: list[np.ndarray | None] | None = None,
+    ) -> ElementArray:
         """The simple, flat, no-hierarchy path: every element is a word with
         no parent. Use this when you already have OCR-shaped (text, bbox)
-        pairs and don't need block/paragraph/line structure."""
+        pairs and don't need block/paragraph/line structure. `segmentations`,
+        if given, is one (P, 2) polygon (or None) per word -- ragged point
+        counts are NaN-padded into a single (N, P_max, 2) array."""
         n = len(texts)
         bboxes_arr = np.asarray(bboxes, dtype=np.float64).reshape(n, 4)
+
+        segmentations_arr = None
+        segmentation_lengths_arr = None
+        if segmentations is not None:
+            lengths = np.array([0 if p is None else len(p) for p in segmentations])
+            p_max = int(lengths.max()) if len(lengths) else 0
+            padded = np.full((n, p_max, 2), np.nan)
+            for i, polygon in enumerate(segmentations):
+                if polygon is not None:
+                    padded[i, : len(polygon)] = polygon
+            segmentations_arr = padded
+            segmentation_lengths_arr = lengths
+
         return cls(
             ids=np.arange(n),
             parent_ids=np.full(n, _ROOT_PARENT),
             levels=np.full(n, OCRLevel.word.value),
             bboxes=bboxes_arr,
             texts=np.asarray(texts, dtype=object),
+            segmentations=segmentations_arr,
+            segmentation_lengths=segmentation_lengths_arr,
         )
 
     def __len__(self) -> int:
@@ -117,6 +143,12 @@ class ElementArray(BaseDataModel):
             texts=self.texts[mask] if self.texts is not None else None,
             confs=self.confs[mask] if self.confs is not None else None,
             angles=self.angles[mask] if self.angles is not None else None,
+            segmentations=self.segmentations[mask]
+            if self.segmentations is not None
+            else None,
+            segmentation_lengths=self.segmentation_lengths[mask]
+            if self.segmentation_lengths is not None
+            else None,
         )
 
     def parent_bbox(self) -> np.ndarray:
@@ -165,11 +197,11 @@ class ElementArray(BaseDataModel):
         mask = self.levels == level.value
         return np.asarray(self.parent_bbox()[mask])
 
-    def joined_text(self, level: OCRLevel = OCRLevel.word) -> str:
+    def joined_text(self, level: OCRLevel = OCRLevel.word, sep: str = " ") -> str:
         texts = self.at(level).texts
         if texts is None:
             return ""
-        return " ".join(t for t in texts.tolist() if t)
+        return sep.join(t for t in texts.tolist() if t)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -182,6 +214,12 @@ class ElementArray(BaseDataModel):
             "texts": self.texts.tolist() if self.texts is not None else None,
             "confs": self.confs.tolist() if self.confs is not None else None,
             "angles": self.angles.tolist() if self.angles is not None else None,
+            "segmentations": self.segmentations.tolist()
+            if self.segmentations is not None
+            else None,
+            "segmentation_lengths": self.segmentation_lengths.tolist()
+            if self.segmentation_lengths is not None
+            else None,
         }
 
     @classmethod
@@ -203,4 +241,6 @@ class ElementArray(BaseDataModel):
             texts=np.asarray(texts, dtype=object) if texts is not None else None,
             confs=_float_array("confs"),
             angles=_float_array("angles"),
+            segmentations=_float_array("segmentations"),
+            segmentation_lengths=_int_array("segmentation_lengths"),
         )

@@ -36,20 +36,20 @@ def _words_to_draw(
     entity-labeling labels -- shared prep for both the image and PDF
     drawing targets, which each scale these to their own coordinate space."""
     ocr_ann: OCRAnnotation = instance.get_annotation_by_type(AnnotationType.ocr)
-    if (content is None or content.elements is None) and ocr_ann is None:
+    elements = (
+        content.elements
+        if content is not None and content.elements is not None
+        else ocr_ann
+    )
+    if elements is None:
         return None
-
-    if content is None:
-        ocr_ann_texts = ocr_ann.texts.tolist() if ocr_ann.texts is not None else None
-        ocr_ann_bboxes = ocr_ann.bboxes
-        return ocr_ann_bboxes, ocr_ann_texts, None
     else:
-        words = content.elements.at(OCRLevel.word)
+        words = elements.at(OCRLevel.word)
         if words.bboxes is None or len(words) == 0:
             return None
 
         bboxes = (
-            content.elements.segment_bboxes(OCRLevel.word)
+            elements.segment_bboxes(OCRLevel.word)
             if draw_segment_bboxes
             else words.bboxes
         )

@@ -144,6 +144,17 @@ class Dataset(
     def metadata(self) -> DatasetMetadata:
         return self._metadata()
 
+    def __repr__(self) -> str:
+        splits = ", ".join(split.value for split in self._split_iterators)
+        if not splits:
+            splits = "-"
+        return (
+            f"{type(self).__name__}("
+            f"config={self.config!r}, "
+            f"splits=[{splits}]"
+            f")"
+        )
+
     @property
     def split_iterators(
         self,

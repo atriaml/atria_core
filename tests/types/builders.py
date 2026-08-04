@@ -16,7 +16,7 @@ from atria_core.types._generic._annotations import (
 )
 from atria_core.types._generic._bounding_box import as_bbox_array, as_segmentation_array
 from atria_core.types._generic._doc_content import DocumentContent
-from atria_core.types._generic._elements import ElementArray
+from atria_core.types._generic._elements import ElementArray, OCRLevel
 from atria_core.types._generic._image import Image
 from atria_core.types._generic._qa_pair import QAPair
 
@@ -108,7 +108,13 @@ def make_transcription_annotation(**overrides: Any) -> TranscriptionAnnotation:
 
 
 def make_ocr_annotation(**overrides: Any) -> OCRAnnotation:
+    """Simple flat (word-only, single-element) OCRAnnotation. For hierarchy
+    tests (multiple levels/parent_ids/polygons), construct OCRAnnotation
+    directly instead."""
     kwargs: dict[str, Any] = {
+        "ids": np.array([0]),
+        "parent_ids": np.array([-1]),
+        "levels": np.array([OCRLevel.word.value]),
         "bboxes": np.stack([make_bounding_box()]),
         "texts": np.array(["hello"], dtype=object),
     }

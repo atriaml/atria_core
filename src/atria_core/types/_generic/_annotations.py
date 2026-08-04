@@ -6,11 +6,10 @@ from dataclasses import dataclass, replace
 from typing import Any
 
 import numpy as np
-
 from atria_core.types._base_data_model import BaseDataModel
 from atria_core.types._generic._annotated_object import AnnotatedObject
 from atria_core.types._generic._bounding_box import BoundingBoxMode
-from atria_core.types._generic._elements import OCRLevel
+from atria_core.types._generic._elements import ElementArray, OCRLevel
 from atria_core.types._generic._qa_pair import QAPair
 
 
@@ -223,6 +222,7 @@ class TranscriptionAnnotation(BaseDataModel):
     type = AnnotationType.transcription.value
 
     text: str | None = None
+    level: OCRLevel | None = None
 
     def __post_init__(self):
         assert isinstance(self.text, str | None)
@@ -241,36 +241,17 @@ class TranscriptionAnnotation(BaseDataModel):
 
 
 @dataclass(frozen=True, repr=False, eq=False)
-class OCRAnnotation(BaseDataModel):
+class OCRAnnotation(ElementArray):
+    """Ground-truth OCR/text-layer hierarchy for a document instance --
+    same structure-of-arrays shape as ElementArray (page/block/line/word,
+    with parent links, normalized bboxes, and optional polygons), just
+    tagged as an `ocr` annotation so it round-trips through
+    BaseDataInstance's annotation dict. A single instance can carry the
+    whole hierarchy at once (sliceable via `.at(level)`), which is what
+    lets one document hold word-level *and* line-level ground truth
+    together."""
+
     type = AnnotationType.ocr.value
-
-    level: OCRLevel = OCRLevel.word
-    bboxes: np.ndarray | None = None
-    texts: np.ndarray | None = None
-
-    def __post_init__(self):
-        assert isinstance(self.bboxes, np.ndarray | None)
-        assert isinstance(self.texts, np.ndarray | None)
-        if self.bboxes is not None and self.texts is not None:
-            assert len(self.bboxes) == len(self.texts)
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "type": self.type,
-            "bboxes": self.bboxes.tolist() if self.bboxes is not None else None,
-            "texts": self.texts.tolist() if self.texts is not None else None,
-        }
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> OCRAnnotation:
-        def _array(key: str, dtype: type) -> np.ndarray | None:
-            value = data.get(key)
-            return np.asarray(value, dtype=dtype) if value is not None else None
-
-        return cls(
-            bboxes=_array("bboxes", np.float64),
-            texts=_array("texts", object),
-        )
 
 
 Annotation = (

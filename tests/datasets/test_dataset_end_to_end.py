@@ -8,7 +8,14 @@ from typing import Any
 from PIL import Image as PILImage
 from pydantic.dataclasses import dataclass as pydantic_dataclass
 
-from atria_core.datasets import Cacher, Dataset, DatasetConfig, FileStorageType
+from atria_core.datasets import (
+    CachedDataset,
+    Cacher,
+    Dataset,
+    DatasetConfig,
+    DatasetSnapshot,
+    FileStorageType,
+)
 from atria_core.registry import Registry
 from atria_core.types import DatasetMetadata, DatasetSplitType, Image, ImageInstance
 
@@ -58,7 +65,9 @@ class SyntheticDataset(Dataset[SyntheticConfig, ImageInstance]):
     def _available_splits(self, data_dir: str) -> list[DatasetSplitType]:
         return [DatasetSplitType.train, DatasetSplitType.test]
 
-    def _build_split_iterator(self, split: DatasetSplitType, data_dir: str) -> _RawSplit:
+    def _build_split_iterator(
+        self, split: DatasetSplitType, data_dir: str
+    ) -> _RawSplit:
         count = 4 if split == DatasetSplitType.train else 2
         return _RawSplit(count)
 
@@ -155,3 +164,40 @@ def test_cacher_validate_cache_rejects_incomplete_snapshot(tmp_path: Path) -> No
 
     (tmp_path / "snapshot.yaml").write_text("dataset_class_name: Foo\n")
     assert Cacher.validate_cache(tmp_path) is False
+
+
+def test_cache_writes_discoverable_versioned_snapshot(tmp_path: Path) -> None:
+    dataset = SyntheticConfig().build_module(data_dir=str(tmp_path))
+    cached = Cacher(FileStorageType.MSGPACK, num_processes=1).cache(
+        dataset, data_dir=str(tmp_path)
+    )
+
+    snapshot = DatasetSnapshot.load(cached.data_dir)
+    assert snapshot.schema_version == DatasetSnapshot.CURRENT_SCHEMA_VERSION
+    assert snapshot.created_at is not None
+    assert snapshot.splits == {"train": 4, "test": 2}
+    assert not (cached.data_dir / "snapshot.yaml.tmp").exists()
+
+    discovered = DatasetSnapshot.discover(tmp_path)
+    assert [item.path for item in discovered] == [cached.data_dir]
+    assert [item.data_dir for item in CachedDataset.discover(tmp_path)] == [
+        cached.data_dir
+    ]
+
+
+def test_snapshot_loads_legacy_schema(tmp_path: Path) -> None:
+    (tmp_path / "config.yaml").write_text("_target_: example.Config\n")
+    (tmp_path / "metadata.yaml").write_text("{}\n")
+    (tmp_path / "snapshot.yaml").write_text(
+        "storage_type: msgpack\n"
+        "data_model: example.Model\n"
+        "dataset_class_name: Example\n"
+        "config_name: Example-123\n"
+        "config_hash: '123'\n"
+    )
+
+    snapshot = DatasetSnapshot.load(tmp_path)
+    assert snapshot.schema_version == 0
+    assert snapshot.created_at is None
+    assert snapshot.splits == {}
+    assert DatasetSnapshot.validate(tmp_path)

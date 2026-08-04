@@ -149,7 +149,13 @@ def _write_rows_to_deltalake(
         for field in schema:
             columns[field.name].append(row.get(field.name))
     table = pa.table(columns, schema=schema)
-    deltalake.write_deltalake(str(split_dir), table, mode=mode)  # type: ignore[call-overload]
+    # Optional fields are not necessarily present in every batch.  Allow an
+    # append to add columns discovered after the first batch; Delta will fill
+    # those columns with nulls for rows that were already written.
+    schema_mode = "merge" if mode == "append" else None
+    deltalake.write_deltalake(  # type: ignore[call-overload]
+        str(split_dir), table, mode=mode, schema_mode=schema_mode
+    )
 
 
 def _write_items(

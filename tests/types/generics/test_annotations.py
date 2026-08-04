@@ -142,7 +142,7 @@ def test_ocr_annotation_roundtrip() -> None:
 
 
 def test_ocr_annotation_rejects_mismatched_bboxes_and_texts() -> None:
-    with pytest.raises(AssertionError):
+    with pytest.raises(ValueError, match="expected"):
         OCRAnnotation(
             bboxes=np.array([[0.1, 0.1, 0.5, 0.5]]),
             texts=np.array(["a", "b"], dtype=object),

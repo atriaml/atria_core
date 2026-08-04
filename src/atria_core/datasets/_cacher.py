@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import hashlib
 import pickle
-from collections.abc import Callable
+from collections.abc import Callable, Sized
 from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import yaml
 
-from atria_core.datasets._cached_dataset import CachedDataset, _SafeTupleLoader
+from atria_core.datasets._cached_dataset import CachedDataset
 from atria_core.datasets._common import FileStorageType
 from atria_core.datasets._constants import (
     _DEFAULT_ATRIA_DATASETS_CONFIG_PATH,
@@ -18,6 +18,7 @@ from atria_core.datasets._constants import (
     _DEFAULT_SNAPSHOT_PATH,
 )
 from atria_core.datasets._dataset import _default_data_dir, _validate_data_dir
+from atria_core.datasets._snapshot import DatasetSnapshot
 from atria_core.datasets._split_iterators import Compose
 from atria_core.logger import get_logger
 from atria_core.transforms.functional import image as image_functional
@@ -102,6 +103,16 @@ def _infer_data_model(dataset: Dataset[Any, Any]) -> type[Any]:
     raise ValueError(
         f"Cannot infer data_model for {type(dataset).__name__}: every split is empty."
     )
+
+
+def _stored_split_counts(storage_manager: Any) -> dict[str, int]:
+    counts = {}
+    for dataset_split in storage_manager.get_splits():
+        stored = storage_manager.read_split(dataset_split)
+        counts[dataset_split.value] = (
+            len(stored) if isinstance(stored, Sized) else sum(1 for _ in stored)
+        )
+    return counts
 
 
 class Cacher:
@@ -245,6 +256,7 @@ class Cacher:
             data_model=data_model,
             storage_type=self._storage_type,
             dataset_class_name=type(dataset).__name__,
+            splits=_stored_split_counts(storage_manager),
         )
         return CachedDataset(unique_path)
 
@@ -275,20 +287,7 @@ class Cacher:
 
     @classmethod
     def validate_cache(cls, path: Path | str) -> bool:
-        path = Path(path)
-        snapshot_file = path / _DEFAULT_SNAPSHOT_PATH
-        if not snapshot_file.exists():
-            return False
-        with open(snapshot_file) as f:
-            snapshot = yaml.load(f, Loader=_SafeTupleLoader)
-        required_keys = {
-            "dataset_class_name",
-            "data_model",
-            "storage_type",
-            "config_name",
-            "config_hash",
-        }
-        return not (required_keys - snapshot.keys())
+        return DatasetSnapshot.validate(path)
 
     @staticmethod
     def _write_yaml(file_path: Path, data: dict[str, Any]) -> None:
@@ -325,14 +324,18 @@ class Cacher:
         data_model: type[Any],
         storage_type: FileStorageType,
         dataset_class_name: str,
+        splits: dict[str, int],
     ) -> None:
-        snapshot = {
-            "storage_type": storage_type.value,
-            "data_model": f"{data_model.__module__}.{data_model.__qualname__}",
-            "dataset_class_name": dataset_class_name,
-            "config_name": config_name,
-            "config_hash": config_hash,
-        }
+        snapshot = DatasetSnapshot.create(
+            storage_type=storage_type,
+            data_model=f"{data_model.__module__}.{data_model.__qualname__}",
+            dataset_class_name=dataset_class_name,
+            config_name=config_name,
+            config_hash=config_hash,
+            splits=splits,
+        )
         snapshot_path = Path(storage_dir) / config_name / _DEFAULT_SNAPSHOT_PATH
         logger.info("Saving dataset snapshot to %s", snapshot_path)
-        cls._write_yaml(snapshot_path, snapshot)
+        temporary_path = snapshot_path.with_suffix(f"{snapshot_path.suffix}.tmp")
+        cls._write_yaml(temporary_path, snapshot.to_dict())
+        temporary_path.replace(snapshot_path)
