@@ -14,6 +14,7 @@ from atria_core.datasets import (
     Dataset,
     DatasetConfig,
     DatasetSnapshot,
+    DatasetSnapshotStore,
     FileStorageType,
 )
 from atria_core.registry import Registry
@@ -90,6 +91,14 @@ def _mark_processed(sample: ImageInstance) -> ImageInstance:
 def test_build_module_constructs_dataset(tmp_path: Path) -> None:
     dataset = SyntheticConfig().build_module(data_dir=str(tmp_path))
     assert isinstance(dataset, SyntheticDataset)
+    assert dataset.data_dir == tmp_path
+
+    snapshot = DatasetSnapshot.load(tmp_path)
+    assert snapshot.snapshot_kind == "source"
+    assert snapshot.dataset_stage == "raw"
+    assert snapshot.storage_type is None
+    assert snapshot.data_model is None
+    assert snapshot.config == dataset.config.to_dict()
 
 
 def test_build_module_produces_live_split_iterators(tmp_path: Path) -> None:
@@ -143,6 +152,7 @@ def test_process_and_cache_applies_transform_at_write_time(tmp_path: Path) -> No
         "processed-2",
         "processed-3",
     }
+    assert cached.dataset_stage == "processed"
 
 
 def test_cache_with_multiprocessing_num_processes_gt_1(tmp_path: Path) -> None:
@@ -172,17 +182,29 @@ def test_cache_writes_discoverable_versioned_snapshot(tmp_path: Path) -> None:
         dataset, data_dir=str(tmp_path)
     )
 
+    root_snapshot = DatasetSnapshot.load(tmp_path)
+    assert root_snapshot.snapshot_kind == "source"
+
     snapshot = DatasetSnapshot.load(cached.data_dir)
     assert snapshot.schema_version == DatasetSnapshot.CURRENT_SCHEMA_VERSION
     assert snapshot.created_at is not None
+    assert snapshot.snapshot_kind == "cached"
     assert snapshot.splits == {"train": 4, "test": 2}
+    assert snapshot.dataset_stage == "raw"
+    assert snapshot.config == dataset.config.to_dict()
+    assert snapshot.metadata == dataset.metadata.to_dict()
     assert not (cached.data_dir / "snapshot.yaml.tmp").exists()
+    assert not (cached.data_dir / "config.yaml").exists()
+    assert not (cached.data_dir / "metadata.yaml").exists()
 
     discovered = DatasetSnapshot.discover(tmp_path)
-    assert [item.path for item in discovered] == [cached.data_dir]
-    assert [item.data_dir for item in CachedDataset.discover(tmp_path)] == [
-        cached.data_dir
-    ]
+    assert [item.path for item in discovered] == [tmp_path, cached.data_dir]
+    source_discovered = DatasetSnapshotStore.discover(tmp_path, snapshot_kind="source")
+    assert [item.path for item in source_discovered] == [tmp_path]
+    cache_discovered = DatasetSnapshotStore.discover(tmp_path, snapshot_kind="cached")
+    assert [item.path for item in cache_discovered] == [cached.data_dir]
+    reopened = [CachedDataset(item.path) for item in cache_discovered if item.path]
+    assert [item.data_dir for item in reopened] == [cached.data_dir]
 
 
 def test_snapshot_loads_legacy_schema(tmp_path: Path) -> None:
@@ -200,4 +222,8 @@ def test_snapshot_loads_legacy_schema(tmp_path: Path) -> None:
     assert snapshot.schema_version == 0
     assert snapshot.created_at is None
     assert snapshot.splits == {}
+    assert snapshot.snapshot_kind == "cached"
+    assert snapshot.dataset_stage == "raw"
+    assert snapshot.config == {}
+    assert snapshot.metadata == {}
     assert DatasetSnapshot.validate(tmp_path)

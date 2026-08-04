@@ -8,10 +8,7 @@ from typing import Any, Generic
 import yaml
 
 from atria_core.datasets._common import FileStorageType
-from atria_core.datasets._constants import (
-    _DEFAULT_ATRIA_DATASETS_CONFIG_PATH,
-    _DEFAULT_ATRIA_DATASETS_METADATA_PATH,
-)
+from atria_core.datasets._constants import _DEFAULT_ATRIA_DATASETS_CONFIG_PATH
 from atria_core.datasets._dataset import Dataset, DatasetConfig, T_BaseDataInstance
 from atria_core.datasets._snapshot import DatasetSnapshot
 from atria_core.datasets._storage._storage_manager import StorageManager
@@ -51,16 +48,23 @@ class CachedDataset(
         self._path = Path(path)
 
         self._snapshot = DatasetSnapshot.load(self._path)
-        self._snapshot_data = self._snapshot.to_dict()
+        if not self._snapshot.is_cached:
+            raise ValueError(
+                f"Snapshot at {self._path} is a {self._snapshot.snapshot_kind} snapshot, not a cached dataset snapshot."
+            )
 
         fqn = self._snapshot.data_model
+        assert fqn is not None
         module_name, class_name = fqn.rsplit(".", 1)
         module = importlib.import_module(module_name)
         self._data_model_cls: type[T_BaseDataInstance] = getattr(module, class_name)
 
-        config_path = self._path / _DEFAULT_ATRIA_DATASETS_CONFIG_PATH
-        with open(config_path) as f:
-            config = ModuleConfig.from_dict(yaml.safe_load(f))
+        config_data = self._snapshot.config
+        if not config_data:
+            config_path = self._path / _DEFAULT_ATRIA_DATASETS_CONFIG_PATH
+            with open(config_path) as f:
+                config_data = yaml.safe_load(f)
+        config = ModuleConfig.from_dict(config_data)
 
         super().__init__(config, data_dir=str(self._path))  # type: ignore[arg-type]
 
@@ -74,37 +78,30 @@ class CachedDataset(
 
     @property
     def dataset_class_name(self) -> str:
-        return str(self._snapshot_data["dataset_class_name"])
+        return self._snapshot.dataset_class_name
 
     @property
     def storage_type(self) -> FileStorageType:
-        return FileStorageType(self._snapshot_data["storage_type"])
+        assert self._snapshot.storage_type is not None
+        return self._snapshot.storage_type
 
     @property
     def config_name(self) -> str:
-        return str(self._snapshot_data["config_name"])
+        assert self._snapshot.config_name is not None
+        return self._snapshot.config_name
 
     @property
     def config_hash(self) -> str:
-        return str(self._snapshot_data["config_hash"])
+        assert self._snapshot.config_hash is not None
+        return self._snapshot.config_hash
 
     @property
     def snapshot(self) -> DatasetSnapshot:
         return self._snapshot
 
-    @classmethod
-    def discover(cls, base_dir: Path | str) -> list[CachedDataset[Any]]:
-        """Open every valid cached dataset found recursively under a directory."""
-        datasets = []
-        for snapshot in DatasetSnapshot.discover(base_dir):
-            assert snapshot.path is not None
-            try:
-                datasets.append(cls(snapshot.path))
-            except (OSError, ImportError, AttributeError, ValueError, AssertionError):
-                logger.warning(
-                    "Ignoring unreadable dataset snapshot at %s", snapshot.path
-                )
-        return datasets
+    @property
+    def dataset_stage(self) -> str:
+        return self._snapshot.dataset_stage
 
     def _download(
         self, data_dir: str, access_token: str | None = None
@@ -115,7 +112,9 @@ class CachedDataset(
         return self._storage_manager().get_splits()
 
     def _metadata(self) -> DatasetMetadata:
-        metadata_path = self._path / _DEFAULT_ATRIA_DATASETS_METADATA_PATH
+        if self._snapshot.metadata:
+            return self._snapshot.dataset_metadata
+        metadata_path = self._path / "metadata.yaml"
         if metadata_path.exists():
             with open(metadata_path) as f:
                 return DatasetMetadata.from_dict(yaml.safe_load(f))
@@ -139,3 +138,6 @@ class CachedDataset(
             config_name=self._path.name,
             num_processes=1,
         )
+
+    def _persist_snapshot(self) -> None:
+        return

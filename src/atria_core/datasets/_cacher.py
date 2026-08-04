@@ -7,18 +7,18 @@ from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-import yaml
-
 from atria_core.datasets._cached_dataset import CachedDataset
 from atria_core.datasets._common import FileStorageType
 from atria_core.datasets._constants import (
-    _DEFAULT_ATRIA_DATASETS_CONFIG_PATH,
-    _DEFAULT_ATRIA_DATASETS_METADATA_PATH,
     _DEFAULT_ATRIA_DATASETS_STORAGE_SUBDIR,
-    _DEFAULT_SNAPSHOT_PATH,
 )
 from atria_core.datasets._dataset import _default_data_dir, _validate_data_dir
-from atria_core.datasets._snapshot import DatasetSnapshot
+from atria_core.datasets._snapshot import (
+    PROCESSED_DATASET_STAGE,
+    RAW_DATASET_STAGE,
+    DatasetSnapshot,
+)
+from atria_core.datasets._snapshot_store import DatasetSnapshotStore
 from atria_core.datasets._split_iterators import Compose
 from atria_core.logger import get_logger
 from atria_core.transforms.functional import image as image_functional
@@ -243,19 +243,16 @@ class Cacher:
                 s, split_iterator.with_transform(write_transform)
             )
 
-        Cacher._save_dataset_info(
-            str(storage_manager.storage_dir),
-            storage_manager.config_name,
-            dataset.config.to_dict(),
-            dataset.metadata.to_dict(),
-        )
-        Cacher._save_snapshot(
-            storage_dir=storage_manager.storage_dir,
+        DatasetSnapshotStore.write_cached_snapshot(
+            dataset=dataset,
+            snapshot_dir=unique_path,
             config_name=storage_manager.config_name,
             config_hash=dataset.config.hash,
             data_model=data_model,
             storage_type=self._storage_type,
-            dataset_class_name=type(dataset).__name__,
+            dataset_stage=RAW_DATASET_STAGE
+            if transform is None
+            else PROCESSED_DATASET_STAGE,
             splits=_stored_split_counts(storage_manager),
         )
         return CachedDataset(unique_path)
@@ -287,55 +284,6 @@ class Cacher:
 
     @classmethod
     def validate_cache(cls, path: Path | str) -> bool:
-        return DatasetSnapshot.validate(path)
-
-    @staticmethod
-    def _write_yaml(file_path: Path, data: dict[str, Any]) -> None:
-        file_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(file_path, "w") as f:
-            yaml.dump(data, f, sort_keys=False)
-
-    @classmethod
-    def _save_dataset_info(
-        cls,
-        storage_dir: str,
-        config_name: str,
-        config: dict[str, Any],
-        metadata: dict[str, Any],
-    ) -> None:
-        config_file_path = (
-            Path(storage_dir) / config_name / _DEFAULT_ATRIA_DATASETS_CONFIG_PATH
-        )
-        logger.info("Saving dataset configuration to %s", config_file_path)
-        cls._write_yaml(config_file_path, config)
-
-        metadata_file_path = (
-            Path(storage_dir) / config_name / _DEFAULT_ATRIA_DATASETS_METADATA_PATH
-        )
-        logger.info("Saving dataset metadata to %s", metadata_file_path)
-        cls._write_yaml(metadata_file_path, metadata)
-
-    @classmethod
-    def _save_snapshot(
-        cls,
-        storage_dir: Path | str,
-        config_name: str,
-        config_hash: str,
-        data_model: type[Any],
-        storage_type: FileStorageType,
-        dataset_class_name: str,
-        splits: dict[str, int],
-    ) -> None:
-        snapshot = DatasetSnapshot.create(
-            storage_type=storage_type,
-            data_model=f"{data_model.__module__}.{data_model.__qualname__}",
-            dataset_class_name=dataset_class_name,
-            config_name=config_name,
-            config_hash=config_hash,
-            splits=splits,
-        )
-        snapshot_path = Path(storage_dir) / config_name / _DEFAULT_SNAPSHOT_PATH
-        logger.info("Saving dataset snapshot to %s", snapshot_path)
-        temporary_path = snapshot_path.with_suffix(f"{snapshot_path.suffix}.tmp")
-        cls._write_yaml(temporary_path, snapshot.to_dict())
-        temporary_path.replace(snapshot_path)
+        if not DatasetSnapshot.validate(path):
+            return False
+        return DatasetSnapshot.load(path).is_cached

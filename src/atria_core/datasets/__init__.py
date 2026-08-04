@@ -16,6 +16,7 @@ if TYPE_CHECKING:
         IterableSplitIterator,
     )
     from ._snapshot import DatasetSnapshot
+    from ._snapshot_store import DatasetSnapshotStore
 
 __getattr__, __dir__, __all__ = lazy.attach(
     __name__,
@@ -40,5 +41,6 @@ __getattr__, __dir__, __all__ = lazy.attach(
             "IterableSplitIterator",
         ],
         "_snapshot": ["DatasetSnapshot"],
+        "_snapshot_store": ["DatasetSnapshotStore"],
     },
 )

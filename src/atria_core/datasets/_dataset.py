@@ -11,6 +11,7 @@ from atria_core.datasets._constants import (
     _DEFAULT_ATRIA_DATASETS_CACHE_DIR,
     _DEFAULT_DOWNLOAD_PATH,
 )
+from atria_core.datasets._snapshot_store import DatasetSnapshotStore
 from atria_core.datasets._split_iterators import (
     IndexableSplitIterator,
     IterableSplitIterator,
@@ -75,7 +76,13 @@ class Dataset(
         data_dir = _validate_data_dir(
             data_dir or _default_data_dir(type(self).__name__)
         )
+        self._data_dir = Path(data_dir)
         self._build_split_iterators(data_dir, split=split, access_token=access_token)
+        self._persist_snapshot()
+
+    @property
+    def data_dir(self) -> Path:
+        return self._data_dir
 
     def _build_split_iterators(
         self,
@@ -177,6 +184,9 @@ class Dataset(
         if split not in self._split_iterators:
             raise ValueError(f"Split '{split}' does not exist for this dataset.")
         return self._split_iterators[split]
+
+    def _persist_snapshot(self) -> None:
+        DatasetSnapshotStore.write_source_snapshot(self, self.data_dir)
 
     @abstractmethod
     def _build_split_iterator(
