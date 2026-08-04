@@ -180,8 +180,25 @@ class DatasetSnapshot:
         base = Path(base_dir).expanduser()
         if not base.is_dir():
             return []
+
+        candidate_paths: list[Path] = []
+
+        direct_snapshot = base / _DEFAULT_SNAPSHOT_PATH
+        if direct_snapshot.is_file():
+            candidate_paths.append(direct_snapshot)
+
+        try:
+            for entry in sorted(base.iterdir(), key=lambda item: item.name):
+                if not entry.is_dir():
+                    continue
+                snapshot_path = entry / _DEFAULT_SNAPSHOT_PATH
+                if snapshot_path.is_file():
+                    candidate_paths.append(snapshot_path)
+        except OSError:
+            return []
+
         snapshots = []
-        for path in sorted(base.rglob(_DEFAULT_SNAPSHOT_PATH)):
+        for path in candidate_paths:
             if cls.validate(path):
                 snapshots.append(cls.load(path))
         return snapshots
