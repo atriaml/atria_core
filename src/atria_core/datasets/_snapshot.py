@@ -8,9 +8,11 @@ from typing import Any, ClassVar
 import yaml
 
 from atria_core.datasets._common import FileStorageType
-from atria_core.datasets._constants import _DEFAULT_SNAPSHOT_PATH
+from atria_core.datasets._constants import (
+    _DEFAULT_ATRIA_DATASETS_STORAGE_SUBDIR,
+    _DEFAULT_SNAPSHOT_PATH,
+)
 from atria_core.types import DatasetMetadata
-
 
 RAW_DATASET_STAGE = "raw"
 PROCESSED_DATASET_STAGE = "processed"
@@ -40,6 +42,7 @@ class DatasetSnapshot:
     schema_version: int = CURRENT_SCHEMA_VERSION
     created_at: str | None = None
     splits: dict[str, int] = dataclasses.field(default_factory=dict)
+    transforms: list[dict[str, Any]] = dataclasses.field(default_factory=list)
     path: Path | None = dataclasses.field(default=None, compare=False, repr=False)
 
     @classmethod
@@ -56,6 +59,7 @@ class DatasetSnapshot:
         metadata: dict[str, Any],
         dataset_stage: str,
         splits: dict[str, int],
+        transforms: list[dict[str, Any]] | None = None,
     ) -> DatasetSnapshot:
         return cls(
             storage_type=storage_type,
@@ -69,6 +73,7 @@ class DatasetSnapshot:
             dataset_stage=dataset_stage,
             created_at=datetime.now(UTC).isoformat(),
             splits=splits,
+            transforms=transforms or [],
         )
 
     @classmethod
@@ -97,15 +102,14 @@ class DatasetSnapshot:
                 if data.get("config_hash") is not None
                 else None
             ),
-            snapshot_kind=str(
-                data.get("snapshot_kind", CACHED_DATASET_SNAPSHOT_KIND)
-            ),
+            snapshot_kind=str(data.get("snapshot_kind", CACHED_DATASET_SNAPSHOT_KIND)),
             config=dict(data.get("config") or {}),
             metadata=dict(data.get("metadata") or {}),
             dataset_stage=str(data.get("dataset_stage", RAW_DATASET_STAGE)),
             splits={
                 str(name): int(count) for name, count in data.get("splits", {}).items()
             },
+            transforms=list(data.get("transforms") or []),
             path=path,
         )
 
@@ -113,7 +117,7 @@ class DatasetSnapshot:
         data: dict[str, Any] = {
             "schema_version": self.schema_version,
             "created_at": self.created_at,
-            "storage_type": self.storage_type.value,
+            "storage_type": self.storage_type.value if self.storage_type else None,
             "data_model": self.data_model,
             "dataset_class_name": self.dataset_class_name,
             "config_name": self.config_name,
@@ -123,6 +127,7 @@ class DatasetSnapshot:
             "metadata": self.metadata,
             "dataset_stage": self.dataset_stage,
             "splits": self.splits,
+            "transforms": self.transforms,
         }
         return {key: value for key, value in data.items() if value is not None}
 
@@ -194,6 +199,20 @@ class DatasetSnapshot:
                 snapshot_path = entry / _DEFAULT_SNAPSHOT_PATH
                 if snapshot_path.is_file():
                     candidate_paths.append(snapshot_path)
+
+            storage_dir = base / _DEFAULT_ATRIA_DATASETS_STORAGE_SUBDIR
+            if storage_dir.is_dir():
+                for storage_type_dir in sorted(
+                    (item for item in storage_dir.iterdir() if item.is_dir()),
+                    key=lambda item: item.name,
+                ):
+                    for dataset_dir in sorted(
+                        (item for item in storage_type_dir.iterdir() if item.is_dir()),
+                        key=lambda item: item.name,
+                    ):
+                        nested_snapshot = dataset_dir / _DEFAULT_SNAPSHOT_PATH
+                        if nested_snapshot.is_file():
+                            candidate_paths.append(nested_snapshot)
         except OSError:
             return []
 

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Iterator, Sequence
-from typing import Any, Generic, TypeVar
+from itertools import islice
+from typing import Any, Generic, TypeVar, overload
 
 T_Output = TypeVar("T_Output")
 T_NewOutput = TypeVar("T_NewOutput")
@@ -30,15 +31,28 @@ class IndexableSplitIterator(Sequence[T_Output], Generic[T_Output]):
         self,
         base_iterator: Sequence[Any],
         transform: Callable[[Any], T_Output],
+        max_samples: int | None = None,
     ) -> None:
         self._base_iterator = base_iterator
         self._transform = transform
+        self._max_samples = max_samples
 
     def __len__(self) -> int:
-        return len(self._base_iterator)
+        if self._max_samples is None:
+            return len(self._base_iterator)
+        return min(self._max_samples, len(self._base_iterator))
 
-    def __getitem__(self, index: int) -> T_Output:  # type: ignore[override]
-        return self._transform(self._base_iterator[index])
+    @overload
+    def __getitem__(self, index: int) -> T_Output: ...
+
+    @overload
+    def __getitem__(self, index: slice) -> list[T_Output]: ...
+
+    def __getitem__(self, index: int | slice) -> T_Output | list[T_Output]:
+        if isinstance(index, slice):
+            return [self[item] for item in range(len(self))[index]]
+        bounded_index = range(len(self))[index]
+        return self._transform(self._base_iterator[bounded_index])
 
     def __getitems__(self, indices: list[int]) -> list[T_Output]:
         return [self[i] for i in indices]
@@ -47,7 +61,30 @@ class IndexableSplitIterator(Sequence[T_Output], Generic[T_Output]):
         self, transform: Callable[[T_Output], T_NewOutput]
     ) -> IndexableSplitIterator[T_NewOutput]:
         composed_transform = Compose(self._transform, transform)
-        return IndexableSplitIterator(self._base_iterator, composed_transform)
+        return IndexableSplitIterator(
+            self._base_iterator,
+            composed_transform,
+            max_samples=self._max_samples,
+        )
+
+    def limit(self, max_samples: int) -> IndexableSplitIterator[T_Output]:
+        if max_samples < 0:
+            raise ValueError("max_samples cannot be negative")
+        return IndexableSplitIterator(
+            self._base_iterator,
+            self._transform,
+            max_samples=min(max_samples, len(self)),
+        )
+
+    @property
+    def base_iterator(self) -> Iterable[Any]:
+        if self._max_samples is None:
+            return self._base_iterator
+        return islice(self._base_iterator, self._max_samples)
+
+    @property
+    def transform(self) -> Callable[[Any], T_Output]:
+        return self._transform
 
     def __repr__(self) -> str:
         return f"IndexableSplitIterator(len={len(self)})"

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Generic
+from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 import aiohttp
 from pydantic.dataclasses import dataclass as pydantic_dataclass
@@ -10,7 +10,6 @@ from atria_core.datasets._dataset import (
     Dataset,
     DatasetConfig,
     T_BaseDataInstance,
-    T_DatasetConfig,
 )
 from atria_core.logger import get_logger
 from atria_core.types import DatasetMetadata, DatasetSplitType
@@ -29,19 +28,25 @@ _HF_SPLIT_MAP = {
 
 @pydantic_dataclass(frozen=True)
 class HuggingfaceDatasetConfig(DatasetConfig):
-    config_name: str
+    config_name: str | None = None
+    dataset_dir_name: str | None = None
+
+
+T_HuggingfaceDatasetConfig = TypeVar(
+    "T_HuggingfaceDatasetConfig", bound=HuggingfaceDatasetConfig
+)
 
 
 class HuggingfaceDataset(
-    Dataset[T_DatasetConfig, T_BaseDataInstance],
-    Generic[T_DatasetConfig, T_BaseDataInstance],
+    Dataset[T_HuggingfaceDatasetConfig, T_BaseDataInstance],
+    Generic[T_HuggingfaceDatasetConfig, T_BaseDataInstance],
 ):
     __abstract__ = True
 
     def __init__(
         self,
         repo: str,
-        config: T_DatasetConfig,
+        config: T_HuggingfaceDatasetConfig,
         *,
         data_dir: str | None = None,
         access_token: str | None = None,

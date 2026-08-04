@@ -57,6 +57,7 @@ class DatasetSnapshotStore:
             metadata=dataset.metadata.to_dict(),
             dataset_stage=RAW_DATASET_STAGE,
             splits=cls._split_counts(dataset.split_iterators),
+            transforms=[],
         )
         cls.write_snapshot(Path(data_dir), snapshot)
         return snapshot
@@ -73,6 +74,7 @@ class DatasetSnapshotStore:
         config_hash: str,
         dataset_stage: str,
         splits: dict[str, int],
+        transforms: list[dict[str, Any]] | None = None,
     ) -> DatasetSnapshot:
         snapshot = DatasetSnapshot.create(
             storage_type=storage_type,
@@ -85,6 +87,7 @@ class DatasetSnapshotStore:
             metadata=dataset.metadata.to_dict(),
             dataset_stage=dataset_stage,
             splits=splits,
+            transforms=transforms or [],
         )
         cls.write_snapshot(Path(snapshot_dir), snapshot)
         return snapshot
@@ -107,7 +110,11 @@ class DatasetSnapshotStore:
     ) -> list[DatasetSnapshot]:
         snapshots = DatasetSnapshot.discover(base_dir)
         if snapshot_kind is not None:
-            snapshots = [item for item in snapshots if item.snapshot_kind == snapshot_kind]
+            snapshots = [
+                item for item in snapshots if item.snapshot_kind == snapshot_kind
+            ]
         if dataset_stage is not None:
-            snapshots = [item for item in snapshots if item.dataset_stage == dataset_stage]
+            snapshots = [
+                item for item in snapshots if item.dataset_stage == dataset_stage
+            ]
         return snapshots

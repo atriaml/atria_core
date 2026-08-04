@@ -1,18 +1,17 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import pickle
 from collections.abc import Callable, Sized
-from dataclasses import replace
+from dataclasses import asdict, is_dataclass, replace
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from atria_core.datasets._cached_dataset import CachedDataset
 from atria_core.datasets._common import FileStorageType
-from atria_core.datasets._constants import (
-    _DEFAULT_ATRIA_DATASETS_STORAGE_SUBDIR,
-)
-from atria_core.datasets._dataset import _default_data_dir, _validate_data_dir
+from atria_core.datasets._constants import _DEFAULT_ATRIA_DATASETS_STORAGE_SUBDIR
+from atria_core.datasets._dataset import _validate_data_dir
 from atria_core.datasets._snapshot import (
     PROCESSED_DATASET_STAGE,
     RAW_DATASET_STAGE,
@@ -21,6 +20,8 @@ from atria_core.datasets._snapshot import (
 from atria_core.datasets._snapshot_store import DatasetSnapshotStore
 from atria_core.datasets._split_iterators import Compose
 from atria_core.logger import get_logger
+from atria_core.transforms import BaseTransform
+from atria_core.transforms._base import _config_value
 from atria_core.transforms.functional import image as image_functional
 from atria_core.types import (
     BaseDataInstance,
@@ -38,33 +39,33 @@ logger = get_logger(__name__)
 
 
 def transform_hash(transform: Callable[[Any], Any] | None) -> str | None:
-    """Storage layer doesn't know or care what a transform does -- it only
-    needs a stable identity to fold into the cache path. Every transform
-    reaching this point is already required to be picklable (workers
-    receive them via Pool/Ray), so hashing the pickled bytes directly
-    gives a deterministic identity for any transform, class instance or
-    plain function, with no per-type special-casing."""
+    """Return a stable identity for a transform or composed pipeline."""
     if transform is None:
         return None
+    if isinstance(transform, BaseTransform):
+        return transform.hash
+    if isinstance(transform, Compose):
+        components = [
+            item.dump()
+            if isinstance(item, BaseTransform)
+            else {"pickle_hash": hashlib.sha256(pickle.dumps(item)).hexdigest()}
+            for item in transform.transforms
+        ]
+        encoded = json.dumps(components, sort_keys=True, separators=(",", ":")).encode()
+        return hashlib.sha256(encoded).hexdigest()[:8]
     return hashlib.md5(pickle.dumps(transform)).hexdigest()[:8]
 
 
-class PreprocessTransform:
+class PreprocessTransform(BaseTransform):
     """Flag-driven output transform applied per-sample before writing to
     storage. materialize_content=True makes to_dict() embed content as
     bytes instead of requiring a file path -- needed for msgpack/tar-shard
     storage, which bundles many small binary blobs into shard files rather
     than reading/writing them one file at a time."""
 
-    def __init__(
-        self,
-        materialize_content: bool = True,
-        resize_images: bool = False,
-        image_max_size: int | tuple[int, int] | None = None,
-    ) -> None:
-        self._materialize_content = materialize_content
-        self._resize_images = resize_images
-        self._image_max_size = image_max_size
+    materialize_content: bool = True
+    resize_images: bool = False
+    image_max_size: int | tuple[int, int] | None = None
 
     def __call__(self, sample: BaseDataInstance) -> BaseDataInstance:
         if isinstance(sample, ImageInstance):
@@ -76,22 +77,41 @@ class PreprocessTransform:
         return sample
 
     def _process_visual(self, visual: Image | PdfPage) -> Image | PdfPage:
-        if self._materialize_content:
+        if self.materialize_content:
             visual = visual.load()
-        if self._resize_images and visual.content is not None:
+        if self.resize_images and visual.content is not None:
             resized = self._resize(Image.from_source(visual.content))
             visual = replace(visual, content=resized.require_content())
         return visual
 
     def _resize(self, image: Image) -> Image:
-        assert self._image_max_size is not None
-        if isinstance(self._image_max_size, tuple):
+        assert self.image_max_size is not None
+        if isinstance(self.image_max_size, tuple):
             return image_functional.resize(
-                image, width=self._image_max_size[0], height=self._image_max_size[1]
+                image, width=self.image_max_size[0], height=self.image_max_size[1]
             )
         return image_functional.resize_with_aspect_ratio(
-            image, max_size=self._image_max_size
+            image, max_size=self.image_max_size
         )
+
+
+def transform_configs(
+    transform: Callable[[Any], Any] | None,
+) -> list[dict[str, Any]]:
+    """Return snapshot metadata for configurable transforms in a pipeline."""
+    if transform is None:
+        return []
+    transforms = transform.transforms if isinstance(transform, Compose) else [transform]
+    return [
+        item.dump()
+        if isinstance(item, BaseTransform)
+        else {
+            "type": f"{type(item).__module__}.{type(item).__qualname__}",
+            "params": _config_value(asdict(cast(Any, item))),
+        }
+        for item in transforms
+        if not isinstance(item, type) and is_dataclass(item)
+    ]
 
 
 def _infer_data_model(dataset: Dataset[Any, Any]) -> type[Any]:
@@ -198,9 +218,7 @@ class Cacher:
             Compose(materialize, transform) if transform is not None else materialize
         )
 
-        resolved_data_dir = _validate_data_dir(
-            data_dir or _default_data_dir(type(dataset).__name__)
-        )
+        resolved_data_dir = _validate_data_dir(data_dir or dataset.data_dir)
         unique_path = self._compute_cache_path(
             dataset, resolved_data_dir, write_transform
         )
@@ -254,6 +272,7 @@ class Cacher:
             if transform is None
             else PROCESSED_DATASET_STAGE,
             splits=_stored_split_counts(storage_manager),
+            transforms=transform_configs(write_transform),
         )
         return CachedDataset(unique_path)
 

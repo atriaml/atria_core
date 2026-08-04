@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from atria_core.types import BoundingBoxMode
 from atria_core.types._generic._elements import ElementArray, OCRLevel
 
 
@@ -27,6 +28,7 @@ def _hierarchy() -> ElementArray:
                 [0.35, 0.1, 0.6, 0.2],
             ]
         ),
+        normalized=True,
         texts=np.array(["", "", "hello", "world"], dtype=object),
     )
 
@@ -38,6 +40,8 @@ def test_from_words_flat() -> None:
     assert list(ea.levels) == [OCRLevel.word.value, OCRLevel.word.value]
     assert list(ea.parent_ids) == [-1, -1]
     assert ea.joined_text() == "hello world"
+    assert ea.bbox_mode == BoundingBoxMode.XYXY
+    assert ea.normalized is False
 
 
 def test_at_filters_by_level() -> None:
@@ -82,8 +86,19 @@ def test_rejects_length_mismatch() -> None:
 def test_rejects_unnormalized_bbox() -> None:
     with pytest.raises(ValueError, match="normalized"):
         ElementArray(
-            bboxes=np.array([[0.0, 0.0, 2.0, 2.0]]), texts=np.array(["x"], dtype=object)
+            bboxes=np.array([[0.0, 0.0, 2.0, 2.0]]),
+            normalized=True,
+            texts=np.array(["x"], dtype=object),
         )
+
+
+def test_accepts_absolute_bbox_by_default() -> None:
+    elements = ElementArray(
+        bboxes=np.array([[0.0, 0.0, 200.0, 100.0]]),
+        texts=np.array(["x"], dtype=object),
+    )
+
+    assert elements.normalized is False
 
 
 def test_rejects_non_ndarray_texts() -> None:

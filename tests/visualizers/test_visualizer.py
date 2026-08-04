@@ -81,7 +81,9 @@ def test_visualize_document_instance_pdf_page_draws_on_pdf_directly(
     tmp_path: Path, sample_pdf_path: Path
 ) -> None:
     elements = ElementArray.from_words(
-        ["hello", "world"], [[0.1, 0.1, 0.3, 0.2], [0.35, 0.1, 0.6, 0.2]]
+        ["hello", "world"],
+        [[0.1, 0.1, 0.3, 0.2], [0.35, 0.1, 0.6, 0.2]],
+        normalized=True,
     )
     instance = SinglePageDocumentInstance.from_pdf(
         sample_pdf_path, page_id=0, content=DocumentContent(elements=elements)

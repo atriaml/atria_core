@@ -17,19 +17,16 @@ from atria_core.datasets._split_iterators import (
     IterableSplitIterator,
 )
 from atria_core.logger import get_logger
-from atria_core.registry import ConfigurableModule
+from atria_core.registry import ConfigurableModule, Registry
 from atria_core.registry._module_config import ModuleConfig
-from atria_core.types import (
-    DatasetMetadata,
-    DatasetSplitType,
-)
+from atria_core.types import DatasetMetadata, DatasetSplitType
 from atria_core.types._data_instance._base import BaseDataInstance
 
 logger = get_logger(__name__)
 
 
-T_DatasetConfig = TypeVar("T_DatasetConfig", bound=ModuleConfig)
 T_BaseDataInstance = TypeVar("T_BaseDataInstance", bound=BaseDataInstance)
+T_DatasetConfig = TypeVar("T_DatasetConfig", bound="DatasetConfig")
 
 
 def _validate_data_dir(data_dir: str | Path) -> str:
@@ -46,13 +43,43 @@ def _validate_data_dir(data_dir: str | Path) -> str:
     return str(data_dir)
 
 
-def _default_data_dir(class_name: str) -> str:
-    return str(_DEFAULT_ATRIA_DATASETS_CACHE_DIR / class_name)
-
-
 @pydantic_dataclass(frozen=True)
 class DatasetConfig(ModuleConfig):
-    pass
+    max_train_samples: int | None = None
+    max_test_samples: int | None = None
+    max_validation_samples: int | None = None
+
+    @classmethod
+    def from_registry(
+        cls: type[T_DatasetConfig],
+        dataset_name: str,
+        **kwargs: Any,
+    ) -> T_DatasetConfig:
+        matching_configs = {
+            config_cls
+            for _, group in Registry.groups()
+            for registered_name, config_cls in group.items()
+            if registered_name == dataset_name and issubclass(config_cls, cls)
+        }
+        if not matching_configs:
+            raise KeyError(f"No dataset config is registered as '{dataset_name}'.")
+        if len(matching_configs) > 1:
+            raise ValueError(
+                f"Multiple dataset configs are registered as '{dataset_name}'."
+            )
+        config_cls = matching_configs.pop()
+        assert issubclass(config_cls, cls), (
+            f"Registered dataset config `{dataset_name}` must inherit "
+            f"{cls.__name__}, got {config_cls.__name__}."
+        )
+
+        # check if data_dir is None
+        data_dir = kwargs.pop("data_dir", None)
+
+        if data_dir is None:
+            data_dir = _DEFAULT_ATRIA_DATASETS_CACHE_DIR / dataset_name
+        kwargs.setdefault("data_dir", data_dir)
+        return config_cls(**kwargs)
 
 
 class Dataset(
@@ -74,7 +101,9 @@ class Dataset(
     ) -> None:
         super().__init__(config)
         data_dir = _validate_data_dir(
-            data_dir or _default_data_dir(type(self).__name__)
+            Path(data_dir)
+            if data_dir is not None
+            else _DEFAULT_ATRIA_DATASETS_CACHE_DIR / self.__class__.__name__
         )
         self._data_dir = Path(data_dir)
         self._build_split_iterators(data_dir, split=split, access_token=access_token)
@@ -155,12 +184,7 @@ class Dataset(
         splits = ", ".join(split.value for split in self._split_iterators)
         if not splits:
             splits = "-"
-        return (
-            f"{type(self).__name__}("
-            f"config={self.config!r}, "
-            f"splits=[{splits}]"
-            f")"
-        )
+        return f"{type(self).__name__}(config={self.config!r}, splits=[{splits}])"
 
     @property
     def split_iterators(
@@ -170,7 +194,7 @@ class Dataset(
         IndexableSplitIterator[T_BaseDataInstance]
         | IterableSplitIterator[T_BaseDataInstance],
     ]:
-        return self._split_iterators
+        return {split: self.split_iterator(split) for split in self._split_iterators}
 
     def split_exists(self, split: DatasetSplitType) -> bool:
         return split in self._split_iterators
@@ -183,7 +207,23 @@ class Dataset(
     ):
         if split not in self._split_iterators:
             raise ValueError(f"Split '{split}' does not exist for this dataset.")
-        return self._split_iterators[split]
+        split_iterator = self._split_iterators[split]
+        max_samples = {
+            DatasetSplitType.train: self.config.max_train_samples,
+            DatasetSplitType.test: self.config.max_test_samples,
+            DatasetSplitType.validation: self.config.max_validation_samples,
+        }[split]
+        if max_samples is None:
+            return split_iterator
+        if max_samples < 0:
+            raise ValueError(
+                f"Maximum sample count for split '{split}' cannot be negative."
+            )
+        if not isinstance(split_iterator, IndexableSplitIterator):
+            raise TypeError(
+                f"Maximum sample count for split '{split}' requires an indexable split iterator."
+            )
+        return split_iterator.limit(max_samples)
 
     def _persist_snapshot(self) -> None:
         DatasetSnapshotStore.write_source_snapshot(self, self.data_dir)
@@ -219,9 +259,7 @@ class Dataset(
         """Default: run the generic Downloader against _download_urls().
         Subclasses with nonstandard fetch logic (e.g. HuggingfaceDataset)
         override this outright -- no override-detection, just polymorphism."""
-        from atria_core.datasets._download._download_manager import (
-            AtriaDownloadManager,
-        )
+        from atria_core.datasets._download._download_manager import AtriaDownloadManager
 
         if self.__requires_access_token__ and access_token is None:
             logger.warning(

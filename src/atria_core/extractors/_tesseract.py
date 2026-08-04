@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import numpy as np
 import pytesseract
@@ -105,6 +105,7 @@ class TesseractExtractor(ContentExtractor):
             parent_ids=np.array(parent_ids),
             levels=np.array(levels),
             bboxes=np.asarray(bboxes, dtype=np.float64),
+            normalized=True,
             texts=np.asarray(texts, dtype=object),
             confs=np.asarray(confs, dtype=np.float64),
         )
@@ -120,11 +121,14 @@ class TesseractExtractor(ContentExtractor):
         return " ".join(parts)
 
     def _get_tesseract_data(self, image: np.ndarray) -> dict[str, Any]:
-        return pytesseract.image_to_data(
-            image,
-            lang=self.config.lang,
-            config=self._build_config_string(),
-            output_type=pytesseract.Output.DICT,
+        return cast(
+            dict[str, Any],
+            pytesseract.image_to_data(
+                image,
+                lang=self.config.lang,
+                config=self._build_config_string(),
+                output_type=pytesseract.Output.DICT,
+            ),
         )
 
     def _preprocess_image(self, image: PILImage) -> np.ndarray:

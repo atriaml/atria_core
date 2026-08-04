@@ -6,6 +6,7 @@ from dataclasses import dataclass, replace
 from typing import Any
 
 import numpy as np
+
 from atria_core.types._base_data_model import BaseDataModel
 from atria_core.types._generic._annotated_object import AnnotatedObject
 from atria_core.types._generic._bounding_box import BoundingBoxMode
@@ -244,7 +245,7 @@ class TranscriptionAnnotation(BaseDataModel):
 class OCRAnnotation(ElementArray):
     """Ground-truth OCR/text-layer hierarchy for a document instance --
     same structure-of-arrays shape as ElementArray (page/block/line/word,
-    with parent links, normalized bboxes, and optional polygons), just
+    with parent links, bbox coordinate metadata, and optional polygons), just
     tagged as an `ocr` annotation so it round-trips through
     BaseDataInstance's annotation dict. A single instance can carry the
     whole hierarchy at once (sliceable via `.at(level)`), which is what

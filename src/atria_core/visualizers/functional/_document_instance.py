@@ -8,6 +8,7 @@ import pymupdf
 from atria_core.logger import get_logger
 from atria_core.types import (
     AnnotationType,
+    BoundingBoxMode,
     DocumentContent,
     DocumentInstance,
     MultiPageDocumentInstance,
@@ -31,11 +32,9 @@ def _words_to_draw(
     *,
     draw_segment_bboxes: bool,
     draw_word_labels: bool,
-) -> tuple[np.ndarray, list[str] | None, list[str] | None] | None:
-    """Word-level bboxes (still normalized [0,1]), texts, and optional
-    entity-labeling labels -- shared prep for both the image and PDF
-    drawing targets, which each scale these to their own coordinate space."""
-    ocr_ann: OCRAnnotation = instance.get_annotation_by_type(AnnotationType.ocr)
+) -> tuple[np.ndarray, list[str] | None, list[str] | None, bool] | None:
+    """Word-level XYXY bboxes, texts, labels, and normalization metadata."""
+    ocr_ann: OCRAnnotation | None = instance.get_annotation_by_type(AnnotationType.ocr)
     elements = (
         content.elements
         if content is not None and content.elements is not None
@@ -53,15 +52,18 @@ def _words_to_draw(
             if draw_segment_bboxes
             else words.bboxes
         )
+        if elements.bbox_mode == BoundingBoxMode.XYWH:
+            bboxes = bboxes.copy()
+            bboxes[:, 2:] += bboxes[:, :2]
         texts = words.texts.tolist() if words.texts is not None else None
 
         labels = None
         if draw_word_labels:
             ann = instance.get_annotation_by_type(AnnotationType.entity_labeling)
             if ann is not None:
-                labels = ann.label_names
+                labels = ann.word_label_names
 
-        return bboxes, texts, labels
+        return bboxes, texts, labels, elements.normalized
 
 
 def _visualize_document_image(
@@ -80,8 +82,8 @@ def _visualize_document_image(
         draw_word_labels=draw_word_labels,
     )
     if prepared is not None:
-        bboxes, texts, labels = prepared
-        if np.all((bboxes > 0.0) & (bboxes < 1.0)):
+        bboxes, texts, labels, normalized = prepared
+        if normalized:
             scale = np.array(
                 [image.width, image.height, image.width, image.height],
                 dtype=np.float64,
@@ -125,11 +127,13 @@ def _visualize_document_pdf_page(
         draw_word_labels=draw_word_labels,
     )
     if prepared is not None:
-        bboxes, texts, labels = prepared
-        scale = np.array(
-            [page.rect.width, page.rect.height, page.rect.width, page.rect.height]
-        )
-        PdfDrawer().draw(page, bboxes * scale, texts=texts, labels=labels, style=style)
+        bboxes, texts, labels, normalized = prepared
+        if normalized:
+            scale = np.array(
+                [page.rect.width, page.rect.height, page.rect.width, page.rect.height]
+            )
+            bboxes = bboxes * scale
+        PdfDrawer().draw(page, bboxes, texts=texts, labels=labels, style=style)
 
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     path = Path(output_dir) / f"{output_name(instance)}.pdf"

@@ -13,8 +13,8 @@ class BboxDrawer(Protocol[T]):
     """Draws bboxes (+ optional per-box text/label) onto a target, using a
     shared DrawStyle for appearance. `bboxes` are always already in the
     target's native coordinate space (pixels for images, points for PDF
-    pages) -- callers scale from ElementArray's normalized [0,1] boxes
-    before calling draw()."""
+    pages) -- callers use ElementArray's coordinate metadata to convert
+    boxes before calling draw()."""
 
     def draw(
         self,

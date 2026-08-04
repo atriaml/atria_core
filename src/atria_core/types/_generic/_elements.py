@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import enum
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 import numpy as np
 
 from atria_core.types._base_data_model import BaseDataModel
+from atria_core.types._generic._bounding_box import BoundingBoxMode
 
 _ROOT_PARENT = -1
 
@@ -29,14 +30,17 @@ class ElementArray(BaseDataModel):
     encoding the tree -- no separate segment/line-box field to store or let
     drift out of sync; a word's line box is `parent_bbox()`.
 
-    `bboxes` is always normalized to [0, 1]. A given array field is present
-    for every element or None for the whole array -- no per-element holes.
+    `bbox_mode` and `normalized` describe every box in the array. A given
+    array field is present for every element or None for the whole array --
+    no per-element holes.
     """
 
     ids: np.ndarray | None = None
     parent_ids: np.ndarray | None = None
     levels: np.ndarray | None = None
     bboxes: np.ndarray | None = None
+    bbox_mode: BoundingBoxMode = BoundingBoxMode.XYXY
+    normalized: bool = False
     texts: np.ndarray | None = None  # dtype=object, elements are str
     confs: np.ndarray | None = None
     angles: np.ndarray | None = None
@@ -67,7 +71,7 @@ class ElementArray(BaseDataModel):
                     f"{name} has length {len(arr)}, expected {n} (len(texts))"
                 )
 
-        if self.bboxes is not None and self.bboxes.size:
+        if self.normalized and self.bboxes is not None and self.bboxes.size:
             if self.bboxes.max() > 1.0 or self.bboxes.min() < 0.0:
                 raise ValueError(
                     "bboxes must be normalized to [0, 1]: "
@@ -94,6 +98,9 @@ class ElementArray(BaseDataModel):
         texts: list[str],
         bboxes: Any,
         segmentations: list[np.ndarray | None] | None = None,
+        *,
+        bbox_mode: BoundingBoxMode = BoundingBoxMode.XYXY,
+        normalized: bool = False,
     ) -> ElementArray:
         """The simple, flat, no-hierarchy path: every element is a word with
         no parent. Use this when you already have OCR-shaped (text, bbox)
@@ -120,6 +127,8 @@ class ElementArray(BaseDataModel):
             parent_ids=np.full(n, _ROOT_PARENT),
             levels=np.full(n, OCRLevel.word.value),
             bboxes=bboxes_arr,
+            bbox_mode=bbox_mode,
+            normalized=normalized,
             texts=np.asarray(texts, dtype=object),
             segmentations=segmentations_arr,
             segmentation_lengths=segmentation_lengths_arr,
@@ -135,7 +144,8 @@ class ElementArray(BaseDataModel):
         if self.levels is None:
             return self
         mask = self.levels == level.value
-        return ElementArray(
+        return replace(
+            self,
             ids=self.ids[mask] if self.ids is not None else None,
             parent_ids=self.parent_ids[mask] if self.parent_ids is not None else None,
             levels=self.levels[mask],
@@ -149,6 +159,23 @@ class ElementArray(BaseDataModel):
             segmentation_lengths=self.segmentation_lengths[mask]
             if self.segmentation_lengths is not None
             else None,
+        )
+
+    def box_batches(self) -> dict[str, np.ndarray | None]:
+        return {"bboxes": self.bboxes}
+
+    def with_box_batches(
+        self,
+        batches: dict[str, np.ndarray],
+        *,
+        normalized: bool,
+        mode: BoundingBoxMode,
+    ) -> ElementArray:
+        return replace(
+            self,
+            bboxes=batches.get("bboxes", self.bboxes),
+            normalized=normalized,
+            bbox_mode=mode,
         )
 
     def parent_bbox(self) -> np.ndarray:
@@ -211,6 +238,8 @@ class ElementArray(BaseDataModel):
             else None,
             "levels": self.levels.tolist() if self.levels is not None else None,
             "bboxes": self.bboxes.tolist() if self.bboxes is not None else None,
+            "bbox_mode": self.bbox_mode.value,
+            "normalized": self.normalized,
             "texts": self.texts.tolist() if self.texts is not None else None,
             "confs": self.confs.tolist() if self.confs is not None else None,
             "angles": self.angles.tolist() if self.angles is not None else None,
@@ -238,6 +267,12 @@ class ElementArray(BaseDataModel):
             parent_ids=_int_array("parent_ids"),
             levels=_int_array("levels"),
             bboxes=_float_array("bboxes"),
+            bbox_mode=BoundingBoxMode(
+                data.get("bbox_mode", BoundingBoxMode.XYXY.value)
+            ),
+            # ElementArray snapshots written before this metadata existed
+            # always used normalized coordinates.
+            normalized=data.get("normalized", True),
             texts=np.asarray(texts, dtype=object) if texts is not None else None,
             confs=_float_array("confs"),
             angles=_float_array("angles"),

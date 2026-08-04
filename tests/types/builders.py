@@ -35,7 +35,7 @@ def make_element_array(
     bboxes = (
         bboxes if bboxes is not None else np.stack([make_bounding_box()] * len(texts))
     )
-    return ElementArray.from_words(texts, bboxes)
+    return ElementArray.from_words(texts, bboxes, normalized=True)
 
 
 def make_document_content(**overrides: Any) -> DocumentContent:

@@ -99,6 +99,7 @@ class PdfNativeExtractor:
             parent_ids=np.array(parent_ids),
             levels=np.array(levels),
             bboxes=np.asarray(bboxes, dtype=np.float64),
+            normalized=True,
             texts=np.asarray(texts, dtype=object),
             confs=np.asarray(confs, dtype=np.float64),
         )

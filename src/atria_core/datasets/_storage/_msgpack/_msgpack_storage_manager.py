@@ -60,8 +60,8 @@ class MsgpackStorageManager(StorageManager):
             f"({'parallel' if self.num_processes > 1 else 'single'} mode)"
         )
 
-        dataset = split_iterator._base_iterator
-        transform = split_iterator._transform
+        dataset = split_iterator.base_iterator
+        transform = split_iterator.transform
 
         writer: (
             RayParallelSplitWriter

@@ -3,6 +3,7 @@ from __future__ import annotations
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import urlparse
 
 import tqdm
 
@@ -18,6 +19,7 @@ logger = get_logger(__name__)
 class UrlSpec:
     url: str
     url_ext: str
+    rel_output_file_path: str | None = None
 
 
 class AtriaDownloadManager(RepresentationMixin):
@@ -43,7 +45,8 @@ class AtriaDownloadManager(RepresentationMixin):
                         url=url_spec.url.format(access_token=access_token)
                         if access_token is not None and "{access_token}" in url_spec.url
                         else url_spec.url,
-                        rel_output_file_path=Path(url_spec.url).name,
+                        rel_output_file_path=url_spec.rel_output_file_path
+                        or Path(urlparse(url_spec.url).path).name,
                         data_dir=self.data_dir,
                         download_dir=self.download_dir,
                         url_ext=url_spec.url_ext,

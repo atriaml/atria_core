@@ -65,6 +65,18 @@ def test_with_transform_chains_multiple_times() -> None:
     assert list(chained) == [20, 30, 40]
 
 
+def test_limit_returns_bounded_view_without_mutating_original() -> None:
+    iterator = IndexableSplitIterator(
+        base_iterator=[0, 1, 2, 3], transform=lambda value: value * 2
+    )
+
+    limited = iterator.limit(2)
+
+    assert list(limited) == [0, 2]
+    assert len(limited) == 2
+    assert len(iterator) == 4
+
+
 def test_compose_is_picklable() -> None:
     composed = Compose(str, len)
     restored = pickle.loads(pickle.dumps(composed))

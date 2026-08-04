@@ -52,7 +52,7 @@ def test_single_page_pdf_source_ocr_roundtrip(text_pdf_path: Path) -> None:
 
     assert extracted.content is not None
     assert "HELLO" in extracted.content.text.upper()
-    # ElementArray.bboxes is always normalized to [0, 1] by design
+    # Native PDF extraction emits normalized ElementArray bboxes.
     words = extracted.content.elements.at(OCRLevel.word)
     assert len(words) > 0
     assert (words.bboxes >= 0).all()

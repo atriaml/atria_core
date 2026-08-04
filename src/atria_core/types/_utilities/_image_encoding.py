@@ -1,7 +1,7 @@
 import base64
 import io
 
-from PIL import Image
+from PIL import Image, ImageOps
 from PIL.Image import Image as PILImage
 
 
@@ -26,10 +26,10 @@ def _image_to_base64(image: PILImage) -> str:
 
 
 def _bytes_to_image(encoded_image: bytes) -> "PILImage":
-    return Image.open(io.BytesIO(encoded_image))
+    return ImageOps.exif_transpose(Image.open(io.BytesIO(encoded_image)))
 
 
 def _base64_to_image(encoded_image: str) -> "PILImage":
     import io
 
-    return Image.open(io.BytesIO(base64.b64decode(encoded_image)))
+    return ImageOps.exif_transpose(Image.open(io.BytesIO(base64.b64decode(encoded_image))))

@@ -6,14 +6,13 @@ from atria_core.transforms import functional as F
 from atria_core.types import (
     AnnotatedObject,
     BoundingBoxMode,
+    ElementArray,
     LayoutAnalysisAnnotation,
     ObjectDetectionAnnotation,
 )
 
-# F.bbox applies to any BoxBatchOwner -- currently ObjectDetectionAnnotation
-# (and its subclass LayoutAnalysisAnnotation). DocumentContent/ElementArray
-# bboxes are always normalized by design (see atria_core.types._generic._elements)
-# and don't implement this protocol.
+# F.bbox applies to any BoxBatchOwner, including object-detection annotations
+# and ElementArray.
 
 
 def _annotation(bbox=(10, 10, 50, 60)) -> ObjectDetectionAnnotation:
@@ -84,3 +83,15 @@ def test_normalize_preserves_layout_analysis_annotation_subclass() -> None:
     )
     result = F.bbox.normalize(ann, 100, 100)
     assert isinstance(result, LayoutAnalysisAnnotation)
+
+
+def test_element_array_supports_bbox_transforms() -> None:
+    elements = ElementArray.from_words(["x"], [[10, 20, 50, 60]])
+
+    normalized = F.bbox.normalize(elements, 100, 100)
+    switched = F.bbox.switch_mode(normalized)
+
+    assert normalized.normalized is True
+    assert np.array_equal(normalized.bboxes, [[0.1, 0.2, 0.5, 0.6]])
+    assert switched.bbox_mode == BoundingBoxMode.XYWH
+    assert np.allclose(switched.bboxes, [[0.1, 0.2, 0.4, 0.4]])
