@@ -35,3 +35,20 @@ def test_to_dict_from_dict_roundtrip_without_span() -> None:
     qa = QAPair(id=2, question_text="q", answer_text="a")
     restored = QAPair.from_dict(qa.to_dict())
     assert restored == qa
+
+
+def test_alternative_answers_defaults_to_empty() -> None:
+    qa = QAPair(id=3, question_text="q", answer_text="a")
+    assert qa.alternative_answers == []
+
+
+def test_to_dict_from_dict_roundtrip_with_alternative_answers() -> None:
+    qa = QAPair(
+        id=4,
+        question_text="q",
+        answer_text="a",
+        alternative_answers=["a", "alternative a", "another a"],
+    )
+    restored = QAPair.from_dict(qa.to_dict())
+    assert restored == qa
+    assert restored.alternative_answers == ["a", "alternative a", "another a"]
