@@ -10,8 +10,8 @@ from pydantic.dataclasses import dataclass as pydantic_dataclass
 
 from atria_core.registry import ConfigurableModule, ModuleConfig, Registry
 
-_segmentors = Registry.group("test_module_config.segmentors")
-_optimizers = Registry.group("test_module_config.optimizers")
+_segmentors: Registry[type[QuickshiftConfig]] = Registry("test_module_config.segmentors")
+_optimizers: Registry[type[OptimizerConfig]] = Registry("test_module_config.optimizers")
 
 
 @_segmentors.register("quickshift")

@@ -16,16 +16,14 @@ from atria_core.datasets import (
     DatasetSnapshot,
     DatasetSnapshotStore,
     FileStorageType,
+    datasets,
 )
 from atria_core.datasets._constants import _DEFAULT_ATRIA_DATASETS_CACHE_DIR
-from atria_core.registry import Registry
 from atria_core.transforms import BaseTransform
 from atria_core.types import DatasetMetadata, DatasetSplitType, Image, ImageInstance
 
-_synthetic = Registry.group("test_dataset_end_to_end.synthetic")
 
-
-@_synthetic.register("synthetic")
+@datasets.register("synthetic")
 @pydantic_dataclass(frozen=True)
 class SyntheticConfig(DatasetConfig):
     def build_module(self, **kwargs: Any) -> SyntheticDataset:
@@ -219,7 +217,7 @@ def test_cached_snapshot_stores_dataclass_transform_params(tmp_path: Path) -> No
         {
             "type": "atria_core.datasets._cacher.PreprocessTransform",
             "params": {
-                "materialize_content": True,
+                "materialize_content": False,
                 "resize_images": False,
                 "image_max_size": None,
             },

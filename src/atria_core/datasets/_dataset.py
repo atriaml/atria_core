@@ -17,7 +17,7 @@ from atria_core.datasets._split_iterators import (
     IterableSplitIterator,
 )
 from atria_core.logger import get_logger
-from atria_core.registry import ConfigurableModule, Registry
+from atria_core.registry import ConfigurableModule
 from atria_core.registry._module_config import ModuleConfig
 from atria_core.types import DatasetMetadata, DatasetSplitType
 from atria_core.types._data_instance._base import BaseDataInstance
@@ -45,6 +45,7 @@ def _validate_data_dir(data_dir: str | Path) -> str:
 
 @pydantic_dataclass(frozen=True)
 class DatasetConfig(ModuleConfig):
+    dataset_dir_name: str | None = None
     max_train_samples: int | None = None
     max_test_samples: int | None = None
     max_validation_samples: int | None = None
@@ -55,10 +56,11 @@ class DatasetConfig(ModuleConfig):
         dataset_name: str,
         **kwargs: Any,
     ) -> T_DatasetConfig:
+        from atria_core.datasets._registry import datasets
+
         matching_configs = {
             config_cls
-            for _, group in Registry.groups()
-            for registered_name, config_cls in group.items()
+            for registered_name, config_cls in datasets.items()
             if registered_name == dataset_name and issubclass(config_cls, cls)
         }
         if not matching_configs:
@@ -73,12 +75,7 @@ class DatasetConfig(ModuleConfig):
             f"{cls.__name__}, got {config_cls.__name__}."
         )
 
-        # check if data_dir is None
-        data_dir = kwargs.pop("data_dir", None)
-
-        if data_dir is None:
-            data_dir = _DEFAULT_ATRIA_DATASETS_CACHE_DIR / dataset_name
-        kwargs.setdefault("data_dir", data_dir)
+        kwargs.setdefault("dataset_dir_name", dataset_name)
         return config_cls(**kwargs)
 
 
@@ -103,7 +100,8 @@ class Dataset(
         data_dir = _validate_data_dir(
             Path(data_dir)
             if data_dir is not None
-            else _DEFAULT_ATRIA_DATASETS_CACHE_DIR / self.__class__.__name__
+            else _DEFAULT_ATRIA_DATASETS_CACHE_DIR
+            / (config.dataset_dir_name or self.__class__.__name__)
         )
         self._data_dir = Path(data_dir)
         self._build_split_iterators(data_dir, split=split, access_token=access_token)
