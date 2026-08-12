@@ -102,6 +102,14 @@ class IterableSplitIterator(Iterable[T_Output], Generic[T_Output]):
     def __iter__(self) -> Iterator[T_Output]:
         yield from map(self._transform, self._base_iterator)
 
+    @property
+    def base_iterator(self) -> Iterable[Any]:
+        return self._base_iterator
+
+    @property
+    def transform(self) -> Callable[[Any], T_Output]:
+        return self._transform
+
     def with_transform(
         self, transform: Callable[[T_Output], T_NewOutput]
     ) -> IterableSplitIterator[T_NewOutput]:

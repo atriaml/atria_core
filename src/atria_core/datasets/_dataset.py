@@ -78,6 +78,11 @@ class DatasetConfig(ModuleConfig):
         kwargs.setdefault("dataset_dir_name", dataset_name)
         return config_cls(**kwargs)
 
+    def build_module(self, **kwargs: Any) -> Dataset:
+        raise NotImplementedError(
+            f"{type(self).__name__} must implement build_module() -- every config builds something."
+        )
+
 
 class Dataset(
     ConfigurableModule[T_DatasetConfig],
