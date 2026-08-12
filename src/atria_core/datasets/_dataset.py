@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterable, Sequence
 from pathlib import Path
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, Self, TypeVar
 
 from pydantic.dataclasses import dataclass as pydantic_dataclass
 
@@ -52,10 +52,10 @@ class DatasetConfig(ModuleConfig):
 
     @classmethod
     def from_registry(
-        cls: type[T_DatasetConfig],
+        cls,
         dataset_name: str,
         **kwargs: Any,
-    ) -> T_DatasetConfig:
+    ) -> Self:
         from atria_core.datasets._registry import datasets
 
         matching_configs = {
@@ -235,9 +235,7 @@ class Dataset(
         pass
 
     @abstractmethod
-    def _build_input_transform(
-        self, **kwargs: Any
-    ) -> Callable[[Any], T_BaseDataInstance]:
+    def _build_input_transform(self) -> Callable[[Any], T_BaseDataInstance]:
         pass
 
     @abstractmethod

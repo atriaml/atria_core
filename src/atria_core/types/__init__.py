@@ -25,6 +25,7 @@ if TYPE_CHECKING:
         SinglePageDocumentInstance as SinglePageDocumentInstance,
     )
     from ._data_instance._image_instance import ImageInstance as ImageInstance
+    from ._data_instance._text_instance import TextInstance as TextInstance
     from ._datasets import (
         DatasetLabels as DatasetLabels,
         DatasetMetadata as DatasetMetadata,
@@ -75,6 +76,7 @@ __getattr__, __dir__, __all__ = lazy.attach(
             "SinglePageDocumentInstance",
         ],
         "_data_instance._image_instance": ["ImageInstance"],
+        "_data_instance._text_instance": ["TextInstance"],
         "_datasets": [
             "DatasetLabels",
             "DatasetMetadata",
