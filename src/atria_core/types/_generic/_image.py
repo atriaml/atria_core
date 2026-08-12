@@ -13,6 +13,7 @@ from atria_core.types._base_data_model import BaseDataModel
 class Image(BaseDataModel):
     file_path: str | None = None
     content: PILImage.Image | None = None
+    crop_box: tuple[int, int, int, int] | None = None
 
     @classmethod
     def from_source(cls, source: str | Path | PILImage.Image) -> Image:
@@ -32,7 +33,10 @@ class Image(BaseDataModel):
 
         assert self.file_path is not None, "Image has neither content nor file_path"
         loader = ResourceLoader.for_uri(self.file_path)
-        return replace(self, content=_bytes_to_image(loader.load_bytes()))
+        content = _bytes_to_image(loader.load_bytes())
+        if self.crop_box is not None:
+            content = content.crop(self.crop_box)
+        return replace(self, content=content)
 
     def require_content(self) -> PILImage.Image:
         """Returns the loaded PIL image, or raises if load() hasn't been called."""
@@ -71,22 +75,32 @@ class Image(BaseDataModel):
         if self.content is not None:
             from atria_core.types._utilities._image_encoding import _image_to_bytes
 
-            return {
+            data: dict[str, Any] = {
                 "content_bytes": _image_to_bytes(self.content),
                 "file_path": self.file_path,
             }
+            if self.crop_box is not None:
+                data["crop_box"] = self.crop_box
+            return data
         if self.file_path is None:
             raise ValueError(
                 "Image must be file-backed or have loaded content before "
                 "to_dict() -- materialize in-memory content to a file first "
                 "or call load()."
             )
-        return {"file_path": self.file_path}
+        data = {"file_path": self.file_path}
+        if self.crop_box is not None:
+            data["crop_box"] = self.crop_box
+        return data
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Image:
+        crop_box = data.get("crop_box")
+        crop_box = tuple(crop_box) if crop_box is not None else None
         if "content_bytes" in data:
             from atria_core.types._utilities._image_encoding import _bytes_to_image
 
-            return cls(content=_bytes_to_image(data["content_bytes"]))
-        return cls(file_path=data["file_path"])
+            return cls(
+                content=_bytes_to_image(data["content_bytes"]), crop_box=crop_box
+            )
+        return cls(file_path=data["file_path"], crop_box=crop_box)

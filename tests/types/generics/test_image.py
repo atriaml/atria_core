@@ -40,6 +40,15 @@ def test_load_from_path_populates_content(sample_image_path: Path) -> None:
     assert image.size == (16, 12)
 
 
+def test_lazy_crop_survives_serialization(sample_image_path: Path) -> None:
+    image = Image(file_path=str(sample_image_path), crop_box=(2, 3, 12, 10))
+
+    restored = Image.from_dict(image.to_dict())
+
+    assert restored.crop_box == (2, 3, 12, 10)
+    assert restored.load().size == (10, 7)
+
+
 def test_load_is_idempotent_when_already_loaded(sample_image: PILImage.Image) -> None:
     image = Image.from_source(sample_image)
     loaded = image.load()
