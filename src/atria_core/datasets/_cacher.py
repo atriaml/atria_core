@@ -150,7 +150,7 @@ class Cacher:
         *,
         num_processes: int = 8,
         use_ray: bool = False,
-        store_artifacts: bool = True,
+        store_artifacts: bool = False,
         resize_images: bool = False,
         image_max_size: int | tuple[int, int] | None = None,
     ) -> None:
