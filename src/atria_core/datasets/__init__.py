@@ -9,7 +9,6 @@ if TYPE_CHECKING:
     from ._cacher import Cacher, PreprocessTransform
     from ._common import DatasetLoadingMode, FileStorageType
     from ._dataset import Dataset, DatasetConfig
-    from ._registry import dataset_configs
     from ._hf_dataset import HuggingfaceDataset, HuggingfaceDatasetConfig
     from ._split_iterators import (
         Compose,
@@ -32,7 +31,6 @@ __getattr__, __dir__, __all__ = lazy.attach(
             "Dataset",
             "DatasetConfig",
         ],
-        "_registry": ["dataset_configs"],
         "_hf_dataset": [
             "HuggingfaceDataset",
             "HuggingfaceDatasetConfig",

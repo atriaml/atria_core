@@ -59,7 +59,7 @@ class CachedDataset(
                 config_data = yaml.safe_load(f)
         config = ModuleConfig.from_dict(config_data)
 
-        super().__init__(config, data_dir=str(self._path))  # type: ignore[arg-type]
+        super().__init__(config=config, data_dir=str(self._path))  # type: ignore[arg-type]
 
     @property
     def data_dir(self) -> Path:

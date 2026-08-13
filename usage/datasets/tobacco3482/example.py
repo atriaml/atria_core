@@ -1,5 +1,5 @@
 """Example: Tobacco3482 document classification dataset, end to end --
-build config -> build_module() -> iterate live, then Cacher(...).cache(dataset)
+construct with a config -> iterate live, then Cacher(...).cache(dataset)
 -> iterate cached. `load_ocr=True` attaches real OCR content parsed from the
 dataset's own pre-computed hocr files.
 """
@@ -17,7 +17,6 @@ from pydantic.dataclasses import dataclass as pydantic_dataclass
 
 from atria_core.datasets import Cacher, Dataset, DatasetConfig, FileStorageType
 from atria_core.logger import get_logger
-from atria_core.registry import Registry
 from atria_core.types import (
     ClassificationAnnotation,
     DatasetLabels,
@@ -30,8 +29,6 @@ from atria_core.types import (
 )
 
 logger = get_logger(__name__)
-
-datasets = Registry.group("datasets")
 
 _CITATION = """\
 @article{Kumar2014StructuralSF,
@@ -127,13 +124,9 @@ def _parse_hocr(hocr_path: Path) -> DocumentContent:
     return DocumentContent(elements=elements)
 
 
-@datasets.register("tobacco3482")
 @pydantic_dataclass(frozen=True)
 class Tobacco3482Config(DatasetConfig):
     load_ocr: bool = False
-
-    def build_module(self, **kwargs: Any) -> Tobacco3482:
-        return Tobacco3482(self, **kwargs)
 
 
 class InputTransform:
@@ -175,6 +168,8 @@ class SplitIterator(Sequence[tuple[Path, Path, int]]):
 
 
 class Tobacco3482(Dataset[Tobacco3482Config, SinglePageDocumentInstance]):
+    __config__ = Tobacco3482Config
+
     def _download_urls(self) -> list[str]:
         return _DATA_URLS
 
@@ -196,11 +191,16 @@ class Tobacco3482(Dataset[Tobacco3482Config, SinglePageDocumentInstance]):
         return SplitIterator(data_dir=data_dir, split=split)
 
     def _build_input_transform(self) -> Callable[[Any], SinglePageDocumentInstance]:
-        return InputTransform(self.config.load_ocr)
+        return InputTransform(load_ocr=self.config.load_ocr)
+
+
+def tobacco3482(load_ocr: bool = False, **kwargs: Any) -> Tobacco3482:
+    """Build the Tobacco3482 dataset. Import and call it directly."""
+    return Tobacco3482(config=Tobacco3482Config(load_ocr=load_ocr), **kwargs)
 
 
 def main() -> None:
-    dataset = Tobacco3482Config(load_ocr=True).build_module()
+    dataset = tobacco3482(load_ocr=True)
 
     train_iterator = dataset.split_iterator(DatasetSplitType.train)
     logger.info("train samples (live): %d", len(train_iterator))

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Generic, TypeVar
+from typing import TYPE_CHECKING, Any, ClassVar, Generic, TypeVar
 
 import aiohttp
 from pydantic.dataclasses import dataclass as pydantic_dataclass
@@ -42,19 +42,32 @@ class HuggingfaceDataset(
     Generic[T_HuggingfaceDatasetConfig, T_BaseDataInstance],
 ):
     __abstract__ = True
+    __config__: ClassVar[type[DatasetConfig]] = HuggingfaceDatasetConfig
 
     def __init__(
         self,
-        repo: str,
-        config: T_HuggingfaceDatasetConfig,
         *,
+        repo: str,
+        config: T_HuggingfaceDatasetConfig | None = None,
         data_dir: str | None = None,
         access_token: str | None = None,
         split: DatasetSplitType | None = None,
     ) -> None:
+        """Stream a dataset from the Hugging Face hub.
+
+        Args:
+            repo: Hub repo id, e.g. `"ylecun/mnist"`.
+            config: Params for this dataset. Defaults to `__config__()`.
+            data_dir: Where Hugging Face caches its downloads.
+            access_token: Credential for gated repos.
+            split: Build only this split, instead of every available one.
+        """
         self._repo = repo
         super().__init__(
-            config, data_dir=data_dir, access_token=access_token, split=split
+            config=config,
+            data_dir=data_dir,
+            access_token=access_token,
+            split=split,
         )
 
     def _download(

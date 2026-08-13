@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterable, Sequence
 from pathlib import Path
-from typing import Any, Generic, TypeVar
+from typing import Any, ClassVar, Generic, TypeVar, cast
 
 from pydantic.dataclasses import dataclass as pydantic_dataclass
 
@@ -45,12 +45,10 @@ def _validate_data_dir(data_dir: str | Path) -> str:
 
 @pydantic_dataclass(frozen=True)
 class DatasetConfig(ModuleConfig):
-    dataset_dir_name: str | None = None
+    """Validated params for a dataset. A config only describes -- it does not
+    build anything; the dataset takes one, not the other way round."""
 
-    def build_module(self, **kwargs: Any) -> Dataset:
-        raise NotImplementedError(
-            f"{type(self).__name__} must implement build_module() -- every config builds something."
-        )
+    dataset_dir_name: str | None = None
 
 
 class Dataset(
@@ -58,27 +56,64 @@ class Dataset(
     ConfigurableModule[T_DatasetConfig],
     Generic[T_DatasetConfig, T_BaseDataInstance],
 ):
+    """Subclasses name their config class in `__config__`, which lets the
+    dataset be constructed with no arguments at all::
+
+        class Tobacco3482(Dataset[Tobacco3482Config, SinglePageDocumentInstance]):
+            __config__ = Tobacco3482Config
+
+
+        Tobacco3482()  # default config
+        Tobacco3482(Tobacco3482Config(load_ocr=True))  # explicit config
+    """
+
     __abstract__ = True
     __requires_access_token__ = False
     __extract_downloads__ = True
+    __config__: ClassVar[type[DatasetConfig]] = DatasetConfig
 
     def __init__(
         self,
-        config: T_DatasetConfig,
         *,
+        config: T_DatasetConfig | None = None,
         data_dir: str | None = None,
         access_token: str | None = None,
         split: DatasetSplitType | None = None,
     ) -> None:
+        """Build every split iterator eagerly, then write a source snapshot.
+
+        Args:
+            config: Params for this dataset. Defaults to `__config__()`.
+            data_dir: Where to read and write data. Defaults to the shared
+                cache directory named after the config or the class.
+            access_token: Credential for datasets behind authentication.
+            split: Build only this split, instead of every available one.
+
+        Raises:
+            TypeError: If `config` is not an instance of this dataset's
+                `__config__` class.
+        """
+        expected_config_cls = type(self).__config__
+        if config is None:
+            config = cast("T_DatasetConfig", expected_config_cls())
+        elif not isinstance(config, expected_config_cls):
+            # Fail here, where the message can name both classes, rather than
+            # as an AttributeError on a missing field inside a _build_* hook.
+            raise TypeError(
+                f"{type(self).__name__} takes a {expected_config_cls.__name__}, "
+                f"but got {type(config).__name__}"
+            )
         super().__init__(config)
         data_dir = _validate_data_dir(
-            Path(data_dir)
+            data_dir=Path(data_dir)
             if data_dir is not None
             else _DEFAULT_ATRIA_DATASETS_CACHE_DIR
-            / (config.dataset_dir_name or self.__class__.__name__)
+            / (config.dataset_dir_name or type(self).__name__)
         )
         self._data_dir = Path(data_dir)
-        self._build_split_iterators(data_dir, split=split, access_token=access_token)
+        self._build_split_iterators(
+            data_dir=data_dir, split=split, access_token=access_token
+        )
         self._persist_snapshot()
 
     @property
@@ -91,7 +126,7 @@ class Dataset(
         split: DatasetSplitType | None = None,
         access_token: str | None = None,
     ) -> None:
-        self._download(data_dir, access_token)
+        self._download(data_dir=data_dir, access_token=access_token)
         input_transform = self._build_input_transform()
         self._split_iterators = {}
         for dataset_split in self._available_splits(data_dir):

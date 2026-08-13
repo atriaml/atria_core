@@ -1,7 +1,10 @@
-"""Example: Tobacco3482 document classification dataset, end to end --
-build config -> build_module() -> iterate live, then Cacher(...).cache(dataset)
--> iterate cached. `load_ocr=True` attaches real OCR content parsed from the
-dataset's own pre-computed hocr files.
+"""Example: MNIST from the Hugging Face hub, end to end -- construct the
+dataset (default config, or an explicit one) -> iterate live, then
+Cacher(...).cache(dataset) -> iterate cached.
+
+Configs describe params; they never build anything. The dataset takes one, and
+falls back to `__config__()` when none is given. The public entry point is the
+`mnist` function below -- an ordinary import, so callers keep the exact type.
 """
 
 from __future__ import annotations
@@ -15,34 +18,26 @@ from pydantic.dataclasses import dataclass as pydantic_dataclass
 from atria_core.datasets import Cacher, FileStorageType
 from atria_core.datasets._hf_dataset import HuggingfaceDataset, HuggingfaceDatasetConfig
 from atria_core.logger import get_logger
-from atria_core.registry import Registry
-from atria_core.types import (
-    DatasetSplitType,
-    SinglePageDocumentInstance,
-)
+from atria_core.types import DatasetSplitType
 from atria_core.types._data_instance._image_instance import ImageInstance
 from atria_core.types._generic._annotations import ClassificationAnnotation
 from atria_core.types._generic._image import Image
 
 logger = get_logger(__name__)
 
-datasets = Registry.group("datasets")
+_REPO = "ylecun/mnist"
 
 
-@datasets.register("mnist")
 @pydantic_dataclass(frozen=True)
 class MNISTConfig(HuggingfaceDatasetConfig):
     config_name: str = "mnist"
-
-    def build_module(self) -> MNIST:
-        return MNIST("ylecun/mnist", config=self)
 
 
 class InputTransform:
     def __init__(self, labels: list[str]):
         self._labels = labels
 
-    def __call__(self, sample) -> ImageInstance:
+    def __call__(self, sample: dict[str, Any]) -> ImageInstance:
         return ImageInstance(
             sample_id=str(uuid.uuid4()),
             image=Image(content=sample["image"]),
@@ -55,12 +50,22 @@ class InputTransform:
 
 
 class MNIST(HuggingfaceDataset[MNISTConfig, ImageInstance]):
-    def _build_input_transform(self) -> Callable[[Any], SinglePageDocumentInstance]:
+    __config__ = MNISTConfig
+
+    def __init__(self, *, config: MNISTConfig | None = None, **kwargs: Any) -> None:
+        super().__init__(repo=_REPO, config=config, **kwargs)
+
+    def _build_input_transform(self) -> Callable[[Any], ImageInstance]:
         return InputTransform(labels=self.metadata.dataset_labels.classification)
 
 
+def mnist(config_name: str = "mnist", **kwargs: Any) -> MNIST:
+    """Build the MNIST dataset. Import and call it -- `atria_datasets.mnist()`."""
+    return MNIST(config=MNISTConfig(config_name=config_name), **kwargs)
+
+
 def main() -> None:
-    dataset = MNISTConfig().build_module()
+    dataset = mnist()
     cached = Cacher(FileStorageType.MSGPACK).cache(dataset)
 
     cached_train = cached.split_iterator(DatasetSplitType.train)

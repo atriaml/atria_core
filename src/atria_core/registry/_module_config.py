@@ -23,9 +23,11 @@ def _is_json_safe(value: Any) -> bool:
 
 @pydantic_dataclass(frozen=True)
 class ModuleConfig:
-    """Base class for registerable configs. Fields must be JSON-safe
-    primitives, nested ModuleConfig instances, or enums. Subclasses
-    implement build_module() to construct whatever they configure."""
+    """Base class for serializable configs. Fields must be JSON-safe
+    primitives, nested ModuleConfig instances, or enums.
+
+    A config only describes params -- it never builds anything. Whatever the
+    config configures takes it as a constructor argument."""
 
     def __post_init__(self) -> None:
         for field in dataclasses.fields(self):
@@ -37,11 +39,6 @@ class ModuleConfig:
                 f"nested ModuleConfig, or an enum -- got {type(value).__name__}. "
                 "Lists/dicts of configs or enums aren't supported."
             )
-
-    def build_module(self, **kwargs: Any) -> Any:
-        raise NotImplementedError(
-            f"{type(self).__name__} must implement build_module() -- every config builds something."
-        )
 
     def to_dict(self) -> dict[str, Any]:
         data: dict[str, Any] = {}

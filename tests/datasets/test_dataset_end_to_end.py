@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import importlib
 from collections.abc import Callable, Sequence
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
+import pytest
 from PIL import Image as PILImage
 from pydantic.dataclasses import dataclass as pydantic_dataclass
 
@@ -16,18 +18,15 @@ from atria_core.datasets import (
     DatasetSnapshot,
     DatasetSnapshotStore,
     FileStorageType,
-    datasets,
 )
-from atria_core.datasets._constants import _DEFAULT_ATRIA_DATASETS_CACHE_DIR
 from atria_core.transforms import BaseTransform
 from atria_core.types import DatasetMetadata, DatasetSplitType, Image, ImageInstance
 
 
-@datasets.register("synthetic")
 @pydantic_dataclass(frozen=True)
 class SyntheticConfig(DatasetConfig):
-    def build_module(self, **kwargs: Any) -> SyntheticDataset:
-        return SyntheticDataset(self, **kwargs)
+    max_train_samples: int | None = None
+    max_test_samples: int | None = None
 
 
 class _InputTransform:
@@ -57,6 +56,8 @@ class _RawSplit(Sequence[int]):
 
 
 class SyntheticDataset(Dataset[SyntheticConfig, ImageInstance]):
+    __config__ = SyntheticConfig
+
     def _download_urls(self) -> list[str]:
         return []
 
@@ -69,11 +70,30 @@ class SyntheticDataset(Dataset[SyntheticConfig, ImageInstance]):
     def _build_split_iterator(
         self, split: DatasetSplitType, data_dir: str
     ) -> _RawSplit:
-        count = 4 if split == DatasetSplitType.train else 2
-        return _RawSplit(count)
+        if split == DatasetSplitType.train:
+            return _RawSplit(min(4, self.config.max_train_samples or 4))
+        return _RawSplit(min(2, self.config.max_test_samples or 2))
 
     def _build_input_transform(self) -> Callable[[Any], ImageInstance]:
         return _InputTransform()
+
+
+def synthetic(
+    max_train_samples: int | None = None,
+    max_test_samples: int | None = None,
+    **kwargs: Any,
+) -> SyntheticDataset:
+    """Build a SyntheticDataset from plain params.
+
+    This is the whole public entry point -- an importable function, so callers
+    get the exact return type with no registry in between.
+    """
+    return SyntheticDataset(
+        config=SyntheticConfig(
+            max_train_samples=max_train_samples, max_test_samples=max_test_samples
+        ),
+        **kwargs,
+    )
 
 
 def _record(item: object) -> ImageInstance:
@@ -96,8 +116,8 @@ class _ConfiguredTransform(BaseTransform):
         return replace(sample, sample_id=f"{self.prefix}-{sample.sample_id}")
 
 
-def test_build_module_constructs_dataset(tmp_path: Path) -> None:
-    dataset = SyntheticConfig().build_module(data_dir=str(tmp_path))
+def test_dataset_constructs_with_default_config(tmp_path: Path) -> None:
+    dataset = SyntheticDataset(data_dir=str(tmp_path))
     assert isinstance(dataset, SyntheticDataset)
     assert dataset.data_dir == tmp_path
 
@@ -109,23 +129,60 @@ def test_build_module_constructs_dataset(tmp_path: Path) -> None:
     assert snapshot.config == dataset.config.to_dict()
 
 
-def test_dataset_config_from_registry_constructs_typed_config() -> None:
-    config = DatasetConfig.from_registry("synthetic")
+def test_default_config_is_used_when_none_given(tmp_path: Path) -> None:
+    dataset = SyntheticDataset(data_dir=str(tmp_path))
 
-    assert isinstance(config, SyntheticConfig)
-    assert config.dataset_dir_name == "synthetic"
+    assert isinstance(dataset.config, SyntheticConfig)
+    assert dataset.config == SyntheticConfig()
 
 
-def test_build_module_uses_config_dataset_dir_name(tmp_path: Path) -> None:
-    dataset_dir_name = tmp_path.name
-    dataset = SyntheticConfig(dataset_dir_name=dataset_dir_name).build_module()
+def test_mismatched_config_class_is_rejected(tmp_path: Path) -> None:
+    @pydantic_dataclass(frozen=True)
+    class OtherConfig(DatasetConfig):
+        pass
+
+    with pytest.raises(TypeError, match="takes a SyntheticConfig, but got OtherConfig"):
+        SyntheticDataset(config=OtherConfig(), data_dir=str(tmp_path))  # type: ignore[arg-type]
+
+
+def test_factory_builds_dataset_from_params(tmp_path: Path) -> None:
+    dataset = synthetic(max_train_samples=2, data_dir=str(tmp_path))
 
     assert isinstance(dataset, SyntheticDataset)
-    assert dataset.data_dir == _DEFAULT_ATRIA_DATASETS_CACHE_DIR / dataset_dir_name
+    assert dataset.config.max_train_samples == 2
 
 
-def test_build_module_produces_live_split_iterators(tmp_path: Path) -> None:
-    dataset = SyntheticConfig().build_module(data_dir=str(tmp_path))
+def test_factory_is_reachable_by_import_path(tmp_path: Path) -> None:
+    """A name arriving as data is resolved by import, not by a registry."""
+    module_name, _, attribute = f"{synthetic.__module__}.synthetic".rpartition(".")
+    factory = getattr(importlib.import_module(module_name), attribute)
+
+    dataset = factory(max_train_samples=2, data_dir=str(tmp_path))
+
+    assert isinstance(dataset, SyntheticDataset)
+
+
+def test_unknown_param_is_rejected(tmp_path: Path) -> None:
+    with pytest.raises(TypeError, match="nonsense"):
+        synthetic(nonsense=1, data_dir=str(tmp_path))  # type: ignore[call-arg]
+
+
+def test_config_dataset_dir_name_sets_data_dir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Point the default cache root at tmp_path so the test never writes to the
+    # real ~/.cache/atria.
+    monkeypatch.setattr(
+        "atria_core.datasets._dataset._DEFAULT_ATRIA_DATASETS_CACHE_DIR", tmp_path
+    )
+
+    dataset = SyntheticDataset(config=SyntheticConfig(dataset_dir_name="named-dir"))
+
+    assert dataset.data_dir == tmp_path / "named-dir"
+
+
+def test_dataset_produces_live_split_iterators(tmp_path: Path) -> None:
+    dataset = SyntheticDataset(data_dir=str(tmp_path))
 
     train = dataset.split_iterator(DatasetSplitType.train)
     test = dataset.split_iterator(DatasetSplitType.test)
@@ -135,23 +192,24 @@ def test_build_module_produces_live_split_iterators(tmp_path: Path) -> None:
     assert _record(train[0]).sample_id == "0"
 
 
-def test_dataset_config_limits_indexable_splits_on_access(tmp_path: Path) -> None:
-    dataset = SyntheticConfig(max_train_samples=2, max_test_samples=1).build_module(
-        data_dir=str(tmp_path)
+def test_config_sample_caps_limit_splits(tmp_path: Path) -> None:
+    dataset = SyntheticDataset(
+        config=SyntheticConfig(max_train_samples=2, max_test_samples=1),
+        data_dir=str(tmp_path),
     )
 
     assert len(dataset.train) == 2
     assert len(dataset.test) == 1
     assert [_record(sample).sample_id for sample in dataset.train] == ["0", "1"]
-    assert len(dataset._split_iterators[DatasetSplitType.train]) == 4
 
     snapshot = DatasetSnapshot.load(tmp_path)
     assert snapshot.splits == {"train": 2, "test": 1}
 
 
 def test_cache_only_writes_configured_max_samples(tmp_path: Path) -> None:
-    dataset = SyntheticConfig(max_train_samples=2, max_test_samples=1).build_module(
-        data_dir=str(tmp_path)
+    dataset = SyntheticDataset(
+        config=SyntheticConfig(max_train_samples=2, max_test_samples=1),
+        data_dir=str(tmp_path),
     )
 
     cached = Cacher(FileStorageType.MSGPACK, num_processes=1).cache(
@@ -164,7 +222,7 @@ def test_cache_only_writes_configured_max_samples(tmp_path: Path) -> None:
 
 
 def test_cache_then_iterate_msgpack(tmp_path: Path) -> None:
-    dataset = SyntheticConfig().build_module(data_dir=str(tmp_path))
+    dataset = SyntheticDataset(data_dir=str(tmp_path))
 
     cached = Cacher(FileStorageType.MSGPACK, num_processes=1).cache(
         dataset, data_dir=str(tmp_path)
@@ -179,18 +237,18 @@ def test_cache_then_iterate_msgpack(tmp_path: Path) -> None:
 
 
 def test_cache_is_reused_on_second_call(tmp_path: Path) -> None:
-    dataset = SyntheticConfig().build_module(data_dir=str(tmp_path))
+    dataset = SyntheticDataset(data_dir=str(tmp_path))
     cacher = Cacher(FileStorageType.MSGPACK, num_processes=1)
     first = cacher.cache(dataset, data_dir=str(tmp_path))
 
-    dataset2 = SyntheticConfig().build_module(data_dir=str(tmp_path))
+    dataset2 = SyntheticDataset(data_dir=str(tmp_path))
     second = cacher.cache(dataset2, data_dir=str(tmp_path))
 
     assert first.data_dir == second.data_dir
 
 
 def test_process_and_cache_applies_transform_at_write_time(tmp_path: Path) -> None:
-    dataset = SyntheticConfig().build_module(data_dir=str(tmp_path))
+    dataset = SyntheticDataset(data_dir=str(tmp_path))
 
     cached = Cacher(FileStorageType.MSGPACK, num_processes=1).process_and_cache(
         dataset, _mark_processed, data_dir=str(tmp_path)
@@ -207,7 +265,7 @@ def test_process_and_cache_applies_transform_at_write_time(tmp_path: Path) -> No
 
 
 def test_cached_snapshot_stores_dataclass_transform_params(tmp_path: Path) -> None:
-    dataset = SyntheticConfig().build_module(data_dir=str(tmp_path))
+    dataset = SyntheticDataset(data_dir=str(tmp_path))
 
     cached = Cacher(FileStorageType.MSGPACK, num_processes=1).process_and_cache(
         dataset, _ConfiguredTransform(prefix="configured"), data_dir=str(tmp_path)
@@ -232,7 +290,7 @@ def test_cached_snapshot_stores_dataclass_transform_params(tmp_path: Path) -> No
 
 
 def test_cache_stores_in_memory_images_as_lazy_files(tmp_path: Path) -> None:
-    dataset = SyntheticConfig().build_module(data_dir=str(tmp_path))
+    dataset = SyntheticDataset(data_dir=str(tmp_path))
 
     cached = Cacher(
         FileStorageType.MSGPACK,
@@ -250,7 +308,7 @@ def test_cache_stores_in_memory_images_as_lazy_files(tmp_path: Path) -> None:
 
 
 def test_cache_with_multiprocessing_num_processes_gt_1(tmp_path: Path) -> None:
-    dataset = SyntheticConfig().build_module(data_dir=str(tmp_path))
+    dataset = SyntheticDataset(data_dir=str(tmp_path))
 
     cached = Cacher(FileStorageType.MSGPACK, num_processes=2).cache(
         dataset, data_dir=str(tmp_path)
@@ -271,7 +329,7 @@ def test_cacher_validate_cache_rejects_incomplete_snapshot(tmp_path: Path) -> No
 
 
 def test_cache_writes_discoverable_versioned_snapshot(tmp_path: Path) -> None:
-    dataset = SyntheticConfig().build_module(data_dir=str(tmp_path))
+    dataset = SyntheticDataset(data_dir=str(tmp_path))
     cached = Cacher(FileStorageType.MSGPACK, num_processes=1).cache(
         dataset, data_dir=str(tmp_path)
     )
