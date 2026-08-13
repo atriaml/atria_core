@@ -3,14 +3,13 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
+
+from datasets.info import DatasetInfo
 
 from atria_core.logger import get_logger
 from atria_core.types._base_data_model import BaseDataModel
 from atria_core.types._common import DatasetSplitType
-
-if TYPE_CHECKING:
-    from datasets.info import DatasetInfo  # type: ignore[import-not-found]
 
 logger = get_logger(__name__)
 

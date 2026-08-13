@@ -113,9 +113,9 @@ def _visualize_document_pdf_page(
         isinstance(instance.visual, PdfPage) and instance.visual.file_path is not None
     )
     pdf_bytes = ResourceLoader.for_uri(instance.visual.file_path).load_bytes()
-    source_doc = pymupdf.open(stream=pdf_bytes, filetype="pdf")  # type: ignore[no-untyped-call]
-    out_doc = pymupdf.open()  # type: ignore[no-untyped-call]
-    out_doc.insert_pdf(  # type: ignore[no-untyped-call]
+    source_doc = pymupdf.open(stream=pdf_bytes, filetype="pdf")
+    out_doc = pymupdf.open()
+    out_doc.insert_pdf(
         source_doc, from_page=instance.visual.page_id, to_page=instance.visual.page_id
     )
     page = out_doc[0]
@@ -138,7 +138,7 @@ def _visualize_document_pdf_page(
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     path = Path(output_dir) / f"{output_name(instance)}.pdf"
     logger.debug(f"Saving visualization for sample {instance.sample_id} to {path}")
-    out_doc.save(path)  # type: ignore[no-untyped-call]
+    out_doc.save(path)
     return path
 
 
@@ -150,12 +150,12 @@ def _visualize_multi_page_document(
     # multi-page PDF rather than raising. See _drawers/ for the drawing
     # infrastructure a future per-page-content shape would plug into.
     pdf_bytes = ResourceLoader.for_uri(instance.source_path).load_bytes()
-    source_doc = pymupdf.open(stream=pdf_bytes, filetype="pdf")  # type: ignore[no-untyped-call]
+    source_doc = pymupdf.open(stream=pdf_bytes, filetype="pdf")
 
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     path = Path(output_dir) / f"{output_name(instance)}.pdf"
     logger.debug(f"Saving visualization for sample {instance.sample_id} to {path}")
-    source_doc.save(path)  # type: ignore[no-untyped-call]
+    source_doc.save(path)
     return path
 
 

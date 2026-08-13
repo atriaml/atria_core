@@ -7,6 +7,12 @@ from urllib.parse import urlparse
 
 import tqdm
 
+from atria_core.datasets._constants import (
+    _ACCESS_TOKEN_PLACEHOLDER,
+    _DOWNLOAD_TIMEOUT_SECONDS,
+    _GOOGLE_DRIVE_URL_PREFIX,
+    _INCOMPLETE_SUFFIX,
+)
 from atria_core.datasets._download._download_file_info import DownloadFileInfo
 from atria_core.datasets._download._file_downloader import FileDownloader
 from atria_core.logger import get_logger
@@ -17,10 +23,18 @@ logger = get_logger(__name__)
 
 @dataclass
 class UrlSpec:
-    """A download URL together with where and under what extension it lands."""
+    """One file to download.
+
+    Attributes:
+        url: Where to fetch from. May contain an `{access_token}` placeholder.
+        url_ext: File extension to treat the download as, when it cannot be
+            read off the URL path.
+        rel_output_file_path: Where the file lands, relative to the data
+            directory. Defaults to the file name in the URL path.
+    """
 
     url: str
-    url_ext: str
+    url_ext: str | None = None
     rel_output_file_path: str | None = None
 
 
@@ -31,69 +45,39 @@ class AtriaDownloadManager(RepresentationMixin):
         self.data_dir = data_dir
         self.download_dir = download_dir
 
-    def _prepare_urls_and_dirs(
-        self,
-        data_urls: str | list[str] | dict[str, str] | list[UrlSpec],
-        access_token: str | None = None,
-    ) -> list[DownloadFileInfo]:
-        is_url_spec = (
-            isinstance(data_urls, list)
-            and len(data_urls) > 0
-            and isinstance(data_urls[0], UrlSpec)
+    def _info_from_url_spec(
+        self, url_spec: UrlSpec, access_token: str | None
+    ) -> DownloadFileInfo:
+        """Resolve one UrlSpec into the paths its download will use.
+
+        Raises:
+            ValueError: If the output name cannot be read off a Google Drive
+                URL and none was given.
+        """
+        rel_output_file_path = url_spec.rel_output_file_path
+        if rel_output_file_path is None:
+            if url_spec.url.startswith(_GOOGLE_DRIVE_URL_PREFIX):
+                raise ValueError(
+                    "Google Drive URLs carry no file name. Set "
+                    "rel_output_file_path on the UrlSpec."
+                )
+            rel_output_file_path = Path(urlparse(url_spec.url).path).name
+
+        return DownloadFileInfo(
+            url=self._apply_access_token(url=url_spec.url, access_token=access_token),
+            rel_output_file_path=rel_output_file_path,
+            data_dir=self.data_dir,
+            download_dir=self.download_dir,
+            url_ext=url_spec.url_ext,
         )
-        if is_url_spec:
-            download_file_infos = []
-            for url_spec in data_urls:
-                download_file_infos.append(
-                    DownloadFileInfo(
-                        url=url_spec.url.format(access_token=access_token)
-                        if access_token is not None and "{access_token}" in url_spec.url
-                        else url_spec.url,
-                        rel_output_file_path=url_spec.rel_output_file_path
-                        or Path(urlparse(url_spec.url).path).name,
-                        data_dir=self.data_dir,
-                        download_dir=self.download_dir,
-                        url_ext=url_spec.url_ext,
-                    )
-                )
-            return download_file_infos
 
-        if not is_url_spec:
-            if isinstance(data_urls, str):
-                data_urls = [data_urls]
-            if isinstance(data_urls, list):
-                if any(x.startswith("https://drive.google.com/") for x in data_urls):
-                    raise ValueError(
-                        "Google Drive URLs are not supported in list format. Use dictionary format instead."
-                    )
-                data_urls = {Path(url).name: url for url in data_urls}
-            assert isinstance(data_urls, dict), (
-                f"data_urls must be a list or a dictionary, got {data_urls}"
-            )
-        download_file_infos = []
-        for download_path, url in data_urls.items():
-            if isinstance(url, tuple):
-                url, url_ext = url
-            else:
-                url_ext = None
-            if access_token is not None and "{access_token}" in url:
-                url = url.format(access_token=access_token)
-            download_file_infos.append(
-                DownloadFileInfo(
-                    url=url,
-                    rel_output_file_path=download_path,
-                    data_dir=self.data_dir,
-                    download_dir=self.download_dir,
-                    url_ext=url_ext,
-                )
-            )
-        return download_file_infos
+    @staticmethod
+    def _apply_access_token(url: str, access_token: str | None) -> str:
+        if access_token is None or _ACCESS_TOKEN_PLACEHOLDER not in url:
+            return url
+        return url.format(access_token=access_token)
 
-    def _download_files(
-        self,
-        download_file_infos: list[DownloadFileInfo],
-        access_token: str | None = None,
-    ) -> None:
+    def _download_files(self, download_file_infos: list[DownloadFileInfo]) -> None:
         for download_file_info in download_file_infos:
             if (
                 download_file_info.download_path.exists()
@@ -102,13 +86,11 @@ class AtriaDownloadManager(RepresentationMixin):
             ):
                 continue
 
-            url = download_file_info.parsed_url
-
-            if "{access_token}" in url:
-                url = url.format(access_token=access_token)  # type: ignore[attr-defined]
-
-            file_downloader = FileDownloader.from_url(url, timeout=10)
-            file_downloader.download(download_file_info)
+            file_downloader = FileDownloader.from_url(
+                parsed_url=download_file_info.parsed_url,
+                timeout=_DOWNLOAD_TIMEOUT_SECONDS,
+            )
+            file_downloader.download(download_file_info=download_file_info)
 
     def _merge_part_files(self, download_file_infos: list[DownloadFileInfo]) -> None:
         merged_files: dict[Path, list[str]] = {}
@@ -164,16 +146,17 @@ class AtriaDownloadManager(RepresentationMixin):
             logger.info(
                 f"Extracting {download_file_info.extractable_path} to {download_file_info.extracted_path}"
             )
+            # Computed before the try block so both handlers can always clean
+            # it up; an assignment inside would leave it unbound if it raised.
+            incomplete_extracted_path = download_file_info.extracted_path.with_suffix(
+                download_file_info.download_path.suffix + _INCOMPLETE_SUFFIX
+            )
             try:
-                incomplete_extracted_path = (
-                    download_file_info.extracted_path.with_suffix(
-                        download_file_info.download_path.suffix + ".incomplete"
-                    )
-                )
                 if incomplete_extracted_path.exists():
                     incomplete_extracted_path.unlink()
                 shutil.unpack_archive(
-                    download_file_info.extractable_path, incomplete_extracted_path
+                    filename=download_file_info.extractable_path,
+                    extract_dir=incomplete_extracted_path,
                 )
                 incomplete_extracted_path.rename(download_file_info.extracted_path)
             except KeyboardInterrupt:
@@ -216,24 +199,24 @@ class AtriaDownloadManager(RepresentationMixin):
 
     def download_and_extract(
         self,
-        data_urls: str | list[str] | dict[str, str],
+        data_urls: list[UrlSpec],
         extract: bool = True,
         access_token: str | None = None,
     ) -> dict[str, Path]:
-        """Download every URL, optionally extracting archives among them.
+        """Download every file, optionally extracting archives among them.
 
         Args:
-            data_urls: URLs to fetch, as a single URL, a list, or a name-to-URL
-                mapping.
+            data_urls: Files to fetch.
             extract: Whether to unpack downloaded archives.
             access_token: Substituted into URLs containing `{access_token}`.
 
         Returns:
             Each downloaded file's final path, keyed by its name.
         """
-        download_file_infos = self._prepare_urls_and_dirs(
-            data_urls=data_urls, access_token=access_token
-        )
+        download_file_infos = [
+            self._info_from_url_spec(url_spec=url_spec, access_token=access_token)
+            for url_spec in data_urls
+        ]
         if extract:
             for download_file_info in download_file_infos:
                 download_file_info.update_extract_path()
@@ -245,7 +228,7 @@ class AtriaDownloadManager(RepresentationMixin):
             logger.info(
                 f"Downloading {len(download_file_infos)} files to {self.download_dir}"
             )
-            self._download_files(download_file_infos)
+            self._download_files(download_file_infos=download_file_infos)
             self._merge_part_files(download_file_infos)
             if extract:
                 self._extract_archives(download_file_infos)

@@ -7,6 +7,7 @@ from urllib.parse import ParseResult
 
 from filelock import FileLock
 
+from atria_core.datasets._constants import _INCOMPLETE_SUFFIX, _LOCK_SUFFIX
 from atria_core.datasets._download._download_file_info import DownloadFileInfo
 from atria_core.logger import get_logger
 from atria_core.types._utilities._repr import RepresentationMixin
@@ -28,7 +29,7 @@ class FileDownloader(ABC, RepresentationMixin):
             RuntimeError: If the transfer fails.
         """
         lock_file_path = download_file_info.download_path.with_suffix(
-            download_file_info.download_path.suffix + ".lock"
+            download_file_info.download_path.suffix + _LOCK_SUFFIX
         )
         with FileLock(lock_file_path):
             if download_file_info.download_path.exists():
@@ -36,7 +37,7 @@ class FileDownloader(ABC, RepresentationMixin):
                 return
 
             incomplete_destination_path = download_file_info.download_path.with_suffix(
-                download_file_info.download_path.suffix + ".incomplete"
+                download_file_info.download_path.suffix + _INCOMPLETE_SUFFIX
             )
             logger.debug(
                 f"Downloading {download_file_info.url} to {incomplete_destination_path}"
@@ -184,4 +185,4 @@ class GoogleDriveDownloader(FileDownloader):
 
         file_id = parsed_url.path.split("/")[-2]
         gdown_url = f"{parsed_url.scheme}://{parsed_url.hostname}/uc?id={file_id}"
-        gdown.download(gdown_url, str(destination_path), quiet=False)  # type: ignore[attr-defined]
+        gdown.download(url=gdown_url, output=str(destination_path), quiet=False)

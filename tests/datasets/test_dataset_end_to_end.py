@@ -19,6 +19,7 @@ from atria_core.datasets import (
     DatasetSnapshotStore,
     FileStorageType,
 )
+from atria_core.datasets._download._download_manager import UrlSpec
 from atria_core.transforms import BaseTransform
 from atria_core.types import DatasetMetadata, DatasetSplitType, Image, ImageInstance
 
@@ -58,7 +59,7 @@ class _RawSplit(Sequence[int]):
 class SyntheticDataset(Dataset[SyntheticConfig, ImageInstance]):
     __config__ = SyntheticConfig
 
-    def _download_urls(self) -> list[str]:
+    def _download_urls(self) -> list[UrlSpec]:
         return []
 
     def _metadata(self) -> DatasetMetadata:

@@ -11,6 +11,7 @@ from atria_core.datasets._constants import (
     _DEFAULT_ATRIA_DATASETS_CACHE_DIR,
     _DEFAULT_DOWNLOAD_PATH,
 )
+from atria_core.datasets._download._download_manager import UrlSpec
 from atria_core.datasets._snapshot_store import DatasetSnapshotStore
 from atria_core.datasets._split_iterators import (
     IndexableSplitIterator,
@@ -262,15 +263,22 @@ class Dataset(
     def _metadata(self) -> DatasetMetadata:
         pass
 
-    def _download_urls(self) -> dict[str, str] | list[str]:
+    def _download_urls(self) -> list[UrlSpec]:
+        """Return the files this dataset downloads. Empty means none."""
         return []
 
     def _download(
         self, data_dir: str, access_token: str | None = None
     ) -> dict[str, Path]:
-        """Default: run the generic Downloader against _download_urls().
-        Subclasses with nonstandard fetch logic (e.g. HuggingfaceDataset)
-        override this outright -- no override-detection, just polymorphism."""
+        """Download this dataset's source files into `data_dir`.
+
+        Args:
+            data_dir: Directory the files are downloaded into.
+            access_token: Substituted into URLs containing `{access_token}`.
+
+        Returns:
+            Each downloaded file's final path, keyed by its name.
+        """
         from atria_core.datasets._download._download_manager import AtriaDownloadManager
 
         if self.__requires_access_token__ and access_token is None:

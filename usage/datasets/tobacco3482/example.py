@@ -16,6 +16,7 @@ import numpy as np
 from pydantic.dataclasses import dataclass as pydantic_dataclass
 
 from atria_core.datasets import Cacher, Dataset, DatasetConfig, FileStorageType
+from atria_core.datasets._download._download_manager import UrlSpec
 from atria_core.logger import get_logger
 from atria_core.types import (
     ClassificationAnnotation,
@@ -50,10 +51,18 @@ _LICENSE = "https://www.industrydocuments.ucsf.edu/help/copyright/"
 _IMAGE_DATA_NAME = "tobacco3482"
 _OCR_DATA_NAME = "tobacco3482_ocr"
 _DATA_URLS = [
-    f"https://huggingface.co/datasets/sasa3396/tobacco3482/resolve/main/data/{_IMAGE_DATA_NAME}.tar.gz",
-    f"https://huggingface.co/datasets/sasa3396/tobacco3482/resolve/main/data/{_OCR_DATA_NAME}.tar.gz",
-    "https://huggingface.co/datasets/sasa3396/tobacco3482/resolve/main/data/train.txt",
-    "https://huggingface.co/datasets/sasa3396/tobacco3482/resolve/main/data/test.txt",
+    UrlSpec(
+        url=f"https://huggingface.co/datasets/sasa3396/tobacco3482/resolve/main/data/{_IMAGE_DATA_NAME}.tar.gz"
+    ),
+    UrlSpec(
+        url=f"https://huggingface.co/datasets/sasa3396/tobacco3482/resolve/main/data/{_OCR_DATA_NAME}.tar.gz"
+    ),
+    UrlSpec(
+        url="https://huggingface.co/datasets/sasa3396/tobacco3482/resolve/main/data/train.txt"
+    ),
+    UrlSpec(
+        url="https://huggingface.co/datasets/sasa3396/tobacco3482/resolve/main/data/test.txt"
+    ),
 ]
 _CLASSES = [
     "Letter",
@@ -170,7 +179,7 @@ class SplitIterator(Sequence[tuple[Path, Path, int]]):
 class Tobacco3482(Dataset[Tobacco3482Config, SinglePageDocumentInstance]):
     __config__ = Tobacco3482Config
 
-    def _download_urls(self) -> list[str]:
+    def _download_urls(self) -> list[UrlSpec]:
         return _DATA_URLS
 
     def _metadata(self) -> DatasetMetadata:

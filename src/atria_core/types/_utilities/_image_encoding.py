@@ -32,4 +32,6 @@ def _bytes_to_image(encoded_image: bytes) -> "PILImage":
 def _base64_to_image(encoded_image: str) -> "PILImage":
     import io
 
-    return ImageOps.exif_transpose(Image.open(io.BytesIO(base64.b64decode(encoded_image))))
+    return ImageOps.exif_transpose(
+        Image.open(io.BytesIO(base64.b64decode(encoded_image)))
+    )
