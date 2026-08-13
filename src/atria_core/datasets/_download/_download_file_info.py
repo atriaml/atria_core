@@ -12,6 +12,9 @@ _COMPRESSED_FILES_REGEX = r"\.(zip|tar|tar\.gz|tgz)(\..+)?$"
 
 
 class DownloadFileInfo(RepresentationMixin):
+    """Every path derived from one download URL: where it downloads, extracts,
+    and finally lands."""
+
     def __init__(
         self,
         url: str,
@@ -37,6 +40,7 @@ class DownloadFileInfo(RepresentationMixin):
         download_dir.mkdir(parents=True, exist_ok=True)
 
     def update_extract_path(self) -> None:
+        """Strip the archive suffix from the output path, for compressed downloads."""
         if self.is_compressed:
             match = re.search(_COMPRESSED_FILES_REGEX, self.rel_output_file_path)
             if match:
@@ -46,14 +50,17 @@ class DownloadFileInfo(RepresentationMixin):
 
     @property
     def parsed_url(self) -> ParseResult:
+        """The download URL, parsed into components."""
         return urlparse(self.url)
 
     @property
     def hashed_url(self) -> str:
+        """Stable digest of the full URL, used as its on-disk download name."""
         return hashlib.sha256(self.url.encode()).hexdigest()
 
     @property
     def hashed_url_without_part(self) -> str:
+        """Digest of the URL minus its part suffix, shared by all parts of one archive."""
         url_without_part = urlunparse(
             (
                 self.parsed_url.scheme,
@@ -68,6 +75,7 @@ class DownloadFileInfo(RepresentationMixin):
 
     @property
     def url_path_ext(self) -> str:
+        """The URL's file extension, or the override given at construction."""
         return (
             "".join(Path(self.parsed_url.path).suffixes)
             if self.url_ext is None
@@ -76,6 +84,7 @@ class DownloadFileInfo(RepresentationMixin):
 
     @property
     def download_path(self) -> Path:
+        """Where the raw bytes for this URL are downloaded to."""
         return self.download_dir / (self.hashed_url + self.url_path_ext)
 
     @property
@@ -90,6 +99,7 @@ class DownloadFileInfo(RepresentationMixin):
 
     @property
     def extracted_path(self) -> Path:
+        """Directory this download's archive is extracted into."""
         if self.is_part_file:
             return self.data_dir / (self.hashed_url_without_part)
         else:
@@ -97,10 +107,12 @@ class DownloadFileInfo(RepresentationMixin):
 
     @property
     def is_part_file(self) -> bool:
+        """Whether this URL is one numbered part of a split archive."""
         return bool(re.search(r"\.(zip|tar|tar\.gz|tgz)\.\d+$", self.parsed_url.path))
 
     @property
     def is_compressed(self) -> bool:
+        """Whether this download is an archive needing extraction."""
         if self.url_ext is not None:
             return bool(
                 re.search(_COMPRESSED_FILES_REGEX, self.parsed_url.path)
@@ -110,8 +122,10 @@ class DownloadFileInfo(RepresentationMixin):
 
     @property
     def output_path(self) -> Path:
+        """Final location this download lands at, under the data directory."""
         return self.data_dir / self.rel_output_file_path
 
     @property
     def is_download_completed(self) -> bool:
+        """Whether the final output for this URL already exists."""
         return self.data_dir.exists() and self.output_path.exists()

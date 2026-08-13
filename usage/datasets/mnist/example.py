@@ -71,9 +71,9 @@ def main() -> None:
     cached_train = cached.split_iterator(DatasetSplitType.train)
     cached_test = cached.split_iterator(DatasetSplitType.test)
 
-    logger.info("train samples (cached): %d", len(cached_train))
-    logger.info("test samples (cached): %d", len(cached_test))
-    logger.info("first train sample (cached): %s", cached_train[0].load())
+    logger.info("train samples (cached): %d", len(cached_train))  # type: ignore
+    logger.info("test samples (cached): %d", len(cached_test))  # type: ignore
+    logger.info("first train sample (cached): %s", cached_train[0].load())  # type: ignore
 
 
 if __name__ == "__main__":

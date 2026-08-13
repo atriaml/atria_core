@@ -30,9 +30,21 @@ class MsgpackShardListDataset(Sequence[Any]):
 
     @property
     def shard_files(self) -> list[Path]:
+        """The shard files backing this split, in order."""
         return self._shard_files
 
     def fetch_sample_by_id(self, sample_id: str) -> tuple[int, dict[str, Any]]:
+        """Find one sample by its id, searching every shard.
+
+        Args:
+            sample_id: Identifier of the sample to fetch.
+
+        Returns:
+            The sample's index within its shard, and the sample itself.
+
+        Raises:
+            ValueError: If no shard holds that id.
+        """
         for reader in self._shard_file_readers:
             try:
                 sample_id = str(sample_id)
@@ -63,5 +75,6 @@ class MsgpackShardListDataset(Sequence[Any]):
         return self._total_size
 
     def close(self) -> None:
+        """Close every open shard reader."""
         for reader in self._shard_file_readers:
             reader._close()

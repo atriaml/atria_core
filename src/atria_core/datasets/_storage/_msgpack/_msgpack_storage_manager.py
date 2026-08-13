@@ -22,6 +22,8 @@ logger = get_logger(__name__)
 
 
 class MsgpackStorageManager(StorageManager):
+    """Stores dataset splits as sharded msgpack files."""
+
     storage_prefix: ClassVar[str] = "msgpack"
 
     def __init__(
@@ -47,10 +49,12 @@ class MsgpackStorageManager(StorageManager):
         )
 
     def split_exists(self, split: DatasetSplitType) -> bool:
+        """Whether `split` has both shard files and their offset indexes on disk."""
         offsets = list(self.split_dir(split).glob("*.msgpack.offsets"))
         return len(self.split_files(split)) > 0 and len(offsets) > 0
 
     def split_files(self, split: DatasetSplitType) -> list[Path]:
+        """Return the msgpack shard files making up `split`."""
         return list(self.split_dir(split).glob("*.msgpack"))
 
     def _write_split_internal(
@@ -92,6 +96,11 @@ class MsgpackStorageManager(StorageManager):
         )
 
     def read_split(self, split: DatasetSplitType) -> Sequence[Any]:
+        """Return the raw, undecoded records of `split`.
+
+        Raises:
+            RuntimeError: If the split has not been written yet.
+        """
         if not self.split_exists(split):
             raise RuntimeError(
                 f"Dataset split {split.value} not prepared. Please call `write_split()` first."

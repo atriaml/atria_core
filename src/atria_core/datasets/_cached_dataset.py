@@ -37,7 +37,20 @@ _SafeTupleLoader.add_constructor(
 class CachedDataset(
     Dataset[DatasetConfig, T_BaseDataInstance], Generic[T_BaseDataInstance]
 ):
+    """A dataset read from an on-disk cache directory.
+
+    Its sample class and config are reconstructed from the snapshot stored
+    alongside the records."""
+
     def __init__(self, path: Path | str) -> None:
+        """Open a cache directory.
+
+        Args:
+            path: Directory holding a cached-dataset snapshot.
+
+        Raises:
+            ValueError: If the snapshot there is not a cached-dataset snapshot.
+        """
         self._path = Path(path)
 
         self._snapshot = DatasetSnapshot.load(self._path)
@@ -63,37 +76,45 @@ class CachedDataset(
 
     @property
     def data_dir(self) -> Path:
+        """The cache directory this dataset was opened from."""
         return self._path
 
     @property
     def data_model(self) -> type[T_BaseDataInstance]:
+        """Sample class the cached records deserialize into."""
         return self._data_model_cls
 
     @property
     def dataset_class_name(self) -> str:
+        """Name of the Dataset class this cache was built from."""
         return self._snapshot.dataset_class_name
 
     @property
     def storage_type(self) -> FileStorageType:
+        """On-disk format these records are stored in."""
         assert self._snapshot.storage_type is not None
         return self._snapshot.storage_type
 
     @property
     def config_name(self) -> str:
+        """Cache directory name, which encodes class and config hash."""
         assert self._snapshot.config_name is not None
         return self._snapshot.config_name
 
     @property
     def config_hash(self) -> str:
+        """Hash of the config of the dataset this cache was built from."""
         assert self._snapshot.config_hash is not None
         return self._snapshot.config_hash
 
     @property
     def snapshot(self) -> DatasetSnapshot:
+        """The snapshot describing this cache."""
         return self._snapshot
 
     @property
     def dataset_stage(self) -> str:
+        """Whether these records are raw or transformed."""
         return self._snapshot.dataset_stage
 
     def _download(

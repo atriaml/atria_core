@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Generic, TypeVar
 import aiohttp
 from pydantic.dataclasses import dataclass as pydantic_dataclass
 
+from atria_core.datasets._constants import _HF_DOWNLOAD_TIMEOUT_SECONDS
 from atria_core.datasets._dataset import (
     Dataset,
     DatasetConfig,
@@ -26,8 +27,19 @@ _HF_SPLIT_MAP = {
 }
 
 
+def _hf_storage_options() -> dict[str, Any]:
+    """Return the fsspec client options used for every hub request."""
+    return {
+        "client_kwargs": {
+            "timeout": aiohttp.ClientTimeout(total=_HF_DOWNLOAD_TIMEOUT_SECONDS)
+        }
+    }
+
+
 @pydantic_dataclass(frozen=True)
 class HuggingfaceDatasetConfig(DatasetConfig):
+    """Params for a dataset streamed from the Hugging Face hub."""
+
     config_name: str | None = None
     dataset_dir_name: str | None = None
 
@@ -41,6 +53,9 @@ class HuggingfaceDataset(
     Dataset[T_HuggingfaceDatasetConfig, T_BaseDataInstance],
     Generic[T_HuggingfaceDatasetConfig, T_BaseDataInstance],
 ):
+    """Streams a dataset straight off the Hugging Face hub, letting the
+    `datasets` library handle downloading and caching internally."""
+
     __abstract__ = True
     __config__: ClassVar[type[DatasetConfig]] = HuggingfaceDatasetConfig
 
@@ -73,23 +88,23 @@ class HuggingfaceDataset(
     def _download(
         self, data_dir: str, access_token: str | None = None
     ) -> dict[str, Path]:
-        """HF handles its own downloading internally during streaming --
-        this just builds the data_dir-dependent state every other hook
-        needs (builder, download manager, split generators), once, up
-        front. _download runs first in Dataset._build_split_iterators, so
-        by the time _metadata/_available_splits/_build_split_iterator run,
-        this state is already there."""
+        """Prepare the hub builder, download manager and split generators.
+
+        The `datasets` library fetches data itself while streaming, so nothing
+        is downloaded here. This runs before any other hook, so the state it
+        builds is available to metadata and split construction.
+        """
         from datasets import load_dataset_builder
 
         self._builder: datasets.DatasetBuilder = load_dataset_builder(
             self._repo,
             name=self.config.config_name,
             cache_dir=data_dir,
-            storage_options={
-                "client_kwargs": {"timeout": aiohttp.ClientTimeout(total=3600)}
-            },
+            storage_options=_hf_storage_options(),
         )
-        self._download_manager = self._prepare_download_manager(data_dir, access_token)
+        self._download_manager = self._prepare_download_manager(
+            data_dir=data_dir, access_token=access_token
+        )
         self._hf_split_generators = {
             _HF_SPLIT_MAP[sg.name]: sg
             for sg in self._builder._split_generators(self._download_manager)
@@ -108,9 +123,7 @@ class HuggingfaceDataset(
             force_extract=False,
             use_etag=False,
             delete_extracted=False,
-            storage_options={
-                "client_kwargs": {"timeout": aiohttp.ClientTimeout(total=3600)}
-            },
+            storage_options=_hf_storage_options(),
             token=access_token,
         )
         if "packaged_modules" in str(self._builder.__module__):

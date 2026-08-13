@@ -61,6 +61,7 @@ class DatasetSnapshot:
         splits: dict[str, int],
         transforms: list[dict[str, Any]] | None = None,
     ) -> DatasetSnapshot:
+        """Build a snapshot stamped with the current time."""
         return cls(
             storage_type=storage_type,
             data_model=data_model,
@@ -80,6 +81,12 @@ class DatasetSnapshot:
     def from_dict(
         cls, data: dict[str, Any], *, path: Path | None = None
     ) -> DatasetSnapshot:
+        """Build a snapshot from its serialized form.
+
+        Args:
+            data: Parsed snapshot contents.
+            path: Directory the snapshot was read from.
+        """
         return cls(
             schema_version=int(data.get("schema_version", 0)),
             created_at=data.get("created_at"),
@@ -114,6 +121,7 @@ class DatasetSnapshot:
         )
 
     def to_dict(self) -> dict[str, Any]:
+        """Return this snapshot as a serializable dict, omitting empty fields."""
         data: dict[str, Any] = {
             "schema_version": self.schema_version,
             "created_at": self.created_at,
@@ -133,6 +141,11 @@ class DatasetSnapshot:
 
     @classmethod
     def load(cls, path: Path | str) -> DatasetSnapshot:
+        """Read a snapshot from a directory or a snapshot file.
+
+        Raises:
+            ValueError: If the file is empty or does not contain a mapping.
+        """
         directory = Path(path)
         snapshot_path = (
             directory
@@ -147,6 +160,7 @@ class DatasetSnapshot:
 
     @classmethod
     def validate(cls, path: Path | str) -> bool:
+        """Whether `path` holds a readable snapshot of a supported version."""
         directory = Path(path)
         if directory.name == _DEFAULT_SNAPSHOT_PATH:
             directory = directory.parent
@@ -174,14 +188,17 @@ class DatasetSnapshot:
 
     @property
     def dataset_metadata(self) -> DatasetMetadata:
+        """The dataset metadata recorded in this snapshot."""
         return DatasetMetadata.from_dict(self.metadata)
 
     @property
     def is_cached(self) -> bool:
+        """Whether this snapshot describes a cache rather than a source dataset."""
         return self.snapshot_kind == CACHED_DATASET_SNAPSHOT_KIND
 
     @classmethod
     def discover(cls, base_dir: Path | str) -> list[DatasetSnapshot]:
+        """Return every valid snapshot found under `base_dir`."""
         base = Path(base_dir).expanduser()
         if not base.is_dir():
             return []

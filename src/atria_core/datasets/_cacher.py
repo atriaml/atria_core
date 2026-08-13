@@ -6,7 +6,7 @@ import pickle
 from collections.abc import Callable, Sized
 from dataclasses import asdict, is_dataclass, replace
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 from atria_core.datasets._cached_dataset import CachedDataset
 from atria_core.datasets._common import FileStorageType
@@ -37,6 +37,12 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
+T_Sample = TypeVar("T_Sample", bound=BaseDataInstance)
+"""Sample type a dataset yields -- preserved through cache() into the handle."""
+
+T_ProcessedSample = TypeVar("T_ProcessedSample", bound=BaseDataInstance)
+"""Sample type a write-time transform produces in process_and_cache()."""
+
 
 def transform_hash(transform: Callable[[Any], Any] | None) -> str | None:
     """Return a stable identity for a transform or composed pipeline."""
@@ -57,6 +63,8 @@ def transform_hash(transform: Callable[[Any], Any] | None) -> str | None:
 
 
 class PreprocessTransform(BaseTransform):
+    """Write-time image preparation applied to every sample before storage."""
+
     resize_images: bool = False
     image_max_size: int | tuple[int, int] | None = None
 
@@ -110,9 +118,12 @@ def transform_configs(
     ]
 
 
-def _infer_data_model(dataset: Dataset[Any, Any]) -> type[Any]:
-    """No __data_model__ declaration exists in the new Dataset design --
-    infer the sample class from an actual sample instead."""
+def _infer_data_model(dataset: Dataset[Any, T_Sample]) -> type[T_Sample]:
+    """Return the sample class a dataset produces, read off its first sample.
+
+    Raises:
+        ValueError: If every split is empty, leaving no sample to inspect.
+    """
     for split_iterator in dataset.split_iterators.values():
         for sample in split_iterator:
             return type(sample)
@@ -132,13 +143,14 @@ def _stored_split_counts(storage_manager: Any) -> dict[str, int]:
 
 
 class Cacher:
-    """Applied from the outside to a Dataset: builds-or-reuses an on-disk
-    cached snapshot and returns a CachedDataset handle for reading it back.
-    Since Dataset.__init__ always eagerly builds every split iterator up
-    front, Cacher just takes the dataset's own already-built
-    dataset.split_iterators (which already have the input transform
-    applied) and layers a write-time transform on top via
-    .with_transform(...) -- no need to re-download or rebuild anything."""
+    """Writes a dataset's splits to disk and returns a handle for reading
+    them back, reusing an existing cache when one matches.
+
+    Caching reads from the dataset's already-built split iterators and layers
+    any write-time transform on top of them, so nothing is re-downloaded or
+    rebuilt. The cache location is derived from the dataset's config hash, the
+    storage backend, and the write transform, so distinct inputs never
+    collide."""
 
     def __init__(
         self,
@@ -159,13 +171,26 @@ class Cacher:
 
     def cache(
         self,
-        dataset: Dataset[Any, Any],
+        dataset: Dataset[Any, T_Sample],
         *,
         data_dir: str | None = None,
         split: DatasetSplitType | None = None,
         max_samples: int | None = None,
         overwrite_existing: bool = False,
-    ) -> CachedDataset[Any]:
+    ) -> CachedDataset[T_Sample]:
+        """Write this dataset to disk, or reuse a matching existing cache.
+
+        Args:
+            dataset: Dataset whose already-built splits are written.
+            data_dir: Root to cache under. Defaults to the dataset's own.
+            split: Cache only this split, instead of every one.
+            max_samples: Cap on samples written per split.
+            overwrite_existing: Rewrite splits that are already cached.
+
+        Returns:
+            A handle for reading the cache back, yielding the same sample type
+            the dataset does.
+        """
         return self._cache(
             dataset,
             data_dir=data_dir,
@@ -177,18 +202,32 @@ class Cacher:
 
     def process_and_cache(
         self,
-        dataset: Dataset[Any, Any],
-        transform: Callable[[Any], Any],
+        dataset: Dataset[Any, T_Sample],
+        transform: Callable[[T_Sample], T_ProcessedSample],
         *,
         data_dir: str | None = None,
         split: DatasetSplitType | None = None,
         max_samples: int | None = None,
         overwrite_existing: bool = False,
-    ) -> CachedDataset[Any]:
+    ) -> CachedDataset[T_ProcessedSample]:
         """Like cache(), but writes transform(sample) for each sample the
-        dataset produces -- e.g. cache raw, then tokenize into a second
-        cache. `transform` is layered on top only for this write; it never
-        touches or mutates `dataset` itself."""
+        dataset produces -- e.g. cache raw, then tokenize into a second cache.
+
+        The returned handle yields the transform's output type, not the
+        dataset's. `transform` is layered on top only for this write; it never
+        touches or mutates `dataset` itself.
+
+        Args:
+            dataset: Dataset whose already-built splits are written.
+            transform: Applied to each sample at write time.
+            data_dir: Root to cache under. Defaults to the dataset's own.
+            split: Cache only this split, instead of every one.
+            max_samples: Cap on samples written per split.
+            overwrite_existing: Rewrite splits that are already cached.
+
+        Returns:
+            A handle for reading the transformed cache back.
+        """
         return self._cache(
             dataset,
             data_dir=data_dir,
@@ -200,14 +239,14 @@ class Cacher:
 
     def _cache(
         self,
-        dataset: Dataset[Any, Any],
+        dataset: Dataset[Any, T_Sample],
         *,
         data_dir: str | None,
         split: DatasetSplitType | None,
         max_samples: int | None,
         overwrite_existing: bool,
-        transform: Callable[[Any], Any] | None,
-    ) -> CachedDataset[Any]:
+        transform: Callable[[T_Sample], T_ProcessedSample] | None,
+    ) -> CachedDataset[T_ProcessedSample]:
         from atria_core.datasets._storage._storage_manager import StorageManager
 
         preprocess = PreprocessTransform(
@@ -220,7 +259,10 @@ class Cacher:
             Compose(preprocess, transform) if transform is not None else preprocess
         )
         unique_path = self._compute_cache_path(
-            dataset, resolved_data_dir, write_transform, max_samples
+            dataset=dataset,
+            data_dir=resolved_data_dir,
+            write_transform=write_transform,
+            max_samples=max_samples,
         )
         storage_manager = StorageManager.create(
             self._storage_type,
@@ -261,7 +303,7 @@ class Cacher:
                 split_iterator = split_iterator.limit(max_samples)
             logger.info(f"Caching split [{s.value}] to {storage_manager.storage_dir}")
             storage_manager.write_split(
-                s, split_iterator.with_transform(write_transform)
+                s, split_iterator=split_iterator.with_transform(write_transform)
             )
 
         DatasetSnapshotStore.write_cached_snapshot(
@@ -313,6 +355,7 @@ class Cacher:
 
     @classmethod
     def validate_cache(cls, path: Path | str) -> bool:
+        """Return whether `path` holds a complete cached-dataset snapshot."""
         if not DatasetSnapshot.validate(path):
             return False
         return DatasetSnapshot.load(path).is_cached

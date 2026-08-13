@@ -20,6 +20,8 @@ logger = get_logger(__name__)
 
 @ray.remote
 class DeltalakeShardWriterActor:
+    """Ray actor writing one shard of a split to Delta Lake."""
+
     def __init__(
         self,
         artifacts_dir: Path,
@@ -29,6 +31,14 @@ class DeltalakeShardWriterActor:
         self._transform = transform
 
     def write(self, sample_tuple: tuple[int, Any]) -> list[dict[str, Any]]:
+        """Convert one sample into Delta table rows, returning [] on failure.
+
+        Args:
+            sample_tuple: The sample's index in the split, and the sample.
+
+        Returns:
+            The rows the sample expands to, or an empty list if it failed.
+        """
         idx, raw_item = sample_tuple
         try:
             return _write_items(raw_item, self._transform, self._artifacts_dir)
@@ -38,6 +48,8 @@ class DeltalakeShardWriterActor:
 
 
 class RayParallelDeltalakeWriter:
+    """Writes a split to Delta Lake across Ray actors."""
+
     def __init__(
         self,
         num_workers: int = 4,
@@ -57,6 +69,14 @@ class RayParallelDeltalakeWriter:
         split_dir: Path,
         artifacts_dir: Path,
     ) -> None:
+        """Write every sample of a split to a Delta table.
+
+        Args:
+            dataset: Samples to write.
+            transform: Applied to each sample before writing, if given.
+            split_dir: Directory the Delta table is written into.
+            artifacts_dir: Directory large binary fields are hoisted into.
+        """
         split_name = split_dir.name
         logger.info(f"Writing split {split_name} with {self.num_workers} Ray actors...")
 

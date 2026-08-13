@@ -19,12 +19,20 @@ _INLINE_BYTES_LIMIT = 1_048_576  # 1 MiB (1024 * 1024)
 
 class ParquetSchema:
     """Flattens a sample's to_dict() output into real parquet columns
-    instead of one opaque JSON blob -- the whole point of Delta/parquet
-    over msgpack is columnar structure. No per-instance-type dispatch:
-    just walks whatever dict shape to_dict() produces."""
+    instead of one opaque JSON blob, so the data keeps its columnar structure.
+    Walks whatever dict shape the sample produces, with no per-type dispatch."""
 
     @staticmethod
     def flatten(data: dict[str, Any], prefix: str = "") -> dict[str, Any]:
+        """Flatten a nested dict into dotted column names.
+
+        Args:
+            data: Nested sample dict.
+            prefix: Column-name prefix for the current nesting level.
+
+        Returns:
+            One flat dict, with variable-length sequences JSON-encoded.
+        """
         flat: dict[str, Any] = {}
         for key, value in data.items():
             full_key = f"{prefix}.{key}" if prefix else key
@@ -40,6 +48,11 @@ class ParquetSchema:
 
     @staticmethod
     def unflatten(flat: dict[str, Any]) -> dict[str, Any]:
+        """Rebuild a nested dict from dotted column names.
+
+        Reverses `flatten`, decoding JSON-encoded sequences and normalizing
+        pandas NaN back to None.
+        """
         nested: dict[str, Any] = {}
         for key, value in flat.items():
             # pandas represents missing/null values as float NaN (not None)
@@ -63,6 +76,7 @@ class ParquetSchema:
 
     @staticmethod
     def infer_pa_type(value: Any) -> pa.DataType:
+        """Return the pyarrow type matching a Python value."""
         if isinstance(value, bool):
             return pa.bool_()
         if isinstance(value, int):
@@ -181,6 +195,7 @@ class _DeltaBatchWriter:
         self._first_batch = True
 
     def add(self, rows: list[dict[str, Any]]) -> None:
+        """Buffer rows, flushing to the table once the batch is full."""
         self._batch.extend(rows)
         if self._write_batch_size is None and self._batch:
             self._write_batch_size = max(
@@ -194,6 +209,7 @@ class _DeltaBatchWriter:
             self._flush()
 
     def finish(self) -> None:
+        """Flush any buffered rows."""
         if self._batch:
             self._flush()
 

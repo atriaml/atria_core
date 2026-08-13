@@ -17,12 +17,16 @@ logger = get_logger(__name__)
 
 @dataclass
 class UrlSpec:
+    """A download URL together with where and under what extension it lands."""
+
     url: str
     url_ext: str
     rel_output_file_path: str | None = None
 
 
 class AtriaDownloadManager(RepresentationMixin):
+    """Downloads a dataset's source files and extracts any archives among them."""
+
     def __init__(self, data_dir: Path, download_dir: Path) -> None:
         self.data_dir = data_dir
         self.download_dir = download_dir
@@ -216,6 +220,17 @@ class AtriaDownloadManager(RepresentationMixin):
         extract: bool = True,
         access_token: str | None = None,
     ) -> dict[str, Path]:
+        """Download every URL, optionally extracting archives among them.
+
+        Args:
+            data_urls: URLs to fetch, as a single URL, a list, or a name-to-URL
+                mapping.
+            extract: Whether to unpack downloaded archives.
+            access_token: Substituted into URLs containing `{access_token}`.
+
+        Returns:
+            Each downloaded file's final path, keyed by its name.
+        """
         download_file_infos = self._prepare_urls_and_dirs(
             data_urls=data_urls, access_token=access_token
         )

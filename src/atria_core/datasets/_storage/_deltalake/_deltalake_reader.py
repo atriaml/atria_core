@@ -33,6 +33,19 @@ class DeltalakeReader(Sequence[Any]):
         config_name: str | None = None,
         storage_options: dict[str, Any] | None = None,
     ) -> DeltalakeReader:
+        """Return the reader implementing `mode`.
+
+        Args:
+            mode: How samples should be loaded.
+            table_path: Delta table to read.
+            storage_dir: Root the table lives under.
+            config_name: Cache directory name.
+            storage_options: Backend options passed to deltalake.
+
+        Raises:
+            NotImplementedError: If `mode` is online_streaming.
+            ValueError: If `mode` is not a known loading mode.
+        """
         kwargs = {
             "table_path": table_path,
             "storage_dir": storage_dir,
@@ -70,10 +83,13 @@ class DeltalakeReader(Sequence[Any]):
         raise NotImplementedError
 
     def dataframe(self) -> pd.DataFrame:
+        """Return the whole split as a dataframe."""
         raise NotImplementedError
 
 
 class InMemoryDeltalakeReader(DeltalakeReader):
+    """Reads a Delta Lake split fully into memory."""
+
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         from deltalake import DeltaTable
 
@@ -91,10 +107,13 @@ class InMemoryDeltalakeReader(DeltalakeReader):
         return [self._process_row(row) for row in row_dicts]
 
     def dataframe(self) -> pd.DataFrame:
+        """Return the whole split as a dataframe."""
         return self._df
 
 
 class LocalDeltalakeReader(DeltalakeReader):
+    """Reads a Delta Lake split lazily from local files."""
+
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         import pyarrow.dataset as ds
         from deltalake import DeltaTable
@@ -126,4 +145,5 @@ class LocalDeltalakeReader(DeltalakeReader):
         return [self._process_row(row) for row in row_dicts]
 
     def dataframe(self) -> pd.DataFrame:
+        """Return the whole split as a dataframe."""
         return self._dataset.to_table().to_pandas()

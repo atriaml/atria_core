@@ -23,6 +23,8 @@ logger = get_logger(__name__)
 
 
 class DeltalakeStorageManager(StorageManager):
+    """Stores dataset splits as Delta Lake tables."""
+
     storage_prefix: ClassVar[str] = "delta"
 
     def __init__(
@@ -48,6 +50,7 @@ class DeltalakeStorageManager(StorageManager):
         )
 
     def split_exists(self, split: DatasetSplitType) -> bool:
+        """Whether `split` has been written as a Delta table."""
         return (self.split_dir(split) / "_delta_log").exists()
 
     def _write_split_internal(
@@ -86,6 +89,15 @@ class DeltalakeStorageManager(StorageManager):
     def read_split(
         self, split: DatasetSplitType, streaming_mode: bool = False
     ) -> Sequence[Any]:
+        """Return the raw, undecoded records of `split`.
+
+        Args:
+            split: Which split to read.
+            streaming_mode: Read lazily from disk instead of loading into memory.
+
+        Raises:
+            RuntimeError: If the split has not been written yet.
+        """
         if not self.split_exists(split):
             raise RuntimeError(
                 f"Dataset split {split.value} not prepared. Please call `write_split()` first."

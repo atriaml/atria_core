@@ -13,10 +13,14 @@ logger = get_logger(__name__)
 
 
 class DuplicateKeyError(Exception):
+    """Raised when two samples in a split share a key."""
+
     pass
 
 
 class MsgpackFileWriter(Writer):  # type: ignore[misc]
+    """Appends length-prefixed msgpack records to one file, rejecting duplicate keys."""
+
     def _write_data(self, key: str, packed: bytes) -> None:
         if key in self._keys_set:
             raise DuplicateKeyError(f"Duplicate key {key!r} not allowed.")
@@ -28,12 +32,22 @@ class MsgpackFileWriter(Writer):  # type: ignore[misc]
         self.written += 1
 
     def write(self, sample: dict[str, Any]) -> int:
+        """Append one record and return the file's byte offset after writing.
+
+        Args:
+            sample: Record to write. Must carry a unique "key" entry.
+
+        Raises:
+            DuplicateKeyError: If the key was already written to this file.
+        """
         assert "key" in sample, "Sample must contain a unique 'key' value."
         self._write(sample["key"], sample)
         return self.written  # type: ignore[no-any-return]
 
 
 class MsgpackShardWriter:
+    """Writes records across msgpack shards, rolling over on size or count."""
+
     def __init__(
         self,
         pattern: str,
@@ -62,6 +76,7 @@ class MsgpackShardWriter:
         self.next_stream()
 
     def next_stream(self) -> None:
+        """Close the current shard and open the next one."""
         self.finish()
         self.fname = self.pattern % self.shard
         if self.verbose:
@@ -79,6 +94,7 @@ class MsgpackShardWriter:
         self.size = 0
 
     def write(self, obj: dict[str, Any]) -> None:
+        """Write one record, rolling over to a new shard if the current one is full."""
         if (
             self.writer is None
             or self.count >= self.maxcount
@@ -92,6 +108,7 @@ class MsgpackShardWriter:
         self.size += size
 
     def finish(self) -> None:
+        """Close the open shard, invoking the post-write hook if one was given."""
         if self.writer is not None:
             self.writer.close()
             assert self.fname is not None
@@ -100,6 +117,7 @@ class MsgpackShardWriter:
             self.writer = None
 
     def close(self) -> None:
+        """Close the writer and release its shard state."""
         self.finish()
         del self.writer
         del self.shard
@@ -114,10 +132,11 @@ class MsgpackShardWriter:
 
 
 class ShardWriterWorker:
-    """Wraps `MsgpackShardWriter`, tracking per-shard `DatasetShardInfo` as
-    shards rotate so callers get back sharding metadata, not just files.
-    `transform` is a plain Callable[[Any], Any] (or None) applied to each
-    raw item on write -- may return a single instance or a list of them."""
+    """Writes records to msgpack shards while collecting shard metadata.
+
+    Tracks a `DatasetShardInfo` per shard as shards rotate, so callers receive
+    sharding metadata alongside the written files. An optional transform is
+    applied to each raw item, and may expand one item into several."""
 
     def __init__(
         self,
@@ -132,6 +151,7 @@ class ShardWriterWorker:
         self._write_info: list[DatasetShardInfo] = []
 
     def load(self) -> Self:
+        """Open the first shard and begin tracking its metadata."""
         self._writer = MsgpackShardWriter(
             self._storage_file_pattern, maxcount=self._max_shard_size, overwrite=True
         )
@@ -140,6 +160,15 @@ class ShardWriterWorker:
         return self
 
     def write(self, index: int, raw_item: Any) -> None:
+        """Transform one raw item and write it to the current shard.
+
+        Args:
+            index: Position of the item in the split.
+            raw_item: Item to transform and write.
+
+        Raises:
+            RuntimeError: If called before `load()`.
+        """
         if self._writer is None:
             raise RuntimeError("ShardWriter is not loaded. Call `load()` first.")
         assert self._writer.fname is not None, "Writer filename is None."
@@ -171,6 +200,7 @@ class ShardWriterWorker:
         )
 
     def close(self) -> list[DatasetShardInfo]:
+        """Close the writer and return metadata for every shard written."""
         if self._writer is not None:
             self._writer.close()
             self._writer = None

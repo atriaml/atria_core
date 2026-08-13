@@ -24,6 +24,8 @@ logger = get_logger(__name__)
 
 
 class DatasetSnapshotStore:
+    """Writes and discovers the snapshot.yaml files that describe a dataset on disk."""
+
     @staticmethod
     def _write_yaml(file_path: Path, data: dict[str, Any]) -> None:
         file_path.parent.mkdir(parents=True, exist_ok=True)
@@ -46,6 +48,15 @@ class DatasetSnapshotStore:
         dataset: Dataset[Any, Any],
         data_dir: Path | str,
     ) -> DatasetSnapshot:
+        """Write the snapshot describing a dataset as loaded from its source.
+
+        Args:
+            dataset: Dataset being described.
+            data_dir: Directory the snapshot is written into.
+
+        Returns:
+            The snapshot that was written.
+        """
         snapshot = DatasetSnapshot.create(
             storage_type=None,
             data_model=None,
@@ -59,7 +70,7 @@ class DatasetSnapshotStore:
             splits=cls._split_counts(dataset.split_iterators),
             transforms=[],
         )
-        cls.write_snapshot(Path(data_dir), snapshot)
+        cls.write_snapshot(directory=Path(data_dir), snapshot=snapshot)
         return snapshot
 
     @classmethod
@@ -76,6 +87,22 @@ class DatasetSnapshotStore:
         splits: dict[str, int],
         transforms: list[dict[str, Any]] | None = None,
     ) -> DatasetSnapshot:
+        """Write the snapshot describing a cached copy of a dataset.
+
+        Args:
+            dataset: Dataset the cache was built from.
+            snapshot_dir: Directory the snapshot is written into.
+            storage_type: On-disk format the records use.
+            data_model: Sample class the records deserialize into.
+            config_name: Cache directory name.
+            config_hash: Hash of the source dataset's config.
+            dataset_stage: Whether the records are raw or transformed.
+            splits: Sample count per split written.
+            transforms: Serialized write-time transforms.
+
+        Returns:
+            The snapshot that was written.
+        """
         snapshot = DatasetSnapshot.create(
             storage_type=storage_type,
             data_model=f"{data_model.__module__}.{data_model.__qualname__}",
@@ -89,15 +116,20 @@ class DatasetSnapshotStore:
             splits=splits,
             transforms=transforms or [],
         )
-        cls.write_snapshot(Path(snapshot_dir), snapshot)
+        cls.write_snapshot(directory=Path(snapshot_dir), snapshot=snapshot)
         return snapshot
 
     @classmethod
     def write_snapshot(cls, directory: Path, snapshot: DatasetSnapshot) -> None:
+        """Write `snapshot` into `directory`, replacing any existing one.
+
+        The file is written to a temporary path and moved into place, so a
+        partially written snapshot is never visible to a reader.
+        """
         snapshot_path = directory / _DEFAULT_SNAPSHOT_PATH
         logger.info("Saving dataset snapshot to %s", snapshot_path)
         temporary_path = snapshot_path.with_suffix(f"{snapshot_path.suffix}.tmp")
-        cls._write_yaml(temporary_path, snapshot.to_dict())
+        cls._write_yaml(file_path=temporary_path, data=snapshot.to_dict())
         temporary_path.replace(snapshot_path)
 
     @classmethod
@@ -108,6 +140,13 @@ class DatasetSnapshotStore:
         snapshot_kind: str | None = None,
         dataset_stage: str | None = None,
     ) -> list[DatasetSnapshot]:
+        """Return snapshots under `base_dir`, optionally filtered.
+
+        Args:
+            base_dir: Directory to search.
+            snapshot_kind: Keep only snapshots of this kind.
+            dataset_stage: Keep only snapshots at this stage.
+        """
         snapshots = DatasetSnapshot.discover(base_dir)
         if snapshot_kind is not None:
             snapshots = [

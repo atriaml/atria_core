@@ -15,7 +15,18 @@ logger = get_logger(__name__)
 
 
 class FileDownloader(ABC, RepresentationMixin):
+    """Base for downloaders, one per URL scheme."""
+
     def download(self, download_file_info: DownloadFileInfo) -> None:
+        """Download one file, skipping it if already present.
+
+        Downloads to a `.incomplete` file under a lock and moves it into place
+        only on success, so an interrupted run never leaves a truncated file
+        that looks complete.
+
+        Raises:
+            RuntimeError: If the transfer fails.
+        """
         lock_file_path = download_file_info.download_path.with_suffix(
             download_file_info.download_path.suffix + ".lock"
         )
@@ -48,6 +59,11 @@ class FileDownloader(ABC, RepresentationMixin):
 
     @classmethod
     def from_url(cls, parsed_url: ParseResult, **kwargs: Any) -> FileDownloader:
+        """Return the downloader handling this URL's host and scheme.
+
+        Raises:
+            ValueError: If no downloader handles the URL.
+        """
         if parsed_url.hostname == "drive.google.com":
             return GoogleDriveDownloader()
         elif parsed_url.scheme == "http" or parsed_url.scheme == "https":
@@ -63,6 +79,8 @@ class FileDownloader(ABC, RepresentationMixin):
 
 
 class FTPFileDownloader(FileDownloader):
+    """Downloads over FTP."""
+
     def _download(self, parsed_url: ParseResult, destination_path: str) -> None:
         from ftplib import FTP
 
@@ -75,6 +93,8 @@ class FTPFileDownloader(FileDownloader):
 
 
 class HTTPDownloader(FileDownloader):
+    """Downloads over HTTP(S), resuming from a partial file when possible."""
+
     def __init__(
         self,
         proxies: dict[str, str] | None = None,
@@ -157,6 +177,8 @@ class HTTPDownloader(FileDownloader):
 
 
 class GoogleDriveDownloader(FileDownloader):
+    """Downloads from Google Drive, which needs its own confirmation handling."""
+
     def _download(self, parsed_url: ParseResult, destination_path: str) -> None:
         import gdown
 

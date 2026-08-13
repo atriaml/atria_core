@@ -42,11 +42,12 @@ def _convert_row(sample: tuple[int, Any]) -> list[dict[str, Any]]:
 
 
 class MultiprocessingParallelDeltalakeWriter:
-    """Ray-free alternative to RayParallelDeltalakeWriter: workers only
-    convert raw items into rows, one sample at a time via
-    `Pool.imap_unordered` (mirrors the msgpack multiprocessing writer's
-    dispatch shape); this process still does the actual Delta Lake writes,
-    in order, in batches."""
+    """Writes a split to Delta Lake using multiprocessing workers for
+    row conversion.
+
+    Workers only convert raw items into rows, one sample at a time. The Delta
+    Lake writes themselves happen in this process, in order and in batches, so
+    row ordering is preserved."""
 
     def __init__(self, num_workers: int = 4, max_memory: int = 1_000_000_000) -> None:
         self.num_workers = num_workers
@@ -59,6 +60,14 @@ class MultiprocessingParallelDeltalakeWriter:
         split_dir: Path,
         artifacts_dir: Path,
     ) -> None:
+        """Write every sample of a split to a Delta table.
+
+        Args:
+            dataset: Samples to write.
+            transform: Applied to each sample before writing, if given.
+            split_dir: Directory the Delta table is written into.
+            artifacts_dir: Directory large binary fields are hoisted into.
+        """
         split_name = split_dir.name
         logger.info(
             f"Writing split {split_name} with {self.num_workers} multiprocessing workers..."
@@ -83,6 +92,8 @@ class MultiprocessingParallelDeltalakeWriter:
 
 
 class SingleDeltalakeWriter:
+    """Writes a split to Delta Lake in the current process."""
+
     def __init__(self, max_memory: int = 1_000_000_000) -> None:
         self.max_memory = max_memory
 
@@ -93,6 +104,14 @@ class SingleDeltalakeWriter:
         split_dir: Path,
         artifacts_dir: Path,
     ) -> None:
+        """Write every sample of a split to a Delta table.
+
+        Args:
+            dataset: Samples to write.
+            transform: Applied to each sample before writing, if given.
+            split_dir: Directory the Delta table is written into.
+            artifacts_dir: Directory large binary fields are hoisted into.
+        """
         split_name = split_dir.name
         batch_writer = _DeltaBatchWriter(split_dir, self.max_memory)
 

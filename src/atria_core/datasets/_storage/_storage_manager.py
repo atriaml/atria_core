@@ -54,13 +54,12 @@ class _StoreImagesToFiles:
 
 
 class StorageManager(ABC):
-    """Base class for on-disk dataset storage backends: writes/reads splits
-    at a given storage_dir/config_name. Deciding *what* that path should be
-    (cache uniqueness -- dataset config hash, transform hash, storage
-    backend) is Cacher's job, not this class's; StorageManager only knows
-    how to store what it's told, where it's told. Split iterators no
-    longer carry their own split identity, so `split` is always an
-    explicit parameter here.
+    """Base class for on-disk dataset storage backends.
+
+    Writes and reads splits under a given `storage_dir`/`config_name`. It
+    stores what it is told, where it is told; choosing a location that keeps
+    distinct caches apart is the caller's responsibility. Split identity is
+    never inferred, so `split` is an explicit parameter on every operation.
     """
 
     storage_prefix: ClassVar[str]
@@ -89,6 +88,11 @@ class StorageManager(ABC):
     def resolve_class(
         cls, cached_storage_type: FileStorageType
     ) -> type[StorageManager]:
+        """Return the StorageManager subclass handling `cached_storage_type`.
+
+        Raises:
+            ValueError: If the storage type has no registered backend.
+        """
         if cached_storage_type == FileStorageType.DELTALAKE:
             from atria_core.datasets._storage._deltalake._deltalake_storage_manager import (
                 DeltalakeStorageManager,
@@ -140,23 +144,37 @@ class StorageManager(ABC):
         (self.storage_dir / self.config_name).mkdir(parents=True, exist_ok=True)
 
     def split_dir(self, split: DatasetSplitType) -> Path:
+        """Return the directory holding `split`, creating it if needed."""
         split_dir = self.storage_dir / self.config_name / split.value / self.name_suffix
         split_dir.mkdir(parents=True, exist_ok=True)
         return split_dir
 
     def dataset_exists(self) -> bool:
+        """Whether any split has been written to this storage location."""
         return bool(self.get_splits())
 
     def get_splits(self) -> list[DatasetSplitType]:
+        """Return every split present in this storage location."""
         return [split for split in DatasetSplitType if self.split_exists(split)]
 
     def purge_split(self, split: DatasetSplitType) -> None:
+        """Delete `split` and everything written for it."""
         split_dir = self.split_dir(split)
         if split_dir.exists():
             logger.info(f"Purging dataset split {split.value} from storage {split_dir}")
             shutil.rmtree(split_dir)
 
     def write_split(self, split: DatasetSplitType, split_iterator: Any) -> None:
+        """Write every sample of `split` to storage, purging it on failure.
+
+        Args:
+            split: Which split is being written.
+            split_iterator: Samples to write.
+
+        Raises:
+            Exception: Re-raised from the backend after the partial split is
+                purged, so a failed write never leaves a half-written split.
+        """
         try:
             if self.store_images_to_files:
                 artifacts_dir = (
@@ -177,6 +195,7 @@ class StorageManager(ABC):
 
     @abstractmethod
     def split_exists(self, split: DatasetSplitType) -> bool:
+        """Whether `split` has already been written here."""
         raise NotImplementedError
 
     @abstractmethod

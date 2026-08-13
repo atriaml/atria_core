@@ -19,9 +19,14 @@ from atria_core.types import DatasetShardInfo
 
 logger = get_logger(__name__)
 
+MAX_ERRORS_PER_ACTOR = 10
+"""Write failures tolerated by one actor before it aborts the split."""
+
 
 @ray.remote
 class ShardWriterActor:
+    """Ray actor writing one msgpack shard of a split."""
+
     def __init__(
         self,
         worker_id: int,
@@ -38,6 +43,17 @@ class ShardWriterActor:
         self.error_count = 0
 
     def write(self, sample_tuple: tuple[int, Any]) -> bool:
+        """Write one sample to this actor's shard.
+
+        Args:
+            sample_tuple: The sample's index in the split, and the sample.
+
+        Returns:
+            True once the sample has been handled.
+
+        Raises:
+            RuntimeError: If this actor has hit MAX_ERRORS_PER_ACTOR failures.
+        """
         idx, raw_item = sample_tuple
         try:
             self.writer.write(idx, raw_item)
@@ -47,20 +63,22 @@ class ShardWriterActor:
             logger.exception(f"Error writing sample at index {idx}")
             self.error_count += 1
 
-        if self.error_count >= 10:
+        if self.error_count >= MAX_ERRORS_PER_ACTOR:
             logger.error("Too many errors encountered. Stopping writer.")
             raise RuntimeError("Too many errors in ShardWriterActor")
         return True
 
     def close(self) -> list[DatasetShardInfo]:
+        """Close this actor's writer and return metadata for its shards."""
         return self.writer.close()
 
 
 class RayParallelSplitWriter:
-    """Parallel split writer using Ray actors: raw items are round-robin
-    dispatched to per-actor msgpack shard writers (each applying
-    `transform` itself), with a bounded in-flight task window (`ray.wait`)
-    so the driver doesn't outrun the actors."""
+    """Writes a split to msgpack shards across Ray actors.
+
+    Raw items are dispatched round-robin to per-actor shard writers, each
+    applying the transform itself. The number of in-flight tasks is bounded so
+    the driver cannot outrun the actors."""
 
     def __init__(
         self,
@@ -81,6 +99,16 @@ class RayParallelSplitWriter:
         transform: Callable[[Any], Any] | None,
         split_dir: Path,
     ) -> list[DatasetShardInfo]:
+        """Write every sample of a split across Ray actors.
+
+        Args:
+            dataset: Samples to write.
+            transform: Applied to each sample before writing, if given.
+            split_dir: Directory the shards are written into.
+
+        Returns:
+            Metadata for each shard written.
+        """
         try:
             split_name = split_dir.name
             logger.info(

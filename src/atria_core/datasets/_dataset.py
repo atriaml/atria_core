@@ -118,6 +118,7 @@ class Dataset(
 
     @property
     def data_dir(self) -> Path:
+        """Directory this dataset reads from and writes its snapshot to."""
         return self._data_dir
 
     def _build_split_iterators(
@@ -163,6 +164,7 @@ class Dataset(
         IndexableSplitIterator[T_BaseDataInstance]
         | IterableSplitIterator[T_BaseDataInstance]
     ):
+        """The train split. Raises ValueError if this dataset has none."""
         return self.split_iterator(DatasetSplitType.train)
 
     @property
@@ -172,6 +174,7 @@ class Dataset(
         IndexableSplitIterator[T_BaseDataInstance]
         | IterableSplitIterator[T_BaseDataInstance]
     ):
+        """The validation split. Raises ValueError if this dataset has none."""
         return self.split_iterator(DatasetSplitType.validation)
 
     @property
@@ -181,10 +184,12 @@ class Dataset(
         IndexableSplitIterator[T_BaseDataInstance]
         | IterableSplitIterator[T_BaseDataInstance]
     ):
+        """The test split. Raises ValueError if this dataset has none."""
         return self.split_iterator(DatasetSplitType.test)
 
     @property
     def metadata(self) -> DatasetMetadata:
+        """Description, citation, homepage and labels for this dataset."""
         return self._metadata()
 
     def __repr__(self) -> str:
@@ -201,9 +206,11 @@ class Dataset(
         IndexableSplitIterator[T_BaseDataInstance]
         | IterableSplitIterator[T_BaseDataInstance],
     ]:
+        """Every split this dataset built, keyed by split type."""
         return {split: self.split_iterator(split) for split in self._split_iterators}
 
     def split_exists(self, split: DatasetSplitType) -> bool:
+        """Return whether this dataset built the given split."""
         return split in self._split_iterators
 
     def split_iterator(
@@ -212,6 +219,15 @@ class Dataset(
         IndexableSplitIterator[T_BaseDataInstance]
         | IterableSplitIterator[T_BaseDataInstance]
     ):
+        """Return one split, optionally capped at `max_samples` samples.
+
+        Args:
+            split: Which split to return.
+            max_samples: Cap on samples exposed. None means no cap.
+
+        Raises:
+            ValueError: If the split does not exist, or `max_samples` is negative.
+        """
         if split not in self._split_iterators:
             raise ValueError(f"Split '{split}' does not exist for this dataset.")
         split_iterator = self._split_iterators[split]
@@ -224,7 +240,7 @@ class Dataset(
         return split_iterator.limit(max_samples)
 
     def _persist_snapshot(self) -> None:
-        DatasetSnapshotStore.write_source_snapshot(self, self.data_dir)
+        DatasetSnapshotStore.write_source_snapshot(dataset=self, data_dir=self.data_dir)
 
     @abstractmethod
     def _build_split_iterator(

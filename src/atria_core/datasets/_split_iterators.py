@@ -27,6 +27,9 @@ class Compose:
 
 
 class IndexableSplitIterator(Sequence[T_Output], Generic[T_Output]):
+    """A random-access split: wraps an indexable raw source and applies a
+    transform to each sample on access, optionally capped at `max_samples`."""
+
     def __init__(
         self,
         base_iterator: Sequence[Any],
@@ -60,30 +63,34 @@ class IndexableSplitIterator(Sequence[T_Output], Generic[T_Output]):
     def with_transform(
         self, transform: Callable[[T_Output], T_NewOutput]
     ) -> IndexableSplitIterator[T_NewOutput]:
+        """Return a new iterator applying `transform` after the current one."""
         composed_transform = Compose(self._transform, transform)
         return IndexableSplitIterator(
-            self._base_iterator,
-            composed_transform,
+            base_iterator=self._base_iterator,
+            transform=composed_transform,
             max_samples=self._max_samples,
         )
 
     def limit(self, max_samples: int) -> IndexableSplitIterator[T_Output]:
+        """Return an iterator exposing at most `max_samples` of these samples."""
         if max_samples < 0:
             raise ValueError("max_samples cannot be negative")
         return IndexableSplitIterator(
-            self._base_iterator,
-            self._transform,
+            base_iterator=self._base_iterator,
+            transform=self._transform,
             max_samples=min(max_samples, len(self)),
         )
 
     @property
     def base_iterator(self) -> Iterable[Any]:
+        """The untransformed source, capped at `max_samples` if one is set."""
         if self._max_samples is None:
             return self._base_iterator
         return islice(self._base_iterator, self._max_samples)
 
     @property
     def transform(self) -> Callable[[Any], T_Output]:
+        """The transform applied to each raw sample."""
         return self._transform
 
     def __repr__(self) -> str:
@@ -91,6 +98,9 @@ class IndexableSplitIterator(Sequence[T_Output], Generic[T_Output]):
 
 
 class IterableSplitIterator(Iterable[T_Output], Generic[T_Output]):
+    """A streaming split: wraps a one-pass raw source and applies a transform
+    to each sample as it is yielded, optionally capped at `max_samples`."""
+
     def __init__(
         self,
         base_iterator: Iterable[Any],
@@ -106,20 +116,25 @@ class IterableSplitIterator(Iterable[T_Output], Generic[T_Output]):
 
     @property
     def base_iterator(self) -> Iterable[Any]:
+        """The untransformed source, capped at `max_samples` if one is set."""
         if self._max_samples is None:
             return self._base_iterator
         return islice(self._base_iterator, self._max_samples)
 
     @property
     def transform(self) -> Callable[[Any], T_Output]:
+        """The transform applied to each raw sample."""
         return self._transform
 
     def with_transform(
         self, transform: Callable[[T_Output], T_NewOutput]
     ) -> IterableSplitIterator[T_NewOutput]:
+        """Return a new iterator applying `transform` after the current one."""
         composed_transform = Compose(self._transform, transform)
         return IterableSplitIterator(
-            self._base_iterator, composed_transform, max_samples=self._max_samples
+            base_iterator=self._base_iterator,
+            transform=composed_transform,
+            max_samples=self._max_samples,
         )
 
     def limit(self, max_samples: int) -> IterableSplitIterator[T_Output]:
@@ -129,7 +144,9 @@ class IterableSplitIterator(Iterable[T_Output], Generic[T_Output]):
         if self._max_samples is not None:
             max_samples = min(max_samples, self._max_samples)
         return IterableSplitIterator(
-            self._base_iterator, self._transform, max_samples=max_samples
+            base_iterator=self._base_iterator,
+            transform=self._transform,
+            max_samples=max_samples,
         )
 
     def __repr__(self) -> str:

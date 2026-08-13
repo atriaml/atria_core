@@ -16,6 +16,9 @@ from atria_core.types import DatasetShardInfo
 
 logger = get_logger(__name__)
 
+MAX_FAILED_SAMPLES = 10
+"""Failed samples tolerated before a parallel split write is aborted."""
+
 _mp_worker_state: tuple[int, ShardWriterWorker] | None = None
 
 
@@ -63,10 +66,11 @@ def _finish_worker(_: int) -> DatasetShardInfo | None:
 
 
 class MultiprocessingParallelSplitWriter:
-    """Ray-free alternative to RayParallelSplitWriter: each of `num_workers`
-    Pool workers claims a persistent shard index off `index_queue` once, at
-    init time, then individual samples (not chunks) are load-balanced
-    across workers via `imap_unordered`."""
+    """Writes a split to msgpack shards across multiprocessing workers.
+
+    Each worker claims one persistent shard index at start-up, then individual
+    samples are load-balanced across workers, so every worker writes to its own
+    shard without coordination."""
 
     def __init__(self, num_workers: int = 4) -> None:
         self.num_workers = num_workers
@@ -77,6 +81,19 @@ class MultiprocessingParallelSplitWriter:
         transform: Callable[[Any], Any] | None,
         split_dir: Path,
     ) -> list[DatasetShardInfo]:
+        """Write every sample of a split across worker processes.
+
+        Args:
+            dataset: Samples to write.
+            transform: Applied to each sample before writing, if given.
+            split_dir: Directory the shards are written into.
+
+        Returns:
+            Metadata for each shard written.
+
+        Raises:
+            RuntimeError: If more than MAX_FAILED_SAMPLES samples fail.
+        """
         split_name = split_dir.name
         logger.info(
             f"Writing split {split_name} with {self.num_workers} multiprocessing workers..."
@@ -102,11 +119,11 @@ class MultiprocessingParallelSplitWriter:
                 if error is not None:
                     errors.append((idx, error))
 
-                    if len(errors) > 10:
+                    if len(errors) > MAX_FAILED_SAMPLES:
                         pool.terminate()
                         raise RuntimeError(
                             f"Too many failed samples ({len(errors)}). "
-                            f"First failures: {errors[:10]}"
+                            f"First failures: {errors[:MAX_FAILED_SAMPLES]}"
                         )
 
             write_info = pool.map(_finish_worker, range(self.num_workers))
@@ -119,6 +136,8 @@ class MultiprocessingParallelSplitWriter:
 
 
 class SingleSplitWriter:
+    """Writes a split to msgpack shards in the current process."""
+
     def __init__(self, max_shard_size: int = 100_000) -> None:
         self.max_shard_size = max_shard_size
 
@@ -128,6 +147,16 @@ class SingleSplitWriter:
         transform: Callable[[Any], Any] | None,
         split_dir: Path,
     ) -> list[DatasetShardInfo]:
+        """Write every sample of a split in the current process.
+
+        Args:
+            dataset: Samples to write.
+            transform: Applied to each sample before writing, if given.
+            split_dir: Directory the shards are written into.
+
+        Returns:
+            Metadata for each shard written.
+        """
         split_name = split_dir.name
 
         writer = ShardWriterWorker(
