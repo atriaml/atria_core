@@ -34,6 +34,7 @@ class DeltalakeStorageManager(StorageManager):
         max_memory: int = 1_000_000_00,
         name_suffix: str = "",
         use_ray: bool = False,
+        store_images_to_files: bool = False,
     ) -> None:
         self.max_memory = max_memory
         super().__init__(
@@ -43,6 +44,7 @@ class DeltalakeStorageManager(StorageManager):
             num_processes=num_processes,
             name_suffix=name_suffix,
             use_ray=use_ray,
+            store_images_to_files=store_images_to_files,
         )
 
     def split_exists(self, split: DatasetSplitType) -> bool:

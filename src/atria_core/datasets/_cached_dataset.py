@@ -37,13 +37,6 @@ _SafeTupleLoader.add_constructor(
 class CachedDataset(
     Dataset[DatasetConfig, T_BaseDataInstance], Generic[T_BaseDataInstance]
 ):
-    """A Dataset subclass reading back from an on-disk cache instead of a
-    live source -- same shape as HuggingfaceDataset (which reads from a HF
-    builder instead of a live source): _download no-ops, _available_splits/
-    _build_split_iterator read from the storage manager, and
-    _build_input_transform is just data_model.from_dict, since the "raw
-    source item" here is a raw dict already sitting on disk."""
-
     def __init__(self, path: Path | str) -> None:
         self._path = Path(path)
 

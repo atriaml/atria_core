@@ -57,13 +57,6 @@ def transform_hash(transform: Callable[[Any], Any] | None) -> str | None:
 
 
 class PreprocessTransform(BaseTransform):
-    """Flag-driven output transform applied per-sample before writing to
-    storage. materialize_content=True makes to_dict() embed content as
-    bytes instead of requiring a file path -- needed for msgpack/tar-shard
-    storage, which bundles many small binary blobs into shard files rather
-    than reading/writing them one file at a time."""
-
-    materialize_content: bool = True
     resize_images: bool = False
     image_max_size: int | tuple[int, int] | None = None
 
@@ -77,11 +70,14 @@ class PreprocessTransform(BaseTransform):
         return sample
 
     def _process_visual(self, visual: Image | PdfPage) -> Image | PdfPage:
-        if self.materialize_content:
+        if not isinstance(visual, Image):
+            return visual
+
+        if self.resize_images:
             visual = visual.load()
-        if self.resize_images and visual.content is not None:
-            resized = self._resize(Image.from_source(visual.content))
+            resized = self._resize(Image.from_source(visual.require_content()))
             visual = replace(visual, content=resized.require_content())
+
         return visual
 
     def _resize(self, image: Image) -> Image:
@@ -150,14 +146,14 @@ class Cacher:
         *,
         num_processes: int = 8,
         use_ray: bool = False,
-        store_artifacts: bool = False,
+        store_images_to_files: bool = False,
         resize_images: bool = False,
         image_max_size: int | tuple[int, int] | None = None,
     ) -> None:
         self._storage_type = storage_type
         self._num_processes = num_processes
         self._use_ray = use_ray
-        self._store_artifacts = store_artifacts
+        self._store_images_to_files = store_images_to_files
         self._resize_images = resize_images
         self._image_max_size = image_max_size
 
@@ -167,12 +163,14 @@ class Cacher:
         *,
         data_dir: str | None = None,
         split: DatasetSplitType | None = None,
+        max_samples: int | None = None,
         overwrite_existing: bool = False,
     ) -> CachedDataset[Any]:
         return self._cache(
             dataset,
             data_dir=data_dir,
             split=split,
+            max_samples=max_samples,
             overwrite_existing=overwrite_existing,
             transform=None,
         )
@@ -184,6 +182,7 @@ class Cacher:
         *,
         data_dir: str | None = None,
         split: DatasetSplitType | None = None,
+        max_samples: int | None = None,
         overwrite_existing: bool = False,
     ) -> CachedDataset[Any]:
         """Like cache(), but writes transform(sample) for each sample the
@@ -194,6 +193,7 @@ class Cacher:
             dataset,
             data_dir=data_dir,
             split=split,
+            max_samples=max_samples,
             overwrite_existing=overwrite_existing,
             transform=transform,
         )
@@ -204,23 +204,23 @@ class Cacher:
         *,
         data_dir: str | None,
         split: DatasetSplitType | None,
+        max_samples: int | None,
         overwrite_existing: bool,
         transform: Callable[[Any], Any] | None,
     ) -> CachedDataset[Any]:
         from atria_core.datasets._storage._storage_manager import StorageManager
 
-        materialize = PreprocessTransform(
-            materialize_content=self._store_artifacts,
+        preprocess = PreprocessTransform(
             resize_images=self._resize_images,
             image_max_size=self._image_max_size,
         )
-        write_transform = (
-            Compose(materialize, transform) if transform is not None else materialize
-        )
 
         resolved_data_dir = _validate_data_dir(data_dir or dataset.data_dir)
+        write_transform = (
+            Compose(preprocess, transform) if transform is not None else preprocess
+        )
         unique_path = self._compute_cache_path(
-            dataset, resolved_data_dir, write_transform
+            dataset, resolved_data_dir, write_transform, max_samples
         )
         storage_manager = StorageManager.create(
             self._storage_type,
@@ -229,6 +229,7 @@ class Cacher:
             storage_dir=str(unique_path.parent),
             config_name=unique_path.name,
             use_ray=self._use_ray,
+            store_images_to_files=self._store_images_to_files,
         )
 
         if (
@@ -256,6 +257,8 @@ class Cacher:
                 )
                 continue
 
+            if max_samples is not None:
+                split_iterator = split_iterator.limit(max_samples)
             logger.info(f"Caching split [{s.value}] to {storage_manager.storage_dir}")
             storage_manager.write_split(
                 s, split_iterator.with_transform(write_transform)
@@ -281,13 +284,14 @@ class Cacher:
         dataset: Dataset[Any, Any],
         data_dir: str,
         write_transform: Callable[[Any], Any],
+        max_samples: int | None = None,
     ) -> Path:
         """Single source of truth for cache uniqueness -- Cacher's job, not
         StorageManager's. Folds the dataset config hash, this dataset
-        class's name, the storage backend's prefix, and a hash of whatever
-        is actually being written per-sample into the cache directory
-        name, so different backends/materialization settings/process
-        transforms never collide."""
+        class's name, the storage backend's prefix, a hash of whatever is
+        actually being written per-sample, and any sample cap into the cache
+        directory name, so different backends/materialization settings/process
+        transforms/sample counts never collide."""
         from atria_core.datasets._storage._storage_manager import StorageManager
 
         storage_manager_cls = StorageManager.resolve_class(self._storage_type)
@@ -299,6 +303,12 @@ class Cacher:
         hash_ = transform_hash(write_transform)
         if hash_ is not None:
             config_name += f"-{hash_}"
+        if self._store_images_to_files:
+            config_name += "-images-files"
+        if max_samples is not None:
+            # A capped cache holds fewer samples than the dataset it came
+            # from, so it must never be reused as though it were complete.
+            config_name += f"-max{max_samples}"
         return storage_dir / config_name
 
     @classmethod

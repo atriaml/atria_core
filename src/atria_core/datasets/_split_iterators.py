@@ -95,16 +95,20 @@ class IterableSplitIterator(Iterable[T_Output], Generic[T_Output]):
         self,
         base_iterator: Iterable[Any],
         transform: Callable[[Any], T_Output],
+        max_samples: int | None = None,
     ) -> None:
         self._base_iterator = base_iterator
         self._transform = transform
+        self._max_samples = max_samples
 
     def __iter__(self) -> Iterator[T_Output]:
-        yield from map(self._transform, self._base_iterator)
+        yield from map(self._transform, self.base_iterator)
 
     @property
     def base_iterator(self) -> Iterable[Any]:
-        return self._base_iterator
+        if self._max_samples is None:
+            return self._base_iterator
+        return islice(self._base_iterator, self._max_samples)
 
     @property
     def transform(self) -> Callable[[Any], T_Output]:
@@ -114,7 +118,19 @@ class IterableSplitIterator(Iterable[T_Output], Generic[T_Output]):
         self, transform: Callable[[T_Output], T_NewOutput]
     ) -> IterableSplitIterator[T_NewOutput]:
         composed_transform = Compose(self._transform, transform)
-        return IterableSplitIterator(self._base_iterator, composed_transform)
+        return IterableSplitIterator(
+            self._base_iterator, composed_transform, max_samples=self._max_samples
+        )
+
+    def limit(self, max_samples: int) -> IterableSplitIterator[T_Output]:
+        """Return an iterator yielding at most `max_samples` of these samples."""
+        if max_samples < 0:
+            raise ValueError("max_samples cannot be negative")
+        if self._max_samples is not None:
+            max_samples = min(max_samples, self._max_samples)
+        return IterableSplitIterator(
+            self._base_iterator, self._transform, max_samples=max_samples
+        )
 
     def __repr__(self) -> str:
         return f"IterableSplitIterator({self._base_iterator})"

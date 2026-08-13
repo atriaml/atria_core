@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterable, Sequence
 from pathlib import Path
-from typing import Any, Generic, Self, TypeVar
+from typing import Any, Generic, TypeVar
 
 from pydantic.dataclasses import dataclass as pydantic_dataclass
 
@@ -46,37 +46,6 @@ def _validate_data_dir(data_dir: str | Path) -> str:
 @pydantic_dataclass(frozen=True)
 class DatasetConfig(ModuleConfig):
     dataset_dir_name: str | None = None
-    max_train_samples: int | None = None
-    max_test_samples: int | None = None
-    max_validation_samples: int | None = None
-
-    @classmethod
-    def from_registry(
-        cls,
-        dataset_name: str,
-        **kwargs: Any,
-    ) -> Self:
-        from atria_core.datasets._registry import datasets
-
-        matching_configs = {
-            config_cls
-            for registered_name, config_cls in datasets.items()
-            if registered_name == dataset_name and issubclass(config_cls, cls)
-        }
-        if not matching_configs:
-            raise KeyError(f"No dataset config is registered as '{dataset_name}'.")
-        if len(matching_configs) > 1:
-            raise ValueError(
-                f"Multiple dataset configs are registered as '{dataset_name}'."
-            )
-        config_cls = matching_configs.pop()
-        assert issubclass(config_cls, cls), (
-            f"Registered dataset config `{dataset_name}` must inherit "
-            f"{cls.__name__}, got {config_cls.__name__}."
-        )
-
-        kwargs.setdefault("dataset_dir_name", dataset_name)
-        return config_cls(**kwargs)
 
     def build_module(self, **kwargs: Any) -> Dataset:
         raise NotImplementedError(
@@ -85,9 +54,9 @@ class DatasetConfig(ModuleConfig):
 
 
 class Dataset(
+    ABC,
     ConfigurableModule[T_DatasetConfig],
     Generic[T_DatasetConfig, T_BaseDataInstance],
-    ABC,
 ):
     __abstract__ = True
     __requires_access_token__ = False
@@ -203,7 +172,7 @@ class Dataset(
         return split in self._split_iterators
 
     def split_iterator(
-        self, split: DatasetSplitType
+        self, split: DatasetSplitType, max_samples: int | None = None
     ) -> (
         IndexableSplitIterator[T_BaseDataInstance]
         | IterableSplitIterator[T_BaseDataInstance]
@@ -211,20 +180,11 @@ class Dataset(
         if split not in self._split_iterators:
             raise ValueError(f"Split '{split}' does not exist for this dataset.")
         split_iterator = self._split_iterators[split]
-        max_samples = {
-            DatasetSplitType.train: self.config.max_train_samples,
-            DatasetSplitType.test: self.config.max_test_samples,
-            DatasetSplitType.validation: self.config.max_validation_samples,
-        }[split]
         if max_samples is None:
             return split_iterator
         if max_samples < 0:
             raise ValueError(
                 f"Maximum sample count for split '{split}' cannot be negative."
-            )
-        if not isinstance(split_iterator, IndexableSplitIterator):
-            raise TypeError(
-                f"Maximum sample count for split '{split}' requires an indexable split iterator."
             )
         return split_iterator.limit(max_samples)
 

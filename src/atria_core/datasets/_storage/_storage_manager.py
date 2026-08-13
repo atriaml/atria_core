@@ -1,16 +1,56 @@
 from __future__ import annotations
 
+import hashlib
+import io
 import shutil
 from abc import ABC, abstractmethod
 from collections.abc import Iterable, Sequence
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, ClassVar
 
 from atria_core.datasets._common import FileStorageType
 from atria_core.logger import get_logger
-from atria_core.types import DatasetSplitType
+from atria_core.types import (
+    BaseDataInstance,
+    DatasetSplitType,
+    Image,
+    ImageInstance,
+    SinglePageDocumentInstance,
+)
 
 logger = get_logger(__name__)
+
+
+@dataclass(frozen=True)
+class _StoreImagesToFiles:
+    artifacts_dir: Path
+
+    def __call__(self, sample: BaseDataInstance) -> BaseDataInstance:
+        if isinstance(sample, ImageInstance):
+            return replace(sample, image=self._store(sample.image))
+        if isinstance(sample, SinglePageDocumentInstance) and isinstance(
+            sample.visual, Image
+        ):
+            return replace(sample, visual=self._store(sample.visual))
+        return sample
+
+    def _store(self, image: Image) -> Image:
+        if image.file_path is not None:
+            return replace(image, content=None)
+
+        buffer = io.BytesIO()
+        image.require_content().save(buffer, format="PNG")
+        image_bytes = buffer.getvalue()
+        digest = hashlib.sha256(image_bytes).hexdigest()
+        image_path = self.artifacts_dir / digest[:2] / f"{digest}.png"
+        image_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            with image_path.open("xb") as output:
+                output.write(image_bytes)
+        except FileExistsError:
+            pass
+        return replace(image, file_path=str(image_path), content=None)
 
 
 class StorageManager(ABC):
@@ -33,6 +73,7 @@ class StorageManager(ABC):
         num_processes: int = 8,
         name_suffix: str = "",
         use_ray: bool = False,
+        store_images_to_files: bool = False,
     ) -> None:
         self.data_dir = data_dir
         self.storage_dir = Path(storage_dir)
@@ -40,6 +81,7 @@ class StorageManager(ABC):
         self.num_processes = num_processes
         self.name_suffix = name_suffix
         self.use_ray = use_ray
+        self.store_images_to_files = store_images_to_files
 
         self._setup_directories()
 
@@ -72,6 +114,7 @@ class StorageManager(ABC):
         storage_dir: str | Path,
         config_name: str,
         use_ray: bool = False,
+        store_images_to_files: bool = False,
     ) -> StorageManager:
         """Resolve the concrete StorageManager for `cached_storage_type` and
         instantiate it at the given, already-computed `storage_dir`/
@@ -86,6 +129,7 @@ class StorageManager(ABC):
             num_processes=num_processes,
             name_suffix=name_suffix,
             use_ray=use_ray,
+            store_images_to_files=store_images_to_files,
         )
 
     def _setup_directories(self) -> None:
@@ -114,6 +158,13 @@ class StorageManager(ABC):
 
     def write_split(self, split: DatasetSplitType, split_iterator: Any) -> None:
         try:
+            if self.store_images_to_files:
+                artifacts_dir = (
+                    self.storage_dir / self.config_name / "artifacts" / "images"
+                )
+                split_iterator = split_iterator.with_transform(
+                    _StoreImagesToFiles(artifacts_dir)
+                )
             self._write_split_internal(split, split_iterator)
         except (Exception, KeyboardInterrupt) as e:
             self.purge_split(split)

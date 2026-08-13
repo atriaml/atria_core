@@ -217,7 +217,6 @@ def test_cached_snapshot_stores_dataclass_transform_params(tmp_path: Path) -> No
         {
             "type": "atria_core.datasets._cacher.PreprocessTransform",
             "params": {
-                "materialize_content": False,
                 "resize_images": False,
                 "image_max_size": None,
             },
@@ -230,6 +229,24 @@ def test_cached_snapshot_stores_dataclass_transform_params(tmp_path: Path) -> No
             },
         },
     ]
+
+
+def test_cache_stores_in_memory_images_as_lazy_files(tmp_path: Path) -> None:
+    dataset = SyntheticConfig().build_module(data_dir=str(tmp_path))
+
+    cached = Cacher(
+        FileStorageType.MSGPACK,
+        num_processes=1,
+        store_images_to_files=True,
+    ).cache(dataset, data_dir=str(tmp_path))
+
+    image = _record(cached.train[0]).image
+    assert image.content is None
+    assert image.file_path is not None
+    image_path = Path(image.file_path)
+    assert image_path.is_file()
+    assert image_path.is_relative_to(cached.data_dir / "artifacts/images")
+    assert image.load().require_content().size == (4, 4)
 
 
 def test_cache_with_multiprocessing_num_processes_gt_1(tmp_path: Path) -> None:

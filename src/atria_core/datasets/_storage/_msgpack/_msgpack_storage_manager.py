@@ -33,6 +33,7 @@ class MsgpackStorageManager(StorageManager):
         max_shard_size: int = 100_000,
         name_suffix: str = "",
         use_ray: bool = False,
+        store_images_to_files: bool = False,
     ) -> None:
         self.max_shard_size = max_shard_size
         super().__init__(
@@ -42,6 +43,7 @@ class MsgpackStorageManager(StorageManager):
             num_processes=num_processes,
             name_suffix=name_suffix,
             use_ray=use_ray,
+            store_images_to_files=store_images_to_files,
         )
 
     def split_exists(self, split: DatasetSplitType) -> bool:
