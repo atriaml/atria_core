@@ -12,7 +12,7 @@ from typing import Any, ClassVar
 from atria_core.datasets._common import FileStorageType
 from atria_core.logger import get_logger
 from atria_core.types import (
-    BaseDataInstance,
+    DataInstance,
     DatasetSplitType,
     Image,
     ImageInstance,
@@ -26,7 +26,7 @@ logger = get_logger(__name__)
 class _StoreImagesToFiles:
     artifacts_dir: Path
 
-    def __call__(self, sample: BaseDataInstance) -> BaseDataInstance:
+    def __call__(self, sample: DataInstance) -> DataInstance:
         if isinstance(sample, ImageInstance):
             return replace(sample, image=self._store(sample.image))
         if isinstance(sample, SinglePageDocumentInstance) and isinstance(

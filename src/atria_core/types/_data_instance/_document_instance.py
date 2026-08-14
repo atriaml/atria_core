@@ -7,7 +7,7 @@ from typing import Any
 
 from PIL import Image as PILImage
 
-from atria_core.types._data_instance._base import BaseDataInstance
+from atria_core.types._data_instance._base import DataInstance
 from atria_core.types._generic._doc_content import DocumentContent
 from atria_core.types._generic._documents import PdfPage
 from atria_core.types._generic._image import Image
@@ -15,7 +15,7 @@ from atria_core.types._utilities._url_fetchers import ResourceLoader
 
 
 @dataclass(frozen=True, repr=False)
-class DocumentInstance(BaseDataInstance):
+class DocumentInstance(DataInstance):
     """Abstract base -- only SinglePageDocumentInstance/MultiPageDocumentInstance
     are ever constructed. Shared only for isinstance checks and typing."""
 

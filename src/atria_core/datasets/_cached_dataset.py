@@ -9,7 +9,7 @@ import yaml
 
 from atria_core.datasets._common import FileStorageType
 from atria_core.datasets._constants import _DEFAULT_ATRIA_DATASETS_CONFIG_PATH
-from atria_core.datasets._dataset import Dataset, DatasetConfig, T_BaseDataInstance
+from atria_core.datasets._dataset import Dataset, DatasetConfig, T_DataInstance
 from atria_core.datasets._snapshot import DatasetSnapshot
 from atria_core.datasets._storage._storage_manager import StorageManager
 from atria_core.logger import get_logger
@@ -19,9 +19,7 @@ from atria_core.types import DatasetMetadata, DatasetSplitType
 logger = get_logger(__name__)
 
 
-class CachedDataset(
-    Dataset[DatasetConfig, T_BaseDataInstance], Generic[T_BaseDataInstance]
-):
+class CachedDataset(Dataset[T_DataInstance, DatasetConfig], Generic[T_DataInstance]):
     """A dataset read from an on-disk cache directory.
 
     Its sample class and config are reconstructed from the snapshot stored
@@ -48,7 +46,7 @@ class CachedDataset(
         assert fqn is not None
         module_name, class_name = fqn.rsplit(".", 1)
         module = importlib.import_module(module_name)
-        self._data_model_cls: type[T_BaseDataInstance] = getattr(module, class_name)
+        self._data_model_cls: type[T_DataInstance] = getattr(module, class_name)
 
         config_data = self._snapshot.config
         if not config_data:
@@ -65,7 +63,7 @@ class CachedDataset(
         return self._path
 
     @property
-    def data_model(self) -> type[T_BaseDataInstance]:
+    def data_model(self) -> type[T_DataInstance]:
         """Sample class the cached records deserialize into."""
         return self._data_model_cls
 
@@ -119,9 +117,7 @@ class CachedDataset(
                 return DatasetMetadata.from_dict(yaml.safe_load(f))
         return DatasetMetadata()
 
-    def _build_input_transform(
-        self, **kwargs: Any
-    ) -> Callable[[Any], T_BaseDataInstance]:
+    def _build_input_transform(self, **kwargs: Any) -> Callable[[Any], T_DataInstance]:
         return self.data_model.from_dict  # type: ignore[return-value]
 
     def _build_split_iterator(

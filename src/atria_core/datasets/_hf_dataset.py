@@ -10,7 +10,7 @@ from atria_core.datasets._constants import _HF_DOWNLOAD_TIMEOUT_SECONDS
 from atria_core.datasets._dataset import (
     Dataset,
     DatasetConfig,
-    T_BaseDataInstance,
+    T_DataInstance,
 )
 from atria_core.logger import get_logger
 from atria_core.types import DatasetMetadata, DatasetSplitType
@@ -41,17 +41,18 @@ class HuggingfaceDatasetConfig(DatasetConfig):
     """Params for a dataset streamed from the Hugging Face hub."""
 
     config_name: str | None = None
-    dataset_dir_name: str | None = None
 
 
 T_HuggingfaceDatasetConfig = TypeVar(
-    "T_HuggingfaceDatasetConfig", bound=HuggingfaceDatasetConfig
+    "T_HuggingfaceDatasetConfig",
+    bound=HuggingfaceDatasetConfig,
+    default=HuggingfaceDatasetConfig,
 )
 
 
 class HuggingfaceDataset(
-    Dataset[T_HuggingfaceDatasetConfig, T_BaseDataInstance],
-    Generic[T_HuggingfaceDatasetConfig, T_BaseDataInstance],
+    Dataset[T_DataInstance, T_HuggingfaceDatasetConfig],
+    Generic[T_DataInstance, T_HuggingfaceDatasetConfig],
 ):
     """Streams a dataset straight off the Hugging Face hub, letting the
     `datasets` library handle downloading and caching internally."""
@@ -67,6 +68,7 @@ class HuggingfaceDataset(
         data_dir: str | None = None,
         access_token: str | None = None,
         split: DatasetSplitType | None = None,
+        dataset_dir_name: str | None = None,
     ) -> None:
         """Stream a dataset from the Hugging Face hub.
 
@@ -83,6 +85,7 @@ class HuggingfaceDataset(
             data_dir=data_dir,
             access_token=access_token,
             split=split,
+            dataset_dir_name=dataset_dir_name,
         )
 
     def _download(

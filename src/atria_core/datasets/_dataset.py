@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterable, Sequence
 from pathlib import Path
-from typing import Any, ClassVar, Generic, TypeVar, cast
+from typing import Any, ClassVar, Generic, TypeVar, cast, get_args, get_origin
 
 from pydantic.dataclasses import dataclass as pydantic_dataclass
 
@@ -20,14 +20,10 @@ from atria_core.datasets._split_iterators import (
 from atria_core.logger import get_logger
 from atria_core.registry import ConfigurableModule
 from atria_core.registry._module_config import ModuleConfig
-from atria_core.types import DatasetMetadata, DatasetSplitType
-from atria_core.types._data_instance._base import BaseDataInstance
+from atria_core.types import DatasetMetadata, DatasetSplitType, RepresentationMixin
+from atria_core.types._data_instance._base import DataInstance
 
 logger = get_logger(__name__)
-
-
-T_BaseDataInstance = TypeVar("T_BaseDataInstance", bound=BaseDataInstance)
-T_DatasetConfig = TypeVar("T_DatasetConfig", bound="DatasetConfig")
 
 
 def _validate_data_dir(data_dir: str | Path) -> str:
@@ -49,13 +45,40 @@ class DatasetConfig(ModuleConfig):
     """Validated params for a dataset. A config only describes -- it does not
     build anything; the dataset takes one, not the other way round."""
 
-    dataset_dir_name: str | None = None
+
+T_DataInstance = TypeVar("T_DataInstance", bound=DataInstance, default=DataInstance)
+T_DatasetConfig = TypeVar(
+    "T_DatasetConfig", bound="DatasetConfig", default=DatasetConfig
+)
+
+
+def _resolve_data_model(dataset_cls: type[Any]) -> type[DataInstance]:
+    """Resolve the first ``Dataset`` generic argument without loading a sample."""
+
+    def resolve(
+        cls: type[Any], type_vars: dict[TypeVar, Any]
+    ) -> type[DataInstance] | None:
+        for base in getattr(cls, "__orig_bases__", ()):
+            origin = get_origin(base) or base
+            args = tuple(type_vars.get(arg, arg) for arg in get_args(base))
+
+            if origin is Dataset and args and isinstance(args[0], type):
+                return cast("type[DataInstance]", args[0])
+
+            parameters = getattr(origin, "__parameters__", ())
+            resolved = resolve(origin, dict(zip(parameters, args, strict=False)))
+            if resolved is not None:
+                return resolved
+        return None
+
+    return resolve(dataset_cls, {}) or DataInstance
 
 
 class Dataset(
     ABC,
+    RepresentationMixin,
     ConfigurableModule[T_DatasetConfig],
-    Generic[T_DatasetConfig, T_BaseDataInstance],
+    Generic[T_DataInstance, T_DatasetConfig],
 ):
     """Subclasses name their config class in `__config__`, which lets the
     dataset be constructed with no arguments at all::
@@ -72,6 +95,12 @@ class Dataset(
     __requires_access_token__ = False
     __extract_downloads__ = True
     __config__: ClassVar[type[DatasetConfig]] = DatasetConfig
+    __repr_fields__ = (
+        "data_model",
+        "data_dir",
+        "split_iterators",
+        "config",
+    )
 
     def __init__(
         self,
@@ -80,6 +109,7 @@ class Dataset(
         data_dir: str | None = None,
         access_token: str | None = None,
         split: DatasetSplitType | None = None,
+        dataset_dir_name: str | None = None,
     ) -> None:
         """Build every split iterator eagerly, then write a source snapshot.
 
@@ -89,6 +119,7 @@ class Dataset(
                 cache directory named after the config or the class.
             access_token: Credential for datasets behind authentication.
             split: Build only this split, instead of every available one.
+            dataset_dir_name: Dataset name override for use
 
         Raises:
             TypeError: If `config` is not an instance of this dataset's
@@ -109,7 +140,7 @@ class Dataset(
             data_dir=Path(data_dir)
             if data_dir is not None
             else _DEFAULT_ATRIA_DATASETS_CACHE_DIR
-            / (config.dataset_dir_name or type(self).__name__)
+            / (dataset_dir_name or type(self).__name__)
         )
         self._data_dir = Path(data_dir)
         self._build_split_iterators(
@@ -161,30 +192,21 @@ class Dataset(
     @property
     def train(
         self,
-    ) -> (
-        IndexableSplitIterator[T_BaseDataInstance]
-        | IterableSplitIterator[T_BaseDataInstance]
-    ):
+    ) -> IndexableSplitIterator[T_DataInstance] | IterableSplitIterator[T_DataInstance]:
         """The train split. Raises ValueError if this dataset has none."""
         return self.split_iterator(DatasetSplitType.train)
 
     @property
     def validation(
         self,
-    ) -> (
-        IndexableSplitIterator[T_BaseDataInstance]
-        | IterableSplitIterator[T_BaseDataInstance]
-    ):
+    ) -> IndexableSplitIterator[T_DataInstance] | IterableSplitIterator[T_DataInstance]:
         """The validation split. Raises ValueError if this dataset has none."""
         return self.split_iterator(DatasetSplitType.validation)
 
     @property
     def test(
         self,
-    ) -> (
-        IndexableSplitIterator[T_BaseDataInstance]
-        | IterableSplitIterator[T_BaseDataInstance]
-    ):
+    ) -> IndexableSplitIterator[T_DataInstance] | IterableSplitIterator[T_DataInstance]:
         """The test split. Raises ValueError if this dataset has none."""
         return self.split_iterator(DatasetSplitType.test)
 
@@ -193,19 +215,17 @@ class Dataset(
         """Description, citation, homepage and labels for this dataset."""
         return self._metadata()
 
-    def __repr__(self) -> str:
-        splits = ", ".join(split.value for split in self._split_iterators)
-        if not splits:
-            splits = "-"
-        return f"{type(self).__name__}(config={self.config!r}, splits=[{splits}])"
+    @property
+    def data_model(self) -> type[T_DataInstance]:
+        """The declared type of samples produced by this dataset."""
+        return cast("type[T_DataInstance]", _resolve_data_model(type(self)))
 
     @property
     def split_iterators(
         self,
     ) -> dict[
         DatasetSplitType,
-        IndexableSplitIterator[T_BaseDataInstance]
-        | IterableSplitIterator[T_BaseDataInstance],
+        IndexableSplitIterator[T_DataInstance] | IterableSplitIterator[T_DataInstance],
     ]:
         """Every split this dataset built, keyed by split type."""
         return {split: self.split_iterator(split) for split in self._split_iterators}
@@ -216,10 +236,7 @@ class Dataset(
 
     def split_iterator(
         self, split: DatasetSplitType, max_samples: int | None = None
-    ) -> (
-        IndexableSplitIterator[T_BaseDataInstance]
-        | IterableSplitIterator[T_BaseDataInstance]
-    ):
+    ) -> IndexableSplitIterator[T_DataInstance] | IterableSplitIterator[T_DataInstance]:
         """Return one split, optionally capped at `max_samples` samples.
 
         Args:
@@ -252,7 +269,7 @@ class Dataset(
         pass
 
     @abstractmethod
-    def _build_input_transform(self) -> Callable[[Any], T_BaseDataInstance]:
+    def _build_input_transform(self) -> Callable[[Any], T_DataInstance]:
         pass
 
     @abstractmethod

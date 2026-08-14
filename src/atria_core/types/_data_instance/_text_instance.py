@@ -3,11 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from atria_core.types._data_instance._base import BaseDataInstance
+from atria_core.types._data_instance._base import DataInstance
 
 
 @dataclass(frozen=True, repr=False)
-class TextInstance(BaseDataInstance):
+class TextInstance(DataInstance):
     """Plain text with no visual/page representation at all -- for
     text-only datasets (e.g. SQuAD)."""
 

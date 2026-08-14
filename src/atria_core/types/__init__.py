@@ -18,7 +18,7 @@ if TYPE_CHECKING:
         OCRType as OCRType,
         TaskType as TaskType,
     )
-    from ._data_instance._base import BaseDataInstance as BaseDataInstance
+    from ._data_instance._base import DataInstance as DataInstance
     from ._data_instance._document_instance import (
         DocumentInstance as DocumentInstance,
         MultiPageDocumentInstance as MultiPageDocumentInstance,
@@ -69,7 +69,7 @@ __getattr__, __dir__, __all__ = lazy.attach(
             "OCRType",
             "TaskType",
         ],
-        "_data_instance._base": ["BaseDataInstance"],
+        "_data_instance._base": ["DataInstance"],
         "_data_instance._document_instance": [
             "DocumentInstance",
             "MultiPageDocumentInstance",

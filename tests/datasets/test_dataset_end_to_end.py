@@ -56,7 +56,7 @@ class _RawSplit(Sequence[int]):
         return index
 
 
-class SyntheticDataset(Dataset[SyntheticConfig, ImageInstance]):
+class SyntheticDataset(Dataset[ImageInstance, SyntheticConfig]):
     __config__ = SyntheticConfig
 
     def _download_urls(self) -> list[UrlSpec]:
@@ -177,7 +177,7 @@ def test_config_dataset_dir_name_sets_data_dir(
         "atria_core.datasets._dataset._DEFAULT_ATRIA_DATASETS_CACHE_DIR", tmp_path
     )
 
-    dataset = SyntheticDataset(config=SyntheticConfig(dataset_dir_name="named-dir"))
+    dataset = SyntheticDataset(config=SyntheticConfig(), dataset_dir_name="named-dir")
 
     assert dataset.data_dir == tmp_path / "named-dir"
 
@@ -191,6 +191,29 @@ def test_dataset_produces_live_split_iterators(tmp_path: Path) -> None:
     assert len(train) == 4
     assert len(test) == 2
     assert _record(train[0]).sample_id == "0"
+
+
+def test_dataset_repr_summarizes_data_model_and_split_sizes(tmp_path: Path) -> None:
+    dataset = SyntheticDataset(data_dir=str(tmp_path))
+
+    representation = repr(dataset)
+
+    assert representation.startswith("SyntheticDataset(\n")
+    assert "data_model=<class " in representation
+    assert "ImageInstance'>" in representation
+    assert "total_size=6" in representation
+    assert f"data_dir={tmp_path!r}" in representation
+    assert "split_iterators={" in representation
+    assert "IndexableSplitIterator(" in representation
+    assert "<DatasetSplitType.train: 'train'>" in representation
+    assert "length=4" in representation
+    assert "base_iterator=" in representation
+    assert "_RawSplit object" in representation
+    assert "transform=" in representation
+    assert "_InputTransform object" in representation
+    assert "<DatasetSplitType.test: 'test'>" in representation
+    assert "length=2" in representation
+    assert f"config={dataset.config!r}" in representation
 
 
 def test_config_sample_caps_limit_splits(tmp_path: Path) -> None:

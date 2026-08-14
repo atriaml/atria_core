@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Collection
 from typing import TYPE_CHECKING, ClassVar
 
 if TYPE_CHECKING:
@@ -17,9 +18,10 @@ class RepresentationMixin:
     (`__repr__`) and human-readable (`__str__`) representations.
 
     Set `__repr_fields__` as a class attribute to specify which fields to include.
+    Prefer a tuple when field order matters.
     """
 
-    __repr_fields__: ClassVar[set[str]] = set()
+    __repr_fields__: ClassVar[Collection[str]] = ()
 
     def __repr_name__(self) -> str:
         """

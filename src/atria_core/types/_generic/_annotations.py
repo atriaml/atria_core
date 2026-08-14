@@ -266,7 +266,7 @@ class OCRAnnotation(ElementArray):
     same structure-of-arrays shape as ElementArray (page/block/line/word,
     with parent links, bbox coordinate metadata, and optional polygons), just
     tagged as an `ocr` annotation so it round-trips through
-    BaseDataInstance's annotation dict. A single instance can carry the
+    DataInstance's annotation dict. A single instance can carry the
     whole hierarchy at once (sliceable via `.at(level)`), which is what
     lets one document hold word-level *and* line-level ground truth
     together."""
@@ -284,7 +284,7 @@ Annotation = (
     | OCRAnnotation
 )
 
-#: type string -> class, for BaseDataInstance's annotation dict (de)serialization.
+#: type string -> class, for DataInstance's annotation dict (de)serialization.
 ANNOTATION_TYPES: dict[str, type[Annotation]] = {
     AnnotationType.classification.value: ClassificationAnnotation,
     AnnotationType.entity_labeling.value: EntityLabelingAnnotation,

@@ -4,16 +4,20 @@ from collections.abc import Callable, Iterable, Iterator, Sequence
 from itertools import islice
 from typing import Any, Generic, TypeVar, overload
 
+from atria_core.types._utilities._repr import RepresentationMixin
+
 T_Output = TypeVar("T_Output")
 T_NewOutput = TypeVar("T_NewOutput")
 
 
-class Compose:
+class Compose(RepresentationMixin):
     """Plain class instead of a closure so composed transforms stay
     picklable -- stdlib pickle can't serialize nested functions, and
     multiprocessing writers need to send composed transforms to worker
     processes. Holds a flat list of transforms, flattening nested Compose
     instances on construction."""
+
+    __repr_fields__ = ("transforms",)
 
     def __init__(self, *transforms: Callable[[Any], Any]) -> None:
         self.transforms: list[Callable[[Any], Any]] = []
@@ -26,9 +30,13 @@ class Compose:
         return value
 
 
-class IndexableSplitIterator(Sequence[T_Output], Generic[T_Output]):
+class IndexableSplitIterator(
+    Sequence[T_Output], Generic[T_Output], RepresentationMixin
+):
     """A random-access split: wraps an indexable raw source and applies a
     transform to each sample on access, optionally capped at `max_samples`."""
+
+    __repr_fields__ = ("length", "base_iterator", "transform", "max_samples")
 
     def __init__(
         self,
@@ -93,13 +101,20 @@ class IndexableSplitIterator(Sequence[T_Output], Generic[T_Output]):
         """The transform applied to each raw sample."""
         return self._transform
 
-    def __repr__(self) -> str:
-        return f"IndexableSplitIterator(len={len(self)})"
+    @property
+    def length(self) -> int:
+        return len(self)
+
+    @property
+    def max_samples(self) -> int | None:
+        return self._max_samples
 
 
-class IterableSplitIterator(Iterable[T_Output], Generic[T_Output]):
+class IterableSplitIterator(Iterable[T_Output], Generic[T_Output], RepresentationMixin):
     """A streaming split: wraps a one-pass raw source and applies a transform
     to each sample as it is yielded, optionally capped at `max_samples`."""
+
+    __repr_fields__ = ("base_iterator", "transform", "max_samples")
 
     def __init__(
         self,
@@ -149,5 +164,6 @@ class IterableSplitIterator(Iterable[T_Output], Generic[T_Output]):
             max_samples=max_samples,
         )
 
-    def __repr__(self) -> str:
-        return f"IterableSplitIterator({self._base_iterator})"
+    @property
+    def max_samples(self) -> int | None:
+        return self._max_samples

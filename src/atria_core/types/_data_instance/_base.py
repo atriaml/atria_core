@@ -19,7 +19,7 @@ from atria_core.types._generic._annotations import (
 
 
 @dataclass(frozen=True, repr=False)
-class BaseDataInstance(BaseDataModel):
+class DataInstance(BaseDataModel):
     sample_id: str
     #: Keyed by annotation.type -- at most one annotation per type. Private:
     #: the only supported way to add/replace an entry is add_annotation(),

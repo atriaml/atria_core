@@ -10,7 +10,7 @@ IMPORT_CHECK = [
     "ModelType",
     "OCRType",
     "TaskType",
-    "BaseDataInstance",
+    "DataInstance",
     "DocumentInstance",
     "ImageInstance",
     "DatasetLabels",

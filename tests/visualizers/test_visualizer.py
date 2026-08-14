@@ -8,7 +8,7 @@ import pytest
 from PIL import Image as PILImage
 
 from atria_core.types import (
-    BaseDataInstance,
+    DataInstance,
     DocumentContent,
     ElementArray,
     ImageInstance,
@@ -122,6 +122,6 @@ def test_visualize_dispatches_by_instance_type(tmp_path: Path) -> None:
 
 
 def test_visualize_raises_for_unsupported_instance_type(tmp_path: Path) -> None:
-    instance = BaseDataInstance(sample_id="s1")
+    instance = DataInstance(sample_id="s1")
     with pytest.raises(TypeError, match="No visualizer"):
         visualize(instance, str(tmp_path))

@@ -24,7 +24,7 @@ from atria_core.transforms import BaseTransform
 from atria_core.transforms._base import _config_value
 from atria_core.transforms.functional import image as image_functional
 from atria_core.types import (
-    BaseDataInstance,
+    DataInstance,
     DatasetSplitType,
     Image,
     ImageInstance,
@@ -37,10 +37,10 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-T_Sample = TypeVar("T_Sample", bound=BaseDataInstance)
+T_Sample = TypeVar("T_Sample", bound=DataInstance)
 """Sample type a dataset yields -- preserved through cache() into the handle."""
 
-T_ProcessedSample = TypeVar("T_ProcessedSample", bound=BaseDataInstance)
+T_ProcessedSample = TypeVar("T_ProcessedSample", bound=DataInstance)
 """Sample type a write-time transform produces in process_and_cache()."""
 
 
@@ -68,7 +68,7 @@ class PreprocessTransform(BaseTransform):
     resize_images: bool = False
     image_max_size: int | tuple[int, int] | None = None
 
-    def __call__(self, sample: BaseDataInstance) -> BaseDataInstance:
+    def __call__(self, sample: DataInstance) -> DataInstance:
         if isinstance(sample, ImageInstance):
             processed = self._process_visual(sample.image)
             assert isinstance(processed, Image)
@@ -118,7 +118,7 @@ def transform_configs(
     ]
 
 
-def _infer_data_model(dataset: Dataset[Any, T_Sample]) -> type[T_Sample]:
+def _infer_data_model(dataset: Dataset[T_Sample, Any]) -> type[T_Sample]:
     """Return the sample class a dataset produces, read off its first sample.
 
     Raises:
@@ -171,7 +171,7 @@ class Cacher:
 
     def cache(
         self,
-        dataset: Dataset[Any, T_Sample],
+        dataset: Dataset[T_Sample, Any],
         *,
         data_dir: str | None = None,
         split: DatasetSplitType | None = None,
@@ -202,7 +202,7 @@ class Cacher:
 
     def process_and_cache(
         self,
-        dataset: Dataset[Any, T_Sample],
+        dataset: Dataset[T_Sample, Any],
         transform: Callable[[T_Sample], T_ProcessedSample],
         *,
         data_dir: str | None = None,
@@ -239,7 +239,7 @@ class Cacher:
 
     def _cache(
         self,
-        dataset: Dataset[Any, T_Sample],
+        dataset: Dataset[T_Sample, Any],
         *,
         data_dir: str | None,
         split: DatasetSplitType | None,

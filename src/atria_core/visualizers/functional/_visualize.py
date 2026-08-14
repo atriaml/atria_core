@@ -5,13 +5,13 @@ from typing import Any
 
 from atria_core.types import (
     AnnotationType,
-    BaseDataInstance,
+    DataInstance,
     DocumentInstance,
     ImageInstance,
 )
 
 
-def output_name(instance: BaseDataInstance) -> str:
+def output_name(instance: DataInstance) -> str:
     classification_annotation = instance.get_annotation_by_type(
         AnnotationType.classification
     )
@@ -20,7 +20,7 @@ def output_name(instance: BaseDataInstance) -> str:
     return f"{instance.sample_id}_label={classification_annotation.label_name}"
 
 
-def visualize(instance: BaseDataInstance, output_dir: str, **kwargs: Any) -> Path:
+def visualize(instance: DataInstance, output_dir: str, **kwargs: Any) -> Path:
     from atria_core.visualizers.functional._document_instance import (
         visualize_document_instance,
     )

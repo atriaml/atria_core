@@ -5,10 +5,10 @@ from pathlib import Path
 from atria_core.datasets import FileStorageType, IndexableSplitIterator
 from atria_core.datasets._storage._storage_manager import StorageManager
 from atria_core.types import DatasetSplitType
-from atria_core.types._data_instance._base import BaseDataInstance
+from atria_core.types._data_instance._base import DataInstance
 
 
-class _Record(BaseDataInstance):
+class _Record(DataInstance):
     def to_dict(self) -> dict[str, object]:
         return {"sample_id": self.sample_id}
 
