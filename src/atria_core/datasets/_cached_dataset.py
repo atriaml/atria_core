@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Generic
 
 import yaml
+from pydantic import ConfigDict
 
 from atria_core.datasets._common import FileStorageType
 from atria_core.datasets._constants import _DEFAULT_ATRIA_DATASETS_CONFIG_PATH
@@ -18,11 +19,26 @@ from atria_core.types import DatasetMetadata, DatasetSplitType
 logger = get_logger(__name__)
 
 
-class CachedDataset(Dataset[T_DataInstance, DatasetConfig], Generic[T_DataInstance]):
+class CachedDatasetConfig(DatasetConfig):
+    """The params recorded in a cache's snapshot, carried as plain data.
+
+    A cache is described entirely by its snapshot, and reading it needs no
+    knowledge of the dataset that produced it -- whose config class may not
+    even be importable. So this declares no fields of its own and accepts
+    whatever params the snapshot holds, rather than rebuilding the original
+    config class.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="allow")
+
+
+class CachedDataset(
+    Dataset[T_DataInstance, CachedDatasetConfig], Generic[T_DataInstance]
+):
     """A dataset read from an on-disk cache directory.
 
-    Its sample class and config are reconstructed from the snapshot stored
-    alongside the records."""
+    Its sample class comes from the snapshot stored alongside the records, and
+    its config carries that snapshot's params verbatim."""
 
     def __init__(self, path: Path | str) -> None:
         """Open a cache directory.
@@ -52,9 +68,10 @@ class CachedDataset(Dataset[T_DataInstance, DatasetConfig], Generic[T_DataInstan
             config_path = self._path / _DEFAULT_ATRIA_DATASETS_CONFIG_PATH
             with open(config_path) as f:
                 config_data = yaml.safe_load(f)
-        config = DatasetConfig.from_dict(config_data)
-
-        super().__init__(config=config, data_dir=str(self._path))
+        super().__init__(
+            config=CachedDatasetConfig.from_dict(config_data),
+            data_dir=str(self._path),
+        )
 
     @property
     def data_dir(self) -> Path:

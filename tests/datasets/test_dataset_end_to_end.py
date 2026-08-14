@@ -1,30 +1,31 @@
 from __future__ import annotations
 
-import importlib
 from collections.abc import Callable, Sequence
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
 import pytest
+import yaml
 from PIL import Image as PILImage
-from pydantic.dataclasses import dataclass as pydantic_dataclass
+from pydantic import ValidationError
 
 from atria_core.datasets import (
     CachedDataset,
+    CachedDatasetConfig,
     Cacher,
     Dataset,
     DatasetConfig,
     DatasetSnapshot,
     DatasetSnapshotStore,
     FileStorageType,
+    datasets,
 )
 from atria_core.datasets._download._download_manager import UrlSpec
 from atria_core.transforms import BaseTransform
 from atria_core.types import DatasetMetadata, DatasetSplitType, Image, ImageInstance
 
 
-@pydantic_dataclass(frozen=True)
 class SyntheticConfig(DatasetConfig):
     max_train_samples: int | None = None
     max_test_samples: int | None = None
@@ -56,6 +57,7 @@ class _RawSplit(Sequence[int]):
         return index
 
 
+@datasets.register("synthetic")
 class SyntheticDataset(Dataset[ImageInstance, SyntheticConfig]):
     def _download_urls(self) -> list[UrlSpec]:
         return []
@@ -77,7 +79,6 @@ class SyntheticDataset(Dataset[ImageInstance, SyntheticConfig]):
         return _InputTransform()
 
 
-@pydantic_dataclass(frozen=True)
 class EmptyConfig(DatasetConfig):
     pass
 
@@ -99,24 +100,6 @@ class EmptyConfigDataset(Dataset[ImageInstance, EmptyConfig]):
 
     def _build_input_transform(self) -> Callable[[Any], ImageInstance]:
         return _InputTransform()
-
-
-def synthetic(
-    max_train_samples: int | None = None,
-    max_test_samples: int | None = None,
-    **kwargs: Any,
-) -> SyntheticDataset:
-    """Build a SyntheticDataset from plain params.
-
-    This is the whole public entry point -- an importable function, so callers
-    get the exact return type with no registry in between.
-    """
-    return SyntheticDataset(
-        config=SyntheticConfig(
-            max_train_samples=max_train_samples, max_test_samples=max_test_samples
-        ),
-        **kwargs,
-    )
 
 
 def _record(item: object) -> ImageInstance:
@@ -160,7 +143,6 @@ def test_default_config_is_used_when_none_given(tmp_path: Path) -> None:
 
 
 def test_mismatched_config_class_is_rejected(tmp_path: Path) -> None:
-    @pydantic_dataclass(frozen=True)
     class OtherConfig(DatasetConfig):
         pass
 
@@ -168,26 +150,16 @@ def test_mismatched_config_class_is_rejected(tmp_path: Path) -> None:
         SyntheticDataset(config=OtherConfig(), data_dir=str(tmp_path))  # type: ignore[arg-type]
 
 
-def test_factory_builds_dataset_from_params(tmp_path: Path) -> None:
-    dataset = synthetic(max_train_samples=2, data_dir=str(tmp_path))
+def test_registry_builds_dataset_from_params(tmp_path: Path) -> None:
+    dataset = datasets.create("synthetic", max_train_samples=2, data_dir=str(tmp_path))
 
     assert isinstance(dataset, SyntheticDataset)
     assert dataset.config.max_train_samples == 2
 
 
-def test_factory_is_reachable_by_import_path(tmp_path: Path) -> None:
-    """A name arriving as data is resolved by import, not by a registry."""
-    module_name, _, attribute = f"{synthetic.__module__}.synthetic".rpartition(".")
-    factory = getattr(importlib.import_module(module_name), attribute)
-
-    dataset = factory(max_train_samples=2, data_dir=str(tmp_path))
-
-    assert isinstance(dataset, SyntheticDataset)
-
-
-def test_unknown_param_is_rejected(tmp_path: Path) -> None:
-    with pytest.raises(TypeError, match="nonsense"):
-        synthetic(nonsense=1, data_dir=str(tmp_path))  # type: ignore[call-arg]
+def test_unknown_config_param_is_rejected() -> None:
+    with pytest.raises(ValidationError, match="nonsense"):
+        SyntheticConfig(nonsense=1)  # type: ignore[call-arg]
 
 
 def test_config_dataset_dir_name_sets_data_dir(
@@ -432,3 +404,34 @@ def test_snapshot_loads_legacy_schema(tmp_path: Path) -> None:
     assert snapshot.config == {}
     assert snapshot.metadata == {}
     assert DatasetSnapshot.validate(tmp_path)
+
+
+def test_reopened_cache_carries_the_snapshot_params_verbatim(tmp_path: Path) -> None:
+    dataset = SyntheticDataset(
+        config=SyntheticConfig(max_train_samples=2), data_dir=str(tmp_path)
+    )
+    cached = Cacher(FileStorageType.MSGPACK, num_processes=1).cache(
+        dataset, data_dir=str(tmp_path)
+    )
+
+    reopened = CachedDataset(cached.data_dir)
+
+    assert isinstance(reopened.config, CachedDatasetConfig)
+    assert reopened.config.to_dict() == dataset.config.to_dict()
+
+
+def test_reopened_cache_needs_no_importable_config_class(tmp_path: Path) -> None:
+    """A cache is described entirely by its snapshot, so reopening one whose
+    producing config class is unknown here must still work."""
+    dataset = SyntheticDataset(data_dir=str(tmp_path))
+    cached = Cacher(FileStorageType.MSGPACK, num_processes=1).cache(
+        dataset, data_dir=str(tmp_path)
+    )
+    snapshot_path = cached.data_dir / "snapshot.yaml"
+    snapshot_data = yaml.safe_load(snapshot_path.read_text())
+    snapshot_data["config"] = {"a_param_from_a_long_gone_class": 7}
+    snapshot_path.write_text(yaml.dump(snapshot_data))
+
+    reopened = CachedDataset(cached.data_dir)
+
+    assert reopened.config.to_dict() == {"a_param_from_a_long_gone_class": 7}

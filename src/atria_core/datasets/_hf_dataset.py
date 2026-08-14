@@ -4,7 +4,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 import aiohttp
-from pydantic.dataclasses import dataclass as pydantic_dataclass
 
 from atria_core.datasets._constants import _HF_DOWNLOAD_TIMEOUT_SECONDS
 from atria_core.datasets._dataset import (
@@ -36,7 +35,6 @@ def _hf_storage_options() -> dict[str, Any]:
     }
 
 
-@pydantic_dataclass(frozen=True)
 class HuggingfaceDatasetConfig(DatasetConfig):
     """Params for a dataset streamed from the Hugging Face hub."""
 
@@ -58,6 +56,7 @@ class HuggingfaceDataset(
     `datasets` library handle downloading and caching internally."""
 
     __abstract__ = True
+
     def __init__(
         self,
         *,

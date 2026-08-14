@@ -4,10 +4,9 @@ import uuid
 from collections.abc import Callable
 from typing import Any
 
-from pydantic.dataclasses import dataclass as pydantic_dataclass
-
 from atria_core.datasets._cacher import Cacher, FileStorageType
 from atria_core.datasets._hf_dataset import HuggingfaceDataset, HuggingfaceDatasetConfig
+from atria_core.datasets._registry import datasets
 from atria_core.types import SinglePageDocumentInstance
 from atria_core.types._generic._annotations import TranscriptionAnnotation
 from atria_core.types._generic._image import Image
@@ -15,7 +14,6 @@ from atria_core.types._generic._image import Image
 _REPO = "fhswf/german_handwriting"
 
 
-@pydantic_dataclass(frozen=True)
 class FHSWFGermanHandwritingConfig(HuggingfaceDatasetConfig):
     config_name: str = "default"
 
@@ -27,6 +25,7 @@ class InputTransform:
         ).add_annotation(TranscriptionAnnotation(text=sample["text"]))
 
 
+@datasets.register("fhswf_german_handwriting")
 class FHSWFGermanHandwriting(
     HuggingfaceDataset[SinglePageDocumentInstance, FHSWFGermanHandwritingConfig]
 ):
@@ -39,17 +38,8 @@ class FHSWFGermanHandwriting(
         return InputTransform()
 
 
-def fhswf_german_handwriting(
-    config_name: str = "default", **kwargs: Any
-) -> FHSWFGermanHandwriting:
-    """Build the FHSWF German handwriting dataset."""
-    return FHSWFGermanHandwriting(
-        config=FHSWFGermanHandwritingConfig(config_name=config_name), **kwargs
-    )
-
-
 def main() -> None:
-    dataset = fhswf_german_handwriting()
+    dataset = FHSWFGermanHandwriting()
     Cacher(FileStorageType.MSGPACK).cache(dataset)
     for sample in dataset.train:
         print(sample)

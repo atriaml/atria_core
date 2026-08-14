@@ -3,8 +3,8 @@ dataset (default config, or an explicit one) -> iterate live, then
 Cacher(...).cache(dataset) -> iterate cached.
 
 Configs describe params; they never build anything. The dataset takes one, and
-constructs its generic config type when none is given. The public entry point is the
-`mnist` function below -- an ordinary import, so callers keep the exact type.
+constructs its generic config type when none is given. Import the class to get
+the exact type, or build it by name with `datasets.create("mnist")`.
 """
 
 from __future__ import annotations
@@ -13,9 +13,7 @@ import uuid
 from collections.abc import Callable
 from typing import Any
 
-from pydantic.dataclasses import dataclass as pydantic_dataclass
-
-from atria_core.datasets import Cacher, FileStorageType
+from atria_core.datasets import Cacher, FileStorageType, datasets
 from atria_core.datasets._hf_dataset import HuggingfaceDataset, HuggingfaceDatasetConfig
 from atria_core.logger import get_logger
 from atria_core.types import DatasetSplitType
@@ -28,9 +26,8 @@ logger = get_logger(__name__)
 _REPO = "ylecun/mnist"
 
 
-@pydantic_dataclass(frozen=True)
 class MNISTConfig(HuggingfaceDatasetConfig):
-    config_name: str = "mnist"
+    config_name: str | None = "mnist"
 
 
 class InputTransform:
@@ -49,6 +46,7 @@ class InputTransform:
         )
 
 
+@datasets.register("mnist")
 class MNIST(HuggingfaceDataset[ImageInstance, MNISTConfig]):
     def __init__(self, *, config: MNISTConfig | None = None, **kwargs: Any) -> None:
         super().__init__(repo=_REPO, config=config, **kwargs)
@@ -57,13 +55,8 @@ class MNIST(HuggingfaceDataset[ImageInstance, MNISTConfig]):
         return InputTransform(labels=self.metadata.dataset_labels.classification)
 
 
-def mnist(config_name: str = "mnist", **kwargs: Any) -> MNIST:
-    """Build the MNIST dataset. Import and call it -- `atria_datasets.mnist()`."""
-    return MNIST(config=MNISTConfig(config_name=config_name), **kwargs)
-
-
 def main() -> None:
-    dataset = mnist()
+    dataset = MNIST()
     cached = Cacher(FileStorageType.MSGPACK).cache(dataset)
 
     cached_train = cached.split_iterator(DatasetSplitType.train)

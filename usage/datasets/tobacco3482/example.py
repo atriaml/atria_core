@@ -13,9 +13,14 @@ from typing import Any
 
 import bs4
 import numpy as np
-from pydantic.dataclasses import dataclass as pydantic_dataclass
 
-from atria_core.datasets import Cacher, Dataset, DatasetConfig, FileStorageType
+from atria_core.datasets import (
+    Cacher,
+    Dataset,
+    DatasetConfig,
+    FileStorageType,
+    datasets,
+)
 from atria_core.datasets._download._download_manager import UrlSpec
 from atria_core.logger import get_logger
 from atria_core.types import (
@@ -133,7 +138,6 @@ def _parse_hocr(hocr_path: Path) -> DocumentContent:
     return DocumentContent(elements=elements)
 
 
-@pydantic_dataclass(frozen=True)
 class Tobacco3482Config(DatasetConfig):
     load_ocr: bool = False
 
@@ -176,6 +180,7 @@ class SplitIterator(Sequence[tuple[Path, Path, int]]):
         return len(self.split_file_paths)
 
 
+@datasets.register("tobacco3482")
 class Tobacco3482(Dataset[SinglePageDocumentInstance, Tobacco3482Config]):
     def _download_urls(self) -> list[UrlSpec]:
         return _DATA_URLS
@@ -201,13 +206,8 @@ class Tobacco3482(Dataset[SinglePageDocumentInstance, Tobacco3482Config]):
         return InputTransform(load_ocr=self.config.load_ocr)
 
 
-def tobacco3482(load_ocr: bool = False, **kwargs: Any) -> Tobacco3482:
-    """Build the Tobacco3482 dataset. Import and call it directly."""
-    return Tobacco3482(config=Tobacco3482Config(load_ocr=load_ocr), **kwargs)
-
-
 def main() -> None:
-    dataset = tobacco3482(load_ocr=True)
+    dataset = Tobacco3482(config=Tobacco3482Config(load_ocr=True))
 
     train_iterator = dataset.split_iterator(DatasetSplitType.train)
     logger.info("train samples (live): %d", len(train_iterator))

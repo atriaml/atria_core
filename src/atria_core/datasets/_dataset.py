@@ -2,11 +2,8 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterable, Sequence
-from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Generic, TypeVar, cast, get_args, get_origin
-
-from pydantic.dataclasses import dataclass as pydantic_dataclass
 
 from atria_core.datasets._constants import (
     _DEFAULT_ATRIA_DATASETS_CACHE_DIR,
@@ -41,7 +38,6 @@ def _validate_data_dir(data_dir: str | Path) -> str:
     return str(data_dir)
 
 
-@pydantic_dataclass(frozen=True)
 class DatasetConfig(ModuleConfig):
     """Validated params for a dataset. A config only describes -- it does not
     build anything; the dataset takes one, not the other way round."""
@@ -102,7 +98,7 @@ class Dataset(
 
     def __rich_repr__(self) -> Any:
         yield from super().__rich_repr__()
-        config = asdict(self.config)
+        config = self.config.model_dump()
         if config:
             yield "config", config
 
@@ -129,7 +125,6 @@ class Dataset(
             TypeError: If `config` is not an instance of this dataset's config class.
         """
         super().__init__(config)
-        print("self.config", self.config)
         data_dir = _validate_data_dir(
             data_dir=Path(data_dir)
             if data_dir is not None

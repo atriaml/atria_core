@@ -5,11 +5,12 @@ from typing import TYPE_CHECKING
 import lazy_loader as lazy
 
 if TYPE_CHECKING:
-    from ._cached_dataset import CachedDataset
+    from ._cached_dataset import CachedDataset, CachedDatasetConfig
     from ._cacher import Cacher, PreprocessTransform
     from ._common import DatasetLoadingMode, FileStorageType
     from ._dataset import Dataset, DatasetConfig
     from ._hf_dataset import HuggingfaceDataset, HuggingfaceDatasetConfig
+    from ._registry import DatasetRegistry, datasets
     from ._split_iterators import (
         Compose,
         IndexableSplitIterator,
@@ -21,7 +22,7 @@ if TYPE_CHECKING:
 __getattr__, __dir__, __all__ = lazy.attach(
     __name__,
     submod_attrs={
-        "_cached_dataset": ["CachedDataset"],
+        "_cached_dataset": ["CachedDataset", "CachedDatasetConfig"],
         "_cacher": ["Cacher", "PreprocessTransform"],
         "_common": [
             "DatasetLoadingMode",
@@ -34,6 +35,10 @@ __getattr__, __dir__, __all__ = lazy.attach(
         "_hf_dataset": [
             "HuggingfaceDataset",
             "HuggingfaceDatasetConfig",
+        ],
+        "_registry": [
+            "DatasetRegistry",
+            "datasets",
         ],
         "_split_iterators": [
             "Compose",
