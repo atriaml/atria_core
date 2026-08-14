@@ -24,6 +24,20 @@ def test_create_builds_the_registered_class_with_the_param_applied(
     assert dataset.config.max_train_samples == 2
 
 
+def test_create_names_the_data_dir_after_the_registered_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Point the default cache root at tmp_path so the test never writes to the
+    # real ~/.cache/atria.
+    monkeypatch.setattr(
+        "atria_core.datasets._dataset._DEFAULT_ATRIA_DATASETS_CACHE_DIR", tmp_path
+    )
+
+    dataset = datasets.create("synthetic")
+
+    assert dataset.data_dir == tmp_path / "synthetic"
+
+
 def test_create_passes_runtime_arguments_outside_the_config(tmp_path: Path) -> None:
     dataset = datasets.create(
         "synthetic", split=DatasetSplitType.train, data_dir=str(tmp_path)
@@ -35,7 +49,7 @@ def test_create_passes_runtime_arguments_outside_the_config(tmp_path: Path) -> N
 
 
 def test_create_rejects_a_param_the_config_does_not_declare(tmp_path: Path) -> None:
-    with pytest.raises(TypeError, match="does not accept 'nonsense'"):
+    with pytest.raises(ValidationError, match="nonsense"):
         datasets.create("synthetic", nonsense=1, data_dir=str(tmp_path))
 
 

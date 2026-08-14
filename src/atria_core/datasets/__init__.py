@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 import lazy_loader as lazy
 
 if TYPE_CHECKING:
+    from ._builder import DatasetBuilder
     from ._cached_dataset import CachedDataset, CachedDatasetConfig
     from ._cacher import Cacher, PreprocessTransform
     from ._common import DatasetLoadingMode, FileStorageType
@@ -22,6 +23,7 @@ if TYPE_CHECKING:
 __getattr__, __dir__, __all__ = lazy.attach(
     __name__,
     submod_attrs={
+        "_builder": ["DatasetBuilder"],
         "_cached_dataset": ["CachedDataset", "CachedDatasetConfig"],
         "_cacher": ["Cacher", "PreprocessTransform"],
         "_common": [
