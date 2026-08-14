@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterable, Sequence
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any, ClassVar, Generic, TypeVar, cast, get_args, get_origin
 
@@ -99,8 +100,13 @@ class Dataset(
         "data_model",
         "data_dir",
         "split_iterators",
-        "config",
     )
+
+    def __rich_repr__(self) -> Any:
+        yield from super().__rich_repr__()
+        config = asdict(self.config)
+        if config:
+            yield "config", config
 
     def __init__(
         self,

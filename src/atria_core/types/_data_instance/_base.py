@@ -28,6 +28,11 @@ class DataInstance(BaseDataModel):
     #: with the value's own type.
     _annotations: dict[str, Annotation] = field(default_factory=dict, kw_only=True)
 
+    def __rich_repr__(self) -> Any:
+        yield from super().__rich_repr__()
+        if self._annotations:
+            yield "annotations", self._annotations
+
     @property
     def key(self) -> str:
         # "#" is a URI fragment delimiter -- ResourceLoader.for_uri would

@@ -1,12 +1,22 @@
 from __future__ import annotations
 
 from collections.abc import Collection
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
     from rich.repr import RichReprResult
+
+
+class _ArraySummary:
+    def __init__(self, value: object) -> None:
+        array = cast(Any, value)
+        self.shape = array.shape
+        self.dtype = array.dtype
+
+    def __repr__(self) -> str:
+        return f"ndarray(shape={self.shape}, dtype={self.dtype})"
 
 
 class RepresentationMixin:
@@ -52,10 +62,21 @@ class RepresentationMixin:
                 continue
 
             value = getattr(self, field_name)
+            safe_value: Any
             if isinstance(value, types.MethodType):
                 safe_value = value.__func__
             else:
                 safe_value = value
+
+            if value is None:
+                yield field_name, safe_value, None
+                continue
+
+            # Array contents quickly dominate nested data-model reprs. Shape
+            # and dtype carry the useful structural information without
+            # dumping every coordinate, label, or pixel.
+            if type(value).__module__.startswith("numpy") and hasattr(value, "shape"):
+                safe_value = _ArraySummary(value)
 
             yield field_name, safe_value
 

@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import numpy as np
 import pytest
 
 from atria_core.types._data_instance._base import DataInstance
-from atria_core.types._generic._annotations import AnnotationType
+from atria_core.types._generic._annotations import (
+    AnnotationType,
+    ObjectDetectionAnnotation,
+)
 from tests.types.builders import make_classification_annotation
 
 
@@ -52,6 +56,37 @@ def test_add_annotation_returns_new_instance_and_replaces_same_type() -> None:
 def test_annotations_are_keyword_only() -> None:
     with pytest.raises(TypeError):
         DataInstance("s1", {})  # type: ignore[misc]
+
+
+def test_repr_shows_non_empty_annotations() -> None:
+    annotation = make_classification_annotation()
+    instance = DataInstance(sample_id="s1").add_annotation(annotation)
+
+    representation = repr(instance)
+
+    assert "annotations={" in representation
+    assert "'classification': ClassificationAnnotation(" in representation
+    assert "label_value=0" in representation
+    assert "label_name='cat'" in representation
+
+
+def test_repr_omits_empty_annotations() -> None:
+    assert "annotations=" not in repr(DataInstance(sample_id="s1"))
+
+
+def test_repr_summarizes_numpy_annotation_fields() -> None:
+    annotation = ObjectDetectionAnnotation(
+        label_values=np.arange(20),
+        bboxes=np.arange(80, dtype=float).reshape(20, 4),
+    )
+    instance = DataInstance(sample_id="s1").add_annotation(annotation)
+
+    representation = repr(instance)
+
+    assert "label_values=ndarray(shape=(20,), dtype=int64)" in representation
+    assert "bboxes=ndarray(shape=(20, 4), dtype=float64)" in representation
+    assert "label_names=" not in representation
+    assert "segmentations=" not in representation
 
 
 def test_equality() -> None:

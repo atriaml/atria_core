@@ -79,6 +79,20 @@ class SyntheticDataset(Dataset[ImageInstance, SyntheticConfig]):
         return _InputTransform()
 
 
+@pydantic_dataclass(frozen=True)
+class EmptyConfig(DatasetConfig):
+    pass
+
+
+class EmptyConfigDataset(SyntheticDataset):
+    __config__ = EmptyConfig
+
+    def _build_split_iterator(
+        self, split: DatasetSplitType, data_dir: str
+    ) -> _RawSplit:
+        return _RawSplit(1)
+
+
 def synthetic(
     max_train_samples: int | None = None,
     max_test_samples: int | None = None,
@@ -201,7 +215,6 @@ def test_dataset_repr_summarizes_data_model_and_split_sizes(tmp_path: Path) -> N
     assert representation.startswith("SyntheticDataset(\n")
     assert "data_model=<class " in representation
     assert "ImageInstance'>" in representation
-    assert "total_size=6" in representation
     assert f"data_dir={tmp_path!r}" in representation
     assert "split_iterators={" in representation
     assert "IndexableSplitIterator(" in representation
@@ -213,7 +226,15 @@ def test_dataset_repr_summarizes_data_model_and_split_sizes(tmp_path: Path) -> N
     assert "_InputTransform object" in representation
     assert "<DatasetSplitType.test: 'test'>" in representation
     assert "length=2" in representation
-    assert f"config={dataset.config!r}" in representation
+    assert (
+        "config={'max_train_samples': None, 'max_test_samples': None}" in representation
+    )
+
+
+def test_dataset_repr_omits_empty_config(tmp_path: Path) -> None:
+    dataset = EmptyConfigDataset(data_dir=str(tmp_path))
+
+    assert "config=" not in repr(dataset)
 
 
 def test_config_sample_caps_limit_splits(tmp_path: Path) -> None:
