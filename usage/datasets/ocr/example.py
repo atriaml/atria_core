@@ -28,10 +28,8 @@ class InputTransform:
 
 
 class FHSWFGermanHandwriting(
-    HuggingfaceDataset[FHSWFGermanHandwritingConfig, SinglePageDocumentInstance]
+    HuggingfaceDataset[SinglePageDocumentInstance, FHSWFGermanHandwritingConfig]
 ):
-    __config__ = FHSWFGermanHandwritingConfig
-
     def __init__(
         self, *, config: FHSWFGermanHandwritingConfig | None = None, **kwargs: Any
     ) -> None:

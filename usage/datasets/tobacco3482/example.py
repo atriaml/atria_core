@@ -176,9 +176,7 @@ class SplitIterator(Sequence[tuple[Path, Path, int]]):
         return len(self.split_file_paths)
 
 
-class Tobacco3482(Dataset[Tobacco3482Config, SinglePageDocumentInstance]):
-    __config__ = Tobacco3482Config
-
+class Tobacco3482(Dataset[SinglePageDocumentInstance, Tobacco3482Config]):
     def _download_urls(self) -> list[UrlSpec]:
         return _DATA_URLS
 

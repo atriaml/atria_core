@@ -57,8 +57,6 @@ class _RawSplit(Sequence[int]):
 
 
 class SyntheticDataset(Dataset[ImageInstance, SyntheticConfig]):
-    __config__ = SyntheticConfig
-
     def _download_urls(self) -> list[UrlSpec]:
         return []
 
@@ -84,13 +82,23 @@ class EmptyConfig(DatasetConfig):
     pass
 
 
-class EmptyConfigDataset(SyntheticDataset):
-    __config__ = EmptyConfig
+class EmptyConfigDataset(Dataset[ImageInstance, EmptyConfig]):
+    def _download_urls(self) -> list[UrlSpec]:
+        return []
+
+    def _metadata(self) -> DatasetMetadata:
+        return DatasetMetadata(description="empty-config synthetic dataset")
+
+    def _available_splits(self, data_dir: str) -> list[DatasetSplitType]:
+        return [DatasetSplitType.train]
 
     def _build_split_iterator(
         self, split: DatasetSplitType, data_dir: str
     ) -> _RawSplit:
         return _RawSplit(1)
+
+    def _build_input_transform(self) -> Callable[[Any], ImageInstance]:
+        return _InputTransform()
 
 
 def synthetic(

@@ -65,7 +65,7 @@ class ModuleConfig:
     def from_dict(cls, data: dict[str, Any]) -> Self:
         from hydra.utils import instantiate
 
-        config: Self = instantiate(data)
+        config = instantiate(data)
         return config
 
     @property

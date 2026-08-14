@@ -13,7 +13,6 @@ from atria_core.datasets._dataset import Dataset, DatasetConfig, T_DataInstance
 from atria_core.datasets._snapshot import DatasetSnapshot
 from atria_core.datasets._storage._storage_manager import StorageManager
 from atria_core.logger import get_logger
-from atria_core.registry import ModuleConfig
 from atria_core.types import DatasetMetadata, DatasetSplitType
 
 logger = get_logger(__name__)
@@ -53,9 +52,9 @@ class CachedDataset(Dataset[T_DataInstance, DatasetConfig], Generic[T_DataInstan
             config_path = self._path / _DEFAULT_ATRIA_DATASETS_CONFIG_PATH
             with open(config_path) as f:
                 config_data = yaml.safe_load(f)
-        config = ModuleConfig.from_dict(config_data)
+        config = DatasetConfig.from_dict(config_data)
 
-        super().__init__(config=config, data_dir=str(self._path))  # type: ignore[arg-type]
+        super().__init__(config=config, data_dir=str(self._path))
 
     @property
     def data_dir(self) -> Path:

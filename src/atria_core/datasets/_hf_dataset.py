@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar, Generic, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 import aiohttp
 from pydantic.dataclasses import dataclass as pydantic_dataclass
@@ -58,8 +58,6 @@ class HuggingfaceDataset(
     `datasets` library handle downloading and caching internally."""
 
     __abstract__ = True
-    __config__: ClassVar[type[DatasetConfig]] = HuggingfaceDatasetConfig
-
     def __init__(
         self,
         *,
@@ -74,7 +72,7 @@ class HuggingfaceDataset(
 
         Args:
             repo: Hub repo id, e.g. `"ylecun/mnist"`.
-            config: Params for this dataset. Defaults to `__config__()`.
+            config: Params for this dataset. Defaults to its generic config type.
             data_dir: Where Hugging Face caches its downloads.
             access_token: Credential for gated repos.
             split: Build only this split, instead of every available one.

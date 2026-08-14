@@ -3,7 +3,7 @@ dataset (default config, or an explicit one) -> iterate live, then
 Cacher(...).cache(dataset) -> iterate cached.
 
 Configs describe params; they never build anything. The dataset takes one, and
-falls back to `__config__()` when none is given. The public entry point is the
+constructs its generic config type when none is given. The public entry point is the
 `mnist` function below -- an ordinary import, so callers keep the exact type.
 """
 
@@ -49,9 +49,7 @@ class InputTransform:
         )
 
 
-class MNIST(HuggingfaceDataset[MNISTConfig, ImageInstance]):
-    __config__ = MNISTConfig
-
+class MNIST(HuggingfaceDataset[ImageInstance, MNISTConfig]):
     def __init__(self, *, config: MNISTConfig | None = None, **kwargs: Any) -> None:
         super().__init__(repo=_REPO, config=config, **kwargs)
 

@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import asdict
 from pathlib import Path
-from typing import Any, ClassVar, Generic, TypeVar, cast, get_args, get_origin
+from typing import Any, Generic, TypeVar, cast, get_args, get_origin
 
 from pydantic.dataclasses import dataclass as pydantic_dataclass
 
@@ -81,11 +81,10 @@ class Dataset(
     ConfigurableModule[T_DatasetConfig],
     Generic[T_DataInstance, T_DatasetConfig],
 ):
-    """Subclasses name their config class in `__config__`, which lets the
-    dataset be constructed with no arguments at all::
+    """The config class is resolved from the second generic argument, which
+    lets the dataset be constructed with no arguments at all::
 
-        class Tobacco3482(Dataset[Tobacco3482Config, SinglePageDocumentInstance]):
-            __config__ = Tobacco3482Config
+        class Tobacco3482(Dataset[SinglePageDocumentInstance, Tobacco3482Config]): ...
 
 
         Tobacco3482()  # default config
@@ -95,7 +94,6 @@ class Dataset(
     __abstract__ = True
     __requires_access_token__ = False
     __extract_downloads__ = True
-    __config__: ClassVar[type[DatasetConfig]] = DatasetConfig
     __repr_fields__ = (
         "data_model",
         "data_dir",
@@ -120,7 +118,7 @@ class Dataset(
         """Build every split iterator eagerly, then write a source snapshot.
 
         Args:
-            config: Params for this dataset. Defaults to `__config__()`.
+            config: Params for this dataset. Defaults to its generic config type.
             data_dir: Where to read and write data. Defaults to the shared
                 cache directory named after the config or the class.
             access_token: Credential for datasets behind authentication.
@@ -128,27 +126,17 @@ class Dataset(
             dataset_dir_name: Dataset name override for use
 
         Raises:
-            TypeError: If `config` is not an instance of this dataset's
-                `__config__` class.
+            TypeError: If `config` is not an instance of this dataset's config class.
         """
-        expected_config_cls = type(self).__config__
-        if config is None:
-            config = cast("T_DatasetConfig", expected_config_cls())
-        elif not isinstance(config, expected_config_cls):
-            # Fail here, where the message can name both classes, rather than
-            # as an AttributeError on a missing field inside a _build_* hook.
-            raise TypeError(
-                f"{type(self).__name__} takes a {expected_config_cls.__name__}, "
-                f"but got {type(config).__name__}"
-            )
         super().__init__(config)
+        print("self.config", self.config)
         data_dir = _validate_data_dir(
             data_dir=Path(data_dir)
             if data_dir is not None
             else _DEFAULT_ATRIA_DATASETS_CACHE_DIR
             / (dataset_dir_name or type(self).__name__)
         )
-        self._data_dir = Path(data_dir)
+        self._data_dir: Path = Path(data_dir)
         self._build_split_iterators(
             data_dir=data_dir, split=split, access_token=access_token
         )
