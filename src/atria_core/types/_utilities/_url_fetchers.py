@@ -122,7 +122,8 @@ class RemoteResourceLoader(ResourceLoader):
         if byte_range is None:
             response = requests.get(self.uri)
             response.raise_for_status()
-            return response.content
+            content: bytes = response.content
+            return content
 
         offset, length = byte_range
         url = self._strip_query_params("offset", "length")
@@ -132,7 +133,8 @@ class RemoteResourceLoader(ResourceLoader):
             stream=True,
         )
         response.raise_for_status()
-        return response.content
+        ranged_content: bytes = response.content
+        return ranged_content
 
     def _strip_query_params(self, *keys: str) -> str:
         query = {k: v for k, v in self.query.items() if k not in keys}

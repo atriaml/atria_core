@@ -4,7 +4,10 @@ import dataclasses
 import enum
 import hashlib
 import json
-from typing import Any, Self
+from typing import TYPE_CHECKING, Any, Self, cast
+
+if TYPE_CHECKING:
+    from _typeshed import DataclassInstance
 
 from pydantic.dataclasses import dataclass as pydantic_dataclass
 
@@ -30,26 +33,31 @@ class ModuleConfig:
     config configures takes it as a constructor argument."""
 
     def __post_init__(self) -> None:
-        for field in dataclasses.fields(self):
-            value = getattr(self, field.name)
+        # ci/lint.sh runs mypy with --follow-imports=skip, which makes pydantic
+        # itself Any, so @pydantic_dataclass does not register this class as a
+        # dataclass for the checker. It is one at runtime; the cast states that.
+        for field in dataclasses.fields(cast("DataclassInstance", self)):
+            name = field.name
+            value = getattr(self, name)
             if isinstance(value, ModuleConfig | enum.Enum):
                 continue
             assert _is_json_safe(value), (
-                f"{type(self).__name__}.{field.name} must be a JSON-safe primitive, a "
+                f"{type(self).__name__}.{name} must be a JSON-safe primitive, a "
                 f"nested ModuleConfig, or an enum -- got {type(value).__name__}. "
                 "Lists/dicts of configs or enums aren't supported."
             )
 
     def to_dict(self) -> dict[str, Any]:
         data: dict[str, Any] = {}
-        for field in dataclasses.fields(self):
-            value = getattr(self, field.name)
+        for field in dataclasses.fields(cast("DataclassInstance", self)):
+            name = field.name
+            value = getattr(self, name)
             if isinstance(value, ModuleConfig):
-                data[field.name] = value.to_dict()
+                data[name] = value.to_dict()
             elif isinstance(value, enum.Enum):
-                data[field.name] = value.value
+                data[name] = value.value
             else:
-                data[field.name] = value
+                data[name] = value
         data["_target_"] = f"{type(self).__module__}.{type(self).__qualname__}"
         return data
 
@@ -57,7 +65,8 @@ class ModuleConfig:
     def from_dict(cls, data: dict[str, Any]) -> Self:
         from hydra.utils import instantiate
 
-        return instantiate(data)  # type: ignore[no-any-return]
+        config: Self = instantiate(data)
+        return config
 
     @property
     def hash(self) -> str:

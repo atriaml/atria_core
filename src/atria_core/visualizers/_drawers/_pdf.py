@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import random
 
-import numpy as np
 import pymupdf
 
+from atria_core.types._arrays import FloatArray
 from atria_core.visualizers._drawers._style import DEFAULT_STYLE, DrawStyle
 
 _FONT_NAME = "helv"
@@ -48,7 +48,7 @@ def _draw_text_label(
 
     label_y1 = max(0, rect.y0 - style.label_offset)
     label_y0 = max(0, label_y1 - text_height - style.label_offset)
-    background_rect = pymupdf.Rect(  # type: ignore[no-untyped-call]
+    background_rect = pymupdf.Rect(
         rect.x0,
         label_y0,
         rect.x0 + text_width + (2 * style.text_padding),
@@ -61,9 +61,7 @@ def _draw_text_label(
         fill_opacity=style.text_background[3] / 255,
     )
     page.insert_text(
-        pymupdf.Point(  # type: ignore[no-untyped-call]
-            rect.x0 + style.text_padding, label_y1 - style.text_padding
-        ),
+        pymupdf.Point(rect.x0 + style.text_padding, label_y1 - style.text_padding),
         text,
         fontsize=font_size,
         fontname=_FONT_NAME,
@@ -79,7 +77,7 @@ class PdfDrawer:
     def draw(
         self,
         target: pymupdf.Page,
-        bboxes: np.ndarray,
+        bboxes: FloatArray,
         *,
         texts: list[str] | None = None,
         labels: list[str] | None = None,
@@ -93,7 +91,7 @@ class PdfDrawer:
             label = labels[index] if labels else None
             color = _get_bbox_color(label, label_to_color, style)
 
-            rect = pymupdf.Rect(*bbox.tolist())  # type: ignore[no-untyped-call]
+            rect = pymupdf.Rect(*bbox.tolist())
             target.draw_rect(rect, color=_to_unit_color(color), width=style.bbox_width)
 
             combined = None

@@ -9,6 +9,7 @@ from PIL.Image import Image as PILImage
 from atria_core.extractors._base import ContentExtractor, ContentExtractorConfig
 from atria_core.logger import get_logger
 from atria_core.types import DocumentContent, ElementArray, OCRLevel
+from atria_core.types._arrays import ImageArray
 
 logger = get_logger(__name__)
 
@@ -120,7 +121,7 @@ class TesseractExtractor(ContentExtractor):
             parts.append(f"--oem {self.config.oem}")
         return " ".join(parts)
 
-    def _get_tesseract_data(self, image: np.ndarray) -> dict[str, Any]:
+    def _get_tesseract_data(self, image: ImageArray) -> dict[str, Any]:
         return cast(
             dict[str, Any],
             pytesseract.image_to_data(
@@ -131,5 +132,5 @@ class TesseractExtractor(ContentExtractor):
             ),
         )
 
-    def _preprocess_image(self, image: PILImage) -> np.ndarray:
+    def _preprocess_image(self, image: PILImage) -> ImageArray:
         return np.array(image.convert("L"))

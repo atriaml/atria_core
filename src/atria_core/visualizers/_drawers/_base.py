@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from typing import Protocol, TypeVar
 
-import numpy as np
-
+from atria_core.types._arrays import FloatArray
 from atria_core.visualizers._drawers._style import DEFAULT_STYLE, DrawStyle
 
 T = TypeVar("T")
@@ -19,7 +18,7 @@ class BboxDrawer(Protocol[T]):
     def draw(
         self,
         target: T,
-        bboxes: np.ndarray,
+        bboxes: FloatArray,
         *,
         texts: list[str] | None = None,
         labels: list[str] | None = None,

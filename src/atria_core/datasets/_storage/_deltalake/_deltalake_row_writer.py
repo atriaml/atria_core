@@ -5,7 +5,7 @@ import math
 import pickle
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import deltalake
 import pyarrow as pa
@@ -155,7 +155,9 @@ def _sample_to_row(sample: Any, artifacts_dir: Path) -> dict[str, Any]:
 
 
 def _write_rows_to_deltalake(
-    flat_rows: list[dict[str, Any]], split_dir: Path, mode: str = "overwrite"
+    flat_rows: list[dict[str, Any]],
+    split_dir: Path,
+    mode: Literal["append", "overwrite"] = "overwrite",
 ) -> None:
     schema = ParquetSchema.merge(flat_rows)
     columns: dict[str, list[Any]] = {field.name: [] for field in schema}
@@ -166,10 +168,8 @@ def _write_rows_to_deltalake(
     # Optional fields are not necessarily present in every batch.  Allow an
     # append to add columns discovered after the first batch; Delta will fill
     # those columns with nulls for rows that were already written.
-    schema_mode = "merge" if mode == "append" else None
-    deltalake.write_deltalake(  # type: ignore[call-overload]
-        str(split_dir), table, mode=mode, schema_mode=schema_mode
-    )
+    schema_mode: Literal["merge"] | None = "merge" if mode == "append" else None
+    deltalake.write_deltalake(str(split_dir), table, mode=mode, schema_mode=schema_mode)
 
 
 def _write_items(
@@ -214,7 +214,9 @@ class _DeltaBatchWriter:
             self._flush()
 
     def _flush(self) -> None:
-        mode = "overwrite" if self._first_batch else "append"
+        mode: Literal["append", "overwrite"] = (
+            "overwrite" if self._first_batch else "append"
+        )
         logger.info(
             f"Writing batch of {len(self._batch)} rows to delta lake at {self._split_dir}"
         )

@@ -10,7 +10,7 @@ import logging
 from pathlib import Path
 from typing import Any, TextIO
 
-import coloredlogs  # type: ignore[import-untyped]
+import coloredlogs
 
 
 def _next_available_path(path: Path) -> Path:
@@ -82,7 +82,7 @@ def _attach_stream_handler(
     log_stream: TextIO,
     log_level: int = logging.INFO,
     log_format: str = "[%(asctime)s][%(name)s][%(levelname)s] %(message)s",
-) -> logging.StreamHandler:  # type: ignore[type-arg]
+) -> logging.StreamHandler[TextIO]:
     """Attach a StreamHandler to a logger.
 
     Args:

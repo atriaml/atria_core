@@ -3,8 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-import numpy as np
-
+from atria_core.types._arrays import FloatArray
 from atria_core.types._base_data_model import BaseDataModel
 from atria_core.types._generic._bounding_box import (
     as_bbox_array,
@@ -21,9 +20,9 @@ class AnnotatedObject(BaseDataModel):
     a list of these and pass it to ObjectDetectionAnnotation.from_objects()."""
 
     label_value: int
-    bbox: np.ndarray
+    bbox: FloatArray
     label_name: str | None = None
-    segmentation: np.ndarray | None = None
+    segmentation: FloatArray | None = None
     iscrowd: bool = False
 
     def __post_init__(self) -> None:

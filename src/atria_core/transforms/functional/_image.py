@@ -4,6 +4,7 @@ import numpy as np
 from PIL.Image import Resampling
 
 from atria_core.types import Image
+from atria_core.types._arrays import ImageArray
 
 
 def resize(
@@ -38,5 +39,5 @@ def to_grayscale(image: Image) -> Image:
     return Image.from_source(image.require_content().convert("L"))
 
 
-def to_numpy(image: Image) -> np.ndarray:
+def to_numpy(image: Image) -> ImageArray:
     return np.array(image.require_content())

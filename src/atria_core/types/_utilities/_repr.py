@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 if TYPE_CHECKING:
-    from rich.pretty import RichReprResult
+    from collections.abc import Iterable
+
+    from rich.repr import RichReprResult
 
 
 class RepresentationMixin:
@@ -17,7 +19,7 @@ class RepresentationMixin:
     Set `__repr_fields__` as a class attribute to specify which fields to include.
     """
 
-    __repr_fields__: set[str] = set()
+    __repr_fields__: ClassVar[set[str]] = set()
 
     def __repr_name__(self) -> str:
         """
@@ -28,7 +30,7 @@ class RepresentationMixin:
         """
         return self.__class__.__name__
 
-    def __rich_repr__(self) -> RichReprResult:  # type: ignore
+    def __rich_repr__(self) -> RichReprResult:
         """
         Generates a rich representation of the object.
 
@@ -37,9 +39,7 @@ class RepresentationMixin:
         """
         import types
 
-        repr_fields = getattr(self.__class__, "__repr_fields__", set())  # type: ignore
-        if len(repr_fields) == 0:
-            repr_fields = self.__dict__.keys()
+        repr_fields: Iterable[str] = self.__repr_fields__ or self.__dict__.keys()
 
         for field_name in repr_fields:
             if not hasattr(self, field_name):
@@ -69,9 +69,10 @@ class RepresentationMixin:
 
         from atria_core.types._constants import _MAX_REPR_PRINT_ELEMENTS
 
-        return pretty_repr(
+        formatted: str = pretty_repr(
             self, max_length=_MAX_REPR_PRINT_ELEMENTS, max_string=128, max_depth=8
         )
+        return formatted
 
     def __str__(self) -> str:
         """
@@ -85,6 +86,7 @@ class RepresentationMixin:
 
         from atria_core.types._constants import _MAX_REPR_PRINT_ELEMENTS
 
-        return pretty_repr(
+        formatted: str = pretty_repr(
             self, max_length=_MAX_REPR_PRINT_ELEMENTS, max_string=128, max_depth=8
         )
+        return formatted

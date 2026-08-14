@@ -107,7 +107,7 @@ class DatasetLabels(BaseDataModel):
 
     @classmethod
     def _infer_from_huggingface_features(cls, features: Any) -> DatasetLabels:
-        import datasets  # type: ignore[import-not-found]
+        import datasets
 
         instance_labels = None
         object_labels = None

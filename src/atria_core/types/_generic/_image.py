@@ -50,7 +50,8 @@ class Image(BaseDataModel):
     # -------------------------------------
     @property
     def size(self) -> tuple[int, int]:
-        return self.require_content().size
+        width, height = self.require_content().size
+        return width, height
 
     @property
     def width(self) -> int:

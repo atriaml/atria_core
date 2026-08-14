@@ -6,6 +6,7 @@ import numpy as np
 from PIL import Image as PILImage
 from PIL import ImageDraw, ImageFont
 
+from atria_core.types._arrays import FloatArray
 from atria_core.visualizers._drawers._style import DEFAULT_STYLE, DrawStyle
 
 
@@ -26,13 +27,8 @@ def _get_text_dimensions(
     text: str,
     font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
 ) -> tuple[int, int]:
-    try:
-        text_bbox = draw.textbbox((0, 0), text, font=font)
-        width = text_bbox[2] - text_bbox[0]
-        height = text_bbox[3] - text_bbox[1]
-    except AttributeError:
-        width, height = font.getsize(text)  # type: ignore
-    return width, height
+    left, top, right, bottom = draw.textbbox((0, 0), text, font=font)
+    return int(right - left), int(bottom - top)
 
 
 def _get_bbox_color(
@@ -47,7 +43,7 @@ def _get_bbox_color(
 
 def _draw_bbox_rectangle(
     draw: ImageDraw.ImageDraw,
-    bbox: np.ndarray,
+    bbox: FloatArray,
     color: tuple[int, int, int],
     style: DrawStyle,
 ) -> None:
@@ -59,7 +55,7 @@ def _draw_bbox_rectangle(
 def _draw_text_label(
     draw: ImageDraw.ImageDraw,
     text: str,
-    bbox: np.ndarray,
+    bbox: FloatArray,
     font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
     style: DrawStyle,
 ) -> None:
@@ -88,7 +84,7 @@ class ImageDrawer:
     def draw(
         self,
         target: PILImage.Image,
-        bboxes: np.ndarray,
+        bboxes: FloatArray,
         *,
         texts: list[str] | None = None,
         labels: list[str] | None = None,

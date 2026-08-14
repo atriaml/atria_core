@@ -6,6 +6,7 @@ from typing import Protocol, TypeVar
 import numpy as np
 
 from atria_core.types import BoundingBoxMode
+from atria_core.types._arrays import FloatArray
 
 Container = TypeVar("Container", bound="BoxBatchOwner")
 
@@ -27,11 +28,11 @@ class BoxBatchOwner(Protocol):
     @property
     def normalized(self) -> bool: ...
 
-    def box_batches(self) -> dict[str, np.ndarray | None]: ...
+    def box_batches(self) -> dict[str, FloatArray | None]: ...
 
     def with_box_batches(
         self: Container,
-        batches: dict[str, np.ndarray],
+        batches: dict[str, FloatArray],
         *,
         normalized: bool,
         mode: BoundingBoxMode,
@@ -66,7 +67,7 @@ def switch_mode(container: Container) -> Container:
         BoundingBoxMode.XYWH if mode == BoundingBoxMode.XYXY else BoundingBoxMode.XYXY
     )
 
-    def _switch(boxes: np.ndarray) -> np.ndarray:
+    def _switch(boxes: FloatArray) -> FloatArray:
         x1, y1, a, b = boxes[:, 0], boxes[:, 1], boxes[:, 2], boxes[:, 3]
         if mode == BoundingBoxMode.XYXY:
             return np.stack([x1, y1, a - x1, b - y1], axis=1)
@@ -77,7 +78,7 @@ def switch_mode(container: Container) -> Container:
 
 def _apply(
     container: Container,
-    fn: Callable[[np.ndarray], np.ndarray],
+    fn: Callable[[FloatArray], FloatArray],
     *,
     normalized: bool,
     mode: BoundingBoxMode,

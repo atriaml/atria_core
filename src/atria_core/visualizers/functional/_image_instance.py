@@ -23,7 +23,7 @@ def visualize_image_instance(
     if detection is not None and detection.bboxes is not None:
         detection = F.bbox.unnormalize(detection, image.width, image.height)
         objects = detection.to_objects()
-        labels = [o.label_name for o in objects]
+        labels = [o.label_name for o in objects if o.label_name is not None]
         ImageDrawer().draw(
             image, np.stack([o.bbox for o in objects]), labels=labels, style=style
         )

@@ -88,6 +88,15 @@ disallow_untyped_defs = true
 check_untyped_defs = true
 warn_unused_ignores = true
 plugins = ["pydantic.mypy"]
+# pymupdf ships no type information, so every call into it reads as untyped.
+# Scoped to that package only -- calls into everything else stay checked.
+untyped_calls_exclude = ["pymupdf"]
+
+# gdown is typed but does not re-export its public names, which strict mode's
+# no_implicit_reexport rejects.
+[[tool.mypy.overrides]]
+module = ["gdown.*"]
+implicit_reexport = true
 
 [dependency-groups]
 dev = [

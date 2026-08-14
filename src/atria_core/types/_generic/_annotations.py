@@ -3,10 +3,16 @@ from __future__ import annotations
 import enum
 import json
 from dataclasses import dataclass, replace
-from typing import Any
+from typing import Any, Self
 
 import numpy as np
 
+from atria_core.types._arrays import (
+    BoolArray,
+    FloatArray,
+    IntArray,
+    ObjectArray,
+)
 from atria_core.types._base_data_model import BaseDataModel
 from atria_core.types._generic._annotated_object import AnnotatedObject
 from atria_core.types._generic._bounding_box import BoundingBoxMode
@@ -39,7 +45,7 @@ class ClassificationAnnotation(BaseDataModel):
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> ClassificationAnnotation:
+    def from_dict(cls, data: dict[str, Any]) -> Self:
         return cls(label_value=data["label_value"], label_name=data["label_name"])
 
 
@@ -61,7 +67,7 @@ class EntityLabelingAnnotation(BaseDataModel):
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> EntityLabelingAnnotation:
+    def from_dict(cls, data: dict[str, Any]) -> Self:
         return cls(
             word_label_values=list(data["word_label_values"]),
             word_label_names=data["word_label_names"],
@@ -81,7 +87,7 @@ class QuestionAnsweringAnnotation(BaseDataModel):
         return {"type": self.type, "qa_pairs": [q.to_dict() for q in self.qa_pairs]}
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> QuestionAnsweringAnnotation:
+    def from_dict(cls, data: dict[str, Any]) -> Self:
         return cls(qa_pairs=[QAPair.from_dict(q) for q in data["qa_pairs"]])
 
 
@@ -97,12 +103,12 @@ class ObjectDetectionAnnotation(BaseDataModel):
 
     type = AnnotationType.object_detection.value
 
-    label_values: np.ndarray | None = None
-    label_names: np.ndarray | None = None
-    bboxes: np.ndarray | None = None
-    segmentations: np.ndarray | None = None  # (N, P_max, 2), NaN-padded
-    segmentation_lengths: np.ndarray | None = None  # (N,) real point count per object
-    iscrowd: np.ndarray | None = None
+    label_values: IntArray | None = None
+    label_names: ObjectArray | None = None
+    bboxes: FloatArray | None = None
+    segmentations: FloatArray | None = None  # (N, P_max, 2), NaN-padded
+    segmentation_lengths: IntArray | None = None  # (N,) real point count per object
+    iscrowd: BoolArray | None = None
     bbox_mode: BoundingBoxMode = BoundingBoxMode.XYXY
     normalized: bool = False
 
@@ -138,8 +144,9 @@ class ObjectDetectionAnnotation(BaseDataModel):
             return []
         n = len(self.label_values)
         iscrowd = self.iscrowd if self.iscrowd is not None else np.zeros(n, dtype=bool)
+        label_names = self.label_names
 
-        def _segmentation(i: int) -> np.ndarray | None:
+        def _segmentation(i: int) -> FloatArray | None:
             if self.segmentations is None or self.segmentation_lengths is None:
                 return None
             length = int(self.segmentation_lengths[i])
@@ -148,7 +155,7 @@ class ObjectDetectionAnnotation(BaseDataModel):
         return [
             AnnotatedObject(
                 label_value=int(self.label_values[i]),
-                label_name=str(self.label_names[i]),
+                label_name=str(label_names[i]) if label_names is not None else None,
                 bbox=self.bboxes[i],
                 segmentation=_segmentation(i),
                 iscrowd=bool(iscrowd[i]),
@@ -159,11 +166,11 @@ class ObjectDetectionAnnotation(BaseDataModel):
     # -------------------------------------
     # Generic batch-transform protocol (see _transforms/_bounding_box.py)
     # -------------------------------------
-    def box_batches(self) -> dict[str, np.ndarray | None]:
+    def box_batches(self) -> dict[str, FloatArray | None]:
         return {"bboxes": self.bboxes}
 
     def with_box_batches(
-        self, batches: dict[str, np.ndarray], *, normalized: bool, mode: BoundingBoxMode
+        self, batches: dict[str, FloatArray], *, normalized: bool, mode: BoundingBoxMode
     ) -> ObjectDetectionAnnotation:
         return replace(
             self,
@@ -194,18 +201,30 @@ class ObjectDetectionAnnotation(BaseDataModel):
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> ObjectDetectionAnnotation:
-        def _array(key: str, dtype: type) -> np.ndarray | None:
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        def _object_array(key: str) -> ObjectArray | None:
             value = data.get(key)
-            return np.asarray(value, dtype=dtype) if value is not None else None
+            return np.asarray(value, dtype=object) if value is not None else None
+
+        def _int_array(key: str) -> IntArray | None:
+            value = data.get(key)
+            return np.asarray(value, dtype=np.int64) if value is not None else None
+
+        def _float_array(key: str) -> FloatArray | None:
+            value = data.get(key)
+            return np.asarray(value, dtype=np.float64) if value is not None else None
+
+        def _bool_array(key: str) -> BoolArray | None:
+            value = data.get(key)
+            return np.asarray(value, dtype=np.bool_) if value is not None else None
 
         return cls(
-            label_names=_array("label_names", object),
-            label_values=_array("label_values", np.int64),
-            bboxes=_array("bboxes", np.float64),
-            segmentations=_array("segmentations", np.float64),
-            segmentation_lengths=_array("segmentation_lengths", np.int64),
-            iscrowd=_array("iscrowd", np.bool_),
+            label_names=_object_array("label_names"),
+            label_values=_int_array("label_values"),
+            bboxes=_float_array("bboxes"),
+            segmentations=_float_array("segmentations"),
+            segmentation_lengths=_int_array("segmentation_lengths"),
+            iscrowd=_bool_array("iscrowd"),
             bbox_mode=BoundingBoxMode(
                 data.get("bbox_mode", BoundingBoxMode.XYXY.value)
             ),
@@ -225,7 +244,7 @@ class TranscriptionAnnotation(BaseDataModel):
     text: str | None = None
     level: OCRLevel | None = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         assert isinstance(self.text, str | None)
 
     def to_dict(self) -> dict[str, Any]:
@@ -235,7 +254,7 @@ class TranscriptionAnnotation(BaseDataModel):
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> TranscriptionAnnotation:
+    def from_dict(cls, data: dict[str, Any]) -> Self:
         return cls(
             text=data.get("text"),
         )

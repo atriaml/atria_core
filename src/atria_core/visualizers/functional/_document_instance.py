@@ -17,6 +17,7 @@ from atria_core.types import (
     ResourceLoader,
     SinglePageDocumentInstance,
 )
+from atria_core.types._arrays import FloatArray
 from atria_core.types._generic._annotations import OCRAnnotation
 from atria_core.visualizers._drawers._image import ImageDrawer
 from atria_core.visualizers._drawers._pdf import PdfDrawer
@@ -32,7 +33,7 @@ def _words_to_draw(
     *,
     draw_segment_bboxes: bool,
     draw_word_labels: bool,
-) -> tuple[np.ndarray, list[str] | None, list[str] | None, bool] | None:
+) -> tuple[FloatArray, list[str] | None, list[str] | None, bool] | None:
     """Word-level XYXY bboxes, texts, labels, and normalization metadata."""
     ocr_ann: OCRAnnotation | None = instance.get_annotation_by_type(AnnotationType.ocr)
     elements = (

@@ -19,21 +19,6 @@ from atria_core.types import DatasetMetadata, DatasetSplitType
 logger = get_logger(__name__)
 
 
-class _SafeTupleLoader(yaml.SafeLoader):
-    pass
-
-
-def _construct_python_tuple(
-    loader: yaml.SafeLoader, node: yaml.SequenceNode
-) -> tuple[Any, ...]:
-    return tuple(loader.construct_sequence(node))
-
-
-_SafeTupleLoader.add_constructor(
-    "tag:yaml.org,2002:python/tuple", _construct_python_tuple
-)
-
-
 class CachedDataset(
     Dataset[DatasetConfig, T_BaseDataInstance], Generic[T_BaseDataInstance]
 ):

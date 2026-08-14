@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import enum
 from dataclasses import dataclass, replace
-from typing import Any
+from typing import Any, Self
 
 import numpy as np
 
+from atria_core.types._arrays import FloatArray, IntArray, ObjectArray
 from atria_core.types._base_data_model import BaseDataModel
 from atria_core.types._generic._bounding_box import BoundingBoxMode
 
@@ -35,17 +36,17 @@ class ElementArray(BaseDataModel):
     no per-element holes.
     """
 
-    ids: np.ndarray | None = None
-    parent_ids: np.ndarray | None = None
-    levels: np.ndarray | None = None
-    bboxes: np.ndarray | None = None
+    ids: IntArray | None = None
+    parent_ids: IntArray | None = None
+    levels: IntArray | None = None
+    bboxes: FloatArray | None = None
     bbox_mode: BoundingBoxMode = BoundingBoxMode.XYXY
     normalized: bool = False
-    texts: np.ndarray | None = None  # dtype=object, elements are str
-    confs: np.ndarray | None = None
-    angles: np.ndarray | None = None
-    segmentations: np.ndarray | None = None  # (N, P_max, 2), NaN-padded
-    segmentation_lengths: np.ndarray | None = None  # (N,) real point count per element
+    texts: ObjectArray | None = None  # elements are str
+    confs: FloatArray | None = None
+    angles: FloatArray | None = None
+    segmentations: FloatArray | None = None  # (N, P_max, 2), NaN-padded
+    segmentation_lengths: IntArray | None = None  # (N,) real point count per element
 
     def __post_init__(self) -> None:
         if self.texts is not None and not isinstance(self.texts, np.ndarray):
@@ -97,7 +98,7 @@ class ElementArray(BaseDataModel):
         cls,
         texts: list[str],
         bboxes: Any,
-        segmentations: list[np.ndarray | None] | None = None,
+        segmentations: list[FloatArray | None] | None = None,
         *,
         bbox_mode: BoundingBoxMode = BoundingBoxMode.XYXY,
         normalized: bool = False,
@@ -161,12 +162,12 @@ class ElementArray(BaseDataModel):
             else None,
         )
 
-    def box_batches(self) -> dict[str, np.ndarray | None]:
+    def box_batches(self) -> dict[str, FloatArray | None]:
         return {"bboxes": self.bboxes}
 
     def with_box_batches(
         self,
-        batches: dict[str, np.ndarray],
+        batches: dict[str, FloatArray],
         *,
         normalized: bool,
         mode: BoundingBoxMode,
@@ -178,7 +179,7 @@ class ElementArray(BaseDataModel):
             bbox_mode=mode,
         )
 
-    def parent_bbox(self) -> np.ndarray:
+    def parent_bbox(self) -> FloatArray:
         """(N, 4) box of each element's parent; roots (and any element whose
         parent isn't present, e.g. after `at()`) fall back to their own box."""
         if self.bboxes is None or self.ids is None or self.parent_ids is None:
@@ -192,14 +193,14 @@ class ElementArray(BaseDataModel):
         sorted_ids = self.ids[order]
         pos = np.clip(np.searchsorted(sorted_ids, self.parent_ids), 0, len(order) - 1)
         rows = order[pos]
-        out = self.bboxes[rows].copy()
+        out: FloatArray = self.bboxes[rows].copy()
         missing = (self.parent_ids == _ROOT_PARENT) | (
             sorted_ids[pos] != self.parent_ids
         )
         out[missing] = self.bboxes[missing]
         return out
 
-    def word_bboxes(self) -> np.ndarray:
+    def word_bboxes(self) -> FloatArray:
         """(M, 4) boxes of every word in this array, in order. If the array has
         no words, returns an empty (0, 4) array."""
         if self.levels is None or self.bboxes is None:
@@ -215,7 +216,7 @@ class ElementArray(BaseDataModel):
         mask = self.levels == OCRLevel.word.value
         return [t for t in self.texts[mask].tolist() if t]
 
-    def segment_bboxes(self, level: OCRLevel = OCRLevel.line) -> np.ndarray:
+    def segment_bboxes(self, level: OCRLevel = OCRLevel.line) -> FloatArray:
         """(M, 4) enclosing box of each `level` element's parent -- the
         replacement for a stored `segment_bbox` field. Call on the full
         (unsliced) array; this gathers first, then filters to `level`."""
@@ -252,12 +253,12 @@ class ElementArray(BaseDataModel):
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> ElementArray:
-        def _int_array(key: str) -> np.ndarray | None:
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        def _int_array(key: str) -> IntArray | None:
             value = data.get(key)
             return np.asarray(value, dtype=np.int64) if value is not None else None
 
-        def _float_array(key: str) -> np.ndarray | None:
+        def _float_array(key: str) -> FloatArray | None:
             value = data.get(key)
             return np.asarray(value, dtype=np.float64) if value is not None else None
 
