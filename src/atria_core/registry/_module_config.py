@@ -66,6 +66,10 @@ class ModuleConfig:
         from hydra.utils import instantiate
 
         config = instantiate(data)
+        assert isinstance(config, cls), (
+            f"{cls.__name__}.from_dict expected {cls.__name__}, "
+            f"but got {type(config).__name__}"
+        )
         return config
 
     @property
