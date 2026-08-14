@@ -179,12 +179,7 @@ class DatasetSnapshot:
             or snapshot.config_hash is None
         ):
             return False
-        if snapshot.config:
-            return True
-        # Legacy caches stored config in a sidecar file. New caches embed it
-        # directly in snapshot.yaml and don't need any extra files to be
-        # discoverable.
-        return (directory / "config.yaml").is_file()
+        return bool(snapshot.config)
 
     @property
     def dataset_metadata(self) -> DatasetMetadata:

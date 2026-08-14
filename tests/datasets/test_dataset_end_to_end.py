@@ -385,8 +385,6 @@ def test_cache_writes_discoverable_versioned_snapshot(tmp_path: Path) -> None:
 
 
 def test_snapshot_loads_legacy_schema(tmp_path: Path) -> None:
-    (tmp_path / "config.yaml").write_text("_target_: example.Config\n")
-    (tmp_path / "metadata.yaml").write_text("{}\n")
     (tmp_path / "snapshot.yaml").write_text(
         "storage_type: msgpack\n"
         "data_model: example.Model\n"
@@ -403,7 +401,10 @@ def test_snapshot_loads_legacy_schema(tmp_path: Path) -> None:
     assert snapshot.dataset_stage == "raw"
     assert snapshot.config == {}
     assert snapshot.metadata == {}
-    assert DatasetSnapshot.validate(tmp_path)
+    # Pre-schema-version-1 snapshots stored config in a sidecar config.yaml
+    # instead of embedding it. That sidecar is no longer read, so a snapshot
+    # with no embedded config is not a valid, self-contained cache.
+    assert not DatasetSnapshot.validate(tmp_path)
 
 
 def test_reopened_cache_carries_the_snapshot_params_verbatim(tmp_path: Path) -> None:

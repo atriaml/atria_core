@@ -5,11 +5,9 @@ from collections.abc import Callable, Iterable, Sequence
 from pathlib import Path
 from typing import Any, Generic
 
-import yaml
 from pydantic import ConfigDict
 
 from atria_core.datasets._common import FileStorageType
-from atria_core.datasets._constants import _DEFAULT_ATRIA_DATASETS_CONFIG_PATH
 from atria_core.datasets._dataset import Dataset, DatasetConfig, T_DataInstance
 from atria_core.datasets._snapshot import DatasetSnapshot
 from atria_core.datasets._storage._storage_manager import StorageManager
@@ -63,13 +61,8 @@ class CachedDataset(
         module = importlib.import_module(module_name)
         self._data_model_cls: type[T_DataInstance] = getattr(module, class_name)
 
-        config_data = self._snapshot.config
-        if not config_data:
-            config_path = self._path / _DEFAULT_ATRIA_DATASETS_CONFIG_PATH
-            with open(config_path) as f:
-                config_data = yaml.safe_load(f)
         super().__init__(
-            config=CachedDatasetConfig.from_dict(config_data),
+            config=CachedDatasetConfig.from_dict(self._snapshot.config),
             data_dir=str(self._path),
         )
 
@@ -125,13 +118,7 @@ class CachedDataset(
         return self._storage_manager().get_splits()
 
     def _metadata(self) -> DatasetMetadata:
-        if self._snapshot.metadata:
-            return self._snapshot.dataset_metadata
-        metadata_path = self._path / "metadata.yaml"
-        if metadata_path.exists():
-            with open(metadata_path) as f:
-                return DatasetMetadata.from_dict(yaml.safe_load(f))
-        return DatasetMetadata()
+        return self._snapshot.dataset_metadata
 
     def _build_input_transform(self, **kwargs: Any) -> Callable[[Any], T_DataInstance]:
         return self.data_model.from_dict  # type: ignore[return-value]
