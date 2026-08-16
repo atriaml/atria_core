@@ -1,20 +1,59 @@
 from __future__ import annotations
 
-from typing import Any, ClassVar, Self, cast, get_args
+from typing import Any, ClassVar, Self, TypeVar, cast, get_args, get_origin
 
 from atria_core.registry._module_config import ModuleConfig
 
 
-def _find_config_class(cls: type[Any]) -> type[ModuleConfig] | None:
-    for base in cls.__dict__.get("__orig_bases__", ()):
-        for arg in get_args(base):
-            if (
-                isinstance(arg, type)
-                and issubclass(arg, ModuleConfig)
-                and arg is not ModuleConfig
-            ):
-                return arg
+def _concrete_config_class(value: Any) -> type[ModuleConfig] | None:
+    """Resolve `value` to a concrete `ModuleConfig` subclass, if possible.
+
+    `value` is either the config type itself, or a type var standing in for
+    it -- resolved through the type var's default (falling back to its
+    bound), the way an unsubscripted generic base leaves it.
+    """
+    if isinstance(value, TypeVar):
+        default = getattr(value, "__default__", None)
+        if isinstance(default, type) and issubclass(default, ModuleConfig):
+            return default
+        value = value.__bound__
+
+    if (
+        isinstance(value, type)
+        and issubclass(value, ModuleConfig)
+        and value is not ModuleConfig
+    ):
+        return value
     return None
+
+
+def _find_config_class(module_cls: type[Any]) -> type[ModuleConfig] | None:
+    """Resolve the config type bound via `Module[MyConfig]` anywhere in
+    `module_cls`'s generic base hierarchy.
+
+    Walks every generic base recursively, substituting each base's own type
+    vars with the args it was given -- so a config bound several generic
+    levels up (e.g. through an intermediate `Dataset[X, MyConfig]` base) is
+    still found, not just one bound directly on `Module`.
+    """
+
+    def resolve(cls: type[Any], type_vars: dict[Any, Any]) -> type[ModuleConfig] | None:
+        for base in getattr(cls, "__orig_bases__", ()):
+            origin = get_origin(base) or base
+            args = tuple(type_vars.get(arg, arg) for arg in get_args(base))
+
+            if origin is Module and args:
+                config_cls = _concrete_config_class(args[0])
+                if config_cls is not None:
+                    return config_cls
+
+            parameters = getattr(origin, "__parameters__", ())
+            config_cls = resolve(origin, dict(zip(parameters, args, strict=False)))
+            if config_cls is not None:
+                return config_cls
+        return None
+
+    return resolve(module_cls, {})
 
 
 class Module[T_ModuleConfig: ModuleConfig]:
