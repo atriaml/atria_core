@@ -118,7 +118,9 @@ def transform_configs(
     ]
 
 
-def _infer_data_model(dataset: Dataset[T_Sample, Any]) -> type[T_Sample]:
+def _infer_data_model[T_Sample: DataInstance](
+    dataset: Dataset[T_Sample, Any],
+) -> type[T_Sample]:
     """Return the sample class a dataset produces, read off its first sample.
 
     Raises:

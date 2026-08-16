@@ -12,7 +12,6 @@ from pydantic import ValidationError
 
 from atria_core.datasets import (
     CachedDataset,
-    CachedDatasetConfig,
     Cacher,
     Dataset,
     DatasetConfig,
@@ -57,8 +56,10 @@ class _RawSplit(Sequence[int]):
         return index
 
 
-@datasets.register("synthetic")
+@datasets.register
 class SyntheticDataset(Dataset[ImageInstance, SyntheticConfig]):
+    __module_name__ = "synthetic"
+
     def _download_urls(self) -> list[UrlSpec]:
         return []
 
@@ -84,6 +85,8 @@ class EmptyConfig(DatasetConfig):
 
 
 class EmptyConfigDataset(Dataset[ImageInstance, EmptyConfig]):
+    __module_name__ = "empty_config"
+
     def _download_urls(self) -> list[UrlSpec]:
         return []
 
@@ -146,7 +149,7 @@ def test_mismatched_config_class_is_rejected(tmp_path: Path) -> None:
     class OtherConfig(DatasetConfig):
         pass
 
-    with pytest.raises(TypeError, match="takes a SyntheticConfig, but got OtherConfig"):
+    with pytest.raises(TypeError, match="takes SyntheticConfig, got OtherConfig"):
         SyntheticDataset(config=OtherConfig(), data_dir=str(tmp_path))  # type: ignore[arg-type]
 
 
@@ -207,7 +210,8 @@ def test_dataset_repr_summarizes_data_model_and_split_sizes(tmp_path: Path) -> N
     assert "<DatasetSplitType.test: 'test'>" in representation
     assert "length=2" in representation
     assert (
-        "config={'max_train_samples': None, 'max_test_samples': None}" in representation
+        "config=SyntheticConfig(max_train_samples=None, max_test_samples=None)"
+        in representation
     )
 
 
@@ -416,8 +420,6 @@ def test_reopened_cache_carries_the_snapshot_params_verbatim(tmp_path: Path) -> 
     )
 
     reopened = CachedDataset(cached.data_dir)
-
-    assert isinstance(reopened.config, CachedDatasetConfig)
     assert reopened.config.to_dict() == dataset.config.to_dict()
 
 

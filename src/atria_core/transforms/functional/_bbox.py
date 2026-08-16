@@ -1,14 +1,12 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Protocol, TypeVar
+from typing import Protocol
 
 import numpy as np
 
 from atria_core.types import BoundingBoxMode
 from atria_core.types._arrays import FloatArray
-
-Container = TypeVar("Container", bound="BoxBatchOwner")
 
 
 class BoxBatchOwner(Protocol):
@@ -30,7 +28,7 @@ class BoxBatchOwner(Protocol):
 
     def box_batches(self) -> dict[str, FloatArray | None]: ...
 
-    def with_box_batches(
+    def with_box_batches[Container: BoxBatchOwner](
         self: Container,
         batches: dict[str, FloatArray],
         *,
@@ -39,7 +37,9 @@ class BoxBatchOwner(Protocol):
     ) -> Container: ...
 
 
-def normalize(container: Container, width: float, height: float) -> Container:
+def normalize[Container: BoxBatchOwner](
+    container: Container, width: float, height: float
+) -> Container:
     if container.normalized:
         return container
     return _apply(
@@ -50,7 +50,9 @@ def normalize(container: Container, width: float, height: float) -> Container:
     )
 
 
-def unnormalize(container: Container, width: float, height: float) -> Container:
+def unnormalize[Container: BoxBatchOwner](
+    container: Container, width: float, height: float
+) -> Container:
     if not container.normalized:
         return container
     return _apply(
@@ -61,7 +63,7 @@ def unnormalize(container: Container, width: float, height: float) -> Container:
     )
 
 
-def switch_mode(container: Container) -> Container:
+def switch_mode[Container: BoxBatchOwner](container: Container) -> Container:
     mode = container.bbox_mode
     new_mode = (
         BoundingBoxMode.XYWH if mode == BoundingBoxMode.XYXY else BoundingBoxMode.XYXY
@@ -76,7 +78,7 @@ def switch_mode(container: Container) -> Container:
     return _apply(container, _switch, normalized=container.normalized, mode=new_mode)
 
 
-def _apply(
+def _apply[Container: BoxBatchOwner](
     container: Container,
     fn: Callable[[FloatArray], FloatArray],
     *,

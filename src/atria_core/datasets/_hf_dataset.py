@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Generic, TypeVar
+from typing import TYPE_CHECKING, Any
 
 import aiohttp
 
@@ -9,10 +9,10 @@ from atria_core.datasets._constants import _HF_DOWNLOAD_TIMEOUT_SECONDS
 from atria_core.datasets._dataset import (
     Dataset,
     DatasetConfig,
-    T_DataInstance,
 )
 from atria_core.logger import get_logger
 from atria_core.types import DatasetMetadata, DatasetSplitType
+from atria_core.types._data_instance._base import DataInstance
 
 if TYPE_CHECKING:
     import datasets
@@ -41,16 +41,11 @@ class HuggingfaceDatasetConfig(DatasetConfig):
     config_name: str | None = None
 
 
-T_HuggingfaceDatasetConfig = TypeVar(
-    "T_HuggingfaceDatasetConfig",
-    bound=HuggingfaceDatasetConfig,
-    default=HuggingfaceDatasetConfig,
-)
-
-
-class HuggingfaceDataset(
+class HuggingfaceDataset[
+    T_DataInstance: DataInstance,
+    T_HuggingfaceDatasetConfig: HuggingfaceDatasetConfig = HuggingfaceDatasetConfig,
+](
     Dataset[T_DataInstance, T_HuggingfaceDatasetConfig],
-    Generic[T_DataInstance, T_HuggingfaceDatasetConfig],
 ):
     """Streams a dataset straight off the Hugging Face hub, letting the
     `datasets` library handle downloading and caching internally."""

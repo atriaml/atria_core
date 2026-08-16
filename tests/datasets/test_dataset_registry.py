@@ -15,6 +15,10 @@ from tests.datasets.test_dataset_end_to_end import SyntheticDataset  # noqa: F40
 _SYNTHETIC_PATH = f"{SyntheticDataset.__module__}.{SyntheticDataset.__qualname__}"
 
 
+class _TestDatasetRegistry(DatasetRegistry):
+    __registry_name__ = "test_registry.datasets"
+
+
 def test_create_builds_the_registered_class_with_the_param_applied(
     tmp_path: Path,
 ) -> None:
@@ -64,28 +68,28 @@ def test_unknown_name_raises_with_a_did_you_mean_hint() -> None:
 
 
 def test_registering_a_non_dataset_is_rejected() -> None:
-    registry: DatasetRegistry = DatasetRegistry("test_registry.datasets")
+    registry = _TestDatasetRegistry()
 
-    with pytest.raises(TypeError, match="only accepts subclasses of Dataset"):
+    class NotADataset:
+        __module_name__ = "not_a_dataset"
 
-        @registry.register("not_a_dataset")
-        class NotADataset:
-            pass
+    with pytest.raises(TypeError, match="only accepts Dataset subclasses"):
+        registry.register(NotADataset)  # type: ignore[arg-type]
 
 
 def test_registering_a_duplicate_name_is_rejected() -> None:
-    registry: DatasetRegistry = DatasetRegistry("test_registry.datasets")
-    registry.register("synthetic")(SyntheticDataset)
+    registry = _TestDatasetRegistry()
+    registry.register(SyntheticDataset)
 
-    with pytest.raises(ValueError, match="already has an entry named 'synthetic'"):
-        registry.register("synthetic")(SyntheticDataset)
+    with pytest.raises(ValueError, match="already has 'synthetic'"):
+        registry.register(SyntheticDataset)
 
 
 def test_store_roundtrip_resolves_a_name_by_import_path(tmp_path: Path) -> None:
     path = tmp_path / "registry.json"
     RegistryStore.dump(path, datasets.to_dict())
 
-    restored: DatasetRegistry = DatasetRegistry("test_registry.datasets")
+    restored = _TestDatasetRegistry()
     restored.from_dict(RegistryStore.load(path))
 
     # from_dict stores the path verbatim; it is resolved on first lookup.

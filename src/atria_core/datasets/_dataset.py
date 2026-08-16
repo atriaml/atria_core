@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterable, Sequence
 from pathlib import Path
-from typing import Any, Generic, TypeVar, cast, get_args, get_origin
+from typing import Any, TypeVar, cast, get_args, get_origin
 
 from atria_core.datasets._constants import (
     _DEFAULT_ATRIA_DATASETS_CACHE_DIR,
@@ -16,7 +16,7 @@ from atria_core.datasets._split_iterators import (
     IterableSplitIterator,
 )
 from atria_core.logger import get_logger
-from atria_core.registry import ConfigurableModule
+from atria_core.registry._module import Module
 from atria_core.registry._module_config import ModuleConfig
 from atria_core.types import DatasetMetadata, DatasetSplitType, RepresentationMixin
 from atria_core.types._data_instance._base import DataInstance
@@ -43,12 +43,6 @@ class DatasetConfig(ModuleConfig):
     build anything; the dataset takes one, not the other way round."""
 
 
-T_DataInstance = TypeVar("T_DataInstance", bound=DataInstance, default=DataInstance)
-T_DatasetConfig = TypeVar(
-    "T_DatasetConfig", bound="DatasetConfig", default=DatasetConfig
-)
-
-
 def _resolve_data_model(dataset_cls: type[Any]) -> type[DataInstance]:
     """Resolve the first ``Dataset`` generic argument without loading a sample."""
 
@@ -71,11 +65,13 @@ def _resolve_data_model(dataset_cls: type[Any]) -> type[DataInstance]:
     return resolve(dataset_cls, {}) or DataInstance
 
 
-class Dataset(
+class Dataset[
+    T_DataInstance: DataInstance = DataInstance,
+    T_DatasetConfig: DatasetConfig = DatasetConfig,
+](
     ABC,
     RepresentationMixin,
-    ConfigurableModule[T_DatasetConfig],
-    Generic[T_DataInstance, T_DatasetConfig],
+    Module[T_DatasetConfig],
 ):
     """The config class is resolved from the second generic argument, which
     lets the dataset be constructed with no arguments at all::
@@ -87,20 +83,21 @@ class Dataset(
         Tobacco3482(Tobacco3482Config(load_ocr=True))  # explicit config
     """
 
-    __abstract__ = True
-    __requires_access_token__ = False
-    __extract_downloads__ = True
     __repr_fields__ = (
         "data_model",
         "data_dir",
         "split_iterators",
     )
 
+    __abstract__ = True
+    requires_access_token = False
+    extract_downloads = True
+
     def __rich_repr__(self) -> Any:
         yield from super().__rich_repr__()
         config = self.config.model_dump()
         if config:
-            yield "config", config
+            yield "config", self.config
 
     def __init__(
         self,
@@ -287,7 +284,7 @@ class Dataset(
         """
         from atria_core.datasets._download._download_manager import AtriaDownloadManager
 
-        if self.__requires_access_token__ and access_token is None:
+        if self.requires_access_token and access_token is None:
             logger.warning(
                 "access_token must be passed to download this dataset. "
                 f"See `{self.metadata.homepage}` for instructions to get the access token"
@@ -303,7 +300,7 @@ class Dataset(
         )
         downloaded = download_manager.download_and_extract(
             download_urls,
-            extract=self.__extract_downloads__,
+            extract=self.extract_downloads,
             access_token=access_token,
         )
         logger.info(f"Downloaded files {downloaded}")

@@ -241,22 +241,25 @@ class LayoutAnalysisAnnotation(ObjectDetectionAnnotation):
 class TranscriptionAnnotation(BaseDataModel):
     type = AnnotationType.transcription.value
 
-    text: str | None = None
+    text: str
     level: OCRLevel | None = None
 
     def __post_init__(self) -> None:
-        assert isinstance(self.text, str | None)
+        assert isinstance(self.text, str)
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "type": self.type,
             "text": self.text,
+            "level": self.level.value if self.level is not None else None,
         }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Self:
+        level = data.get("level")
         return cls(
-            text=data.get("text"),
+            text=data["text"],
+            level=OCRLevel(level) if level is not None else None,
         )
 
 

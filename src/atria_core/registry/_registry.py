@@ -1,16 +1,13 @@
 from __future__ import annotations
 
-import dataclasses
 import difflib
 import importlib
 import pkgutil
-from collections.abc import Callable, ItemsView
-from typing import Any, Generic, TypeVar
+from collections.abc import ItemsView
+from typing import Any, ClassVar, cast, get_args, get_origin
 
-# Unbound: a registry holds whatever `target_type` says it holds -- a config
-# class, a dataset class -- and `_validated` enforces that at registration.
-T = TypeVar("T")
-T_Registered = TypeVar("T_Registered")
+from atria_core.registry._module import Module
+from atria_core.registry._module_config import ModuleConfig
 
 
 def import_submodules(package: str) -> None:
@@ -23,102 +20,84 @@ def import_submodules(package: str) -> None:
         importlib.import_module(name)
 
 
-class ConfigRegistry(Generic[T]):
-    """Maps names to classes, so one can be created by name.
+class ModuleRegistry[T_Module: Module[ModuleConfig]]:
+    """Maps names to `Module` subclasses, so one can be created by name.
 
-    Entries registered with `register()` hold the class itself. Entries added
-    from a serialized mapping with `from_dict()` hold an import path, and are
-    imported the first time that name is looked up.
-
-    What a created object is then used for is the caller's business; this only
-    resolves a name into a validated instance.
-
-    Args:
-        name: Name of this registry group, used in error messages.
-        target_type: Class every entry must subclass.
+    `__registry_name__` and `__module_type__` are read from each subclass's
+    own namespace -- `__registry_name__` for its use in error messages,
+    `__module_type__` for the subclass check every registered entry must
+    pass -- rather than exposed as constructor arguments.
     """
 
-    def __init__(self, name: str, target_type: type[T]) -> None:
-        self.name = name
-        self._target_type = target_type
-        self._store: dict[str, type[T] | str] = {}
+    __registry_name__: ClassVar[str]
+    __module_type__: ClassVar[type[Module[ModuleConfig]]]
 
-    def register(self, name: str) -> Callable[[type[T_Registered]], type[T_Registered]]:
-        """Return a decorator that registers the decorated class under `name`.
-
-        The decorated class keeps its own type, so decorating it does not widen
-        it to this registry's target type. `_validated` checks the subclass
-        relationship at registration time.
-        """
-
-        def decorator(target: type[T_Registered]) -> type[T_Registered]:
-            if name in self._store:
-                raise ValueError(
-                    f"registry {self.name!r} already has an entry named {name!r} "
-                    f"({self._describe(self._store[name])}) -- pick a different "
-                    f"name, or remove the other registration"
-                )
-            self._store[name] = self._validated(target, name=name)
-            return target
-
-        return decorator
-
-    def _get_class(self, name: str) -> type[T]:
-        """Return the class registered under `name`, importing it if needed.
-
-        Raises:
-            KeyError: If nothing is registered under `name`.
-            TypeError: If the entry does not subclass this registry's target type.
-        """
-        try:
-            entry = self._store[name]
-        except KeyError:
-            raise KeyError(
-                f"{self.name} has no entry named {name!r}."
-                f"{self._suggest(name)} "
-                f"Available: {', '.join(sorted(self.list())) or '<empty>'}"
-            ) from None
-
-        if not isinstance(entry, str):
-            return entry
-
-        resolved = self._validated(self._import(entry, name=name), name=name)
-        self._store[name] = resolved
-        return resolved
-
-    def create(self, name: str, **params: Any) -> T:
-        """Create an instance of the class registered under `name` from `params`.
-
-        Intended for names and values arriving as data -- a command line flag,
-        a config file -- where parameters cannot be checked statically. Code
-        that knows which class it wants should import and construct it
-        directly instead.
-
-        Raises:
-            KeyError: If nothing is registered under `name`.
-            TypeError: If `params` holds names the class does not accept, or
-                values it rejects.
-        """
-        target = self._get_class(name)
-        self._check_params(target, params=params, name=name)
-        try:
-            return target(**params)
-        except TypeError as e:
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        if "__registry_name__" not in cls.__dict__:
             raise TypeError(
-                f"cannot create {name!r} ({target.__name__}) from "
-                f"{self._describe_params(params)}: {e}"
-            ) from e
+                f"{cls.__name__} must define a '__registry_name__' class variable."
+            )
+        for base in cls.__dict__.get("__orig_bases__", ()):
+            if get_origin(base) is ModuleRegistry:
+                (arg,) = get_args(base)
+                module_cls = get_origin(arg) or arg
+                if not (isinstance(module_cls, type) and issubclass(module_cls, Module)):
+                    raise TypeError(
+                        f"{cls.__name__} must specialize ModuleRegistry with a "
+                        f"concrete Module subclass, got {arg!r}"
+                    )
+                cls.__module_type__ = module_cls
+                return
 
-    def items(self) -> ItemsView[str, type[T]]:
-        """Return every name and its class, importing any entry not yet loaded."""
-        return {name: self._get_class(name) for name in self._store}.items()
+    def __init__(self) -> None:
+        if not hasattr(self, "__module_type__"):
+            raise TypeError(
+                f"{type(self).__name__} must specialize ModuleRegistry, e.g. "
+                f"class MyRegistry(ModuleRegistry[MyModule]): ..."
+            )
+        self._store: dict[str, type[T_Module] | str] = {}
+
+    @property
+    def name(self) -> str:
+        """This registry group's name, used in error messages."""
+        return type(self).__registry_name__
+
+    @property
+    def module_type(self) -> type[T_Module]:
+        """Class every entry in this registry must subclass."""
+        return cast("type[T_Module]", type(self).__module_type__)
+
+    def register(self, cls: type[T_Module]) -> type[T_Module]:
+        name = cls.__module_name__
+        if name in self._store:
+            raise ValueError(f"{self.name!r} already has {name!r}")
+        self._store[name] = self._validate(cls, name)
+        return cls
+
+    def get(self, name: str) -> type[T_Module]:
+        entry = self._store.get(name)
+        if entry is None:
+            close = difflib.get_close_matches(name, self._store, n=3)
+            hint = f" Did you mean {', '.join(map(repr, close))}?" if close else ""
+            raise KeyError(f"{self.name!r} has no entry {name!r}.{hint}")
+        if isinstance(entry, str):
+            resolved = self._validate(self._import(entry, name), name)
+            self._store[name] = resolved
+            return resolved
+        return entry
+
+    def create(self, name: str, config: ModuleConfig | None = None) -> T_Module:
+        cls = self.get(name)
+        return cls(config)
 
     def list(self) -> list[str]:
-        """Return every registered name, without importing anything."""
-        return list(self._store.keys())
+        return list(self._store)
+
+    def items(self) -> ItemsView[str, type[T_Module]]:
+        return {name: self.get(name) for name in self._store}.items()
 
     def to_dict(self) -> dict[str, str]:
-        """Return the registry as a mapping of name to import path."""
         return {
             name: entry
             if isinstance(entry, str)
@@ -127,77 +106,27 @@ class ConfigRegistry(Generic[T]):
         }
 
     def from_dict(self, data: dict[str, str]) -> None:
-        """Add entries from a mapping of name to import path.
+        for name, path in data.items():
+            if name in self._store:
+                raise ValueError(f"{self.name!r} already has {name!r}")
+            self._store[name] = path
 
-        Nothing is imported here; each path is resolved and checked the first
-        time its name is looked up.
-        """
-        self._store.update(data)
-
-    def _import(self, path: str, *, name: str) -> Any:
-        module_name, _, attr = path.rpartition(".")
-        if not module_name:
-            raise ValueError(
-                f"registry {self.name!r} entry {name!r} is {path!r}, which is not "
-                f"a 'module.ClassName' import path"
-            )
-        try:
-            module = importlib.import_module(module_name)
-        except ImportError as e:
-            raise ImportError(
-                f"registry {self.name!r} entry {name!r} points at {path!r}, but "
-                f"module {module_name!r} could not be imported: {e}"
-            ) from e
-        try:
-            return getattr(module, attr)
-        except AttributeError:
-            raise AttributeError(
-                f"registry {self.name!r} entry {name!r} points at {path!r}, but "
-                f"module {module_name!r} has no attribute {attr!r}"
-            ) from None
-
-    def _validated(self, target: Any, *, name: str) -> type[T]:
-        """Check `target` against this registry's config type and return it typed."""
-        target_type = self._target_type
-        if not isinstance(target, type):
+    def _validate(self, target: Any, name: str) -> type[T_Module]:
+        if not isinstance(target, type) or not issubclass(target, self.module_type):
             raise TypeError(
-                f"registry {self.name!r} only accepts classes, but {name!r} is "
-                f"{target!r} ({type(target).__name__})"
-            )
-        if not issubclass(target, target_type):
-            bases = ", ".join(base.__name__ for base in target.__bases__)
-            raise TypeError(
-                f"registry {self.name!r} only accepts subclasses of "
-                f"{target_type.__name__}, but {name!r} is {target.__name__}, "
-                f"which subclasses {bases}"
+                f"{self.name!r} only accepts {self.module_type.__name__} "
+                f"subclasses, got {target!r}"
             )
         return target
 
-    def _check_params(
-        self, target: type[T], *, params: dict[str, Any], name: str
-    ) -> None:
-        if not dataclasses.is_dataclass(target):
-            return
-        accepted = {field.name for field in dataclasses.fields(target)}
-        unknown = sorted(set(params) - accepted)
-        if unknown:
-            raise TypeError(
-                f"{name!r} ({target.__name__}) does not accept "
-                f"{', '.join(repr(field) for field in unknown)}. "
-                f"Accepted parameters: {', '.join(sorted(accepted)) or '<none>'}"
-            )
-
-    def _suggest(self, name: str) -> str:
-        """Return a ' Did you mean ...?' hint for the closest registered names."""
-        close_matches = difflib.get_close_matches(name, self.list(), n=3)
-        if not close_matches:
-            return ""
-        return f" Did you mean {' or '.join(repr(m) for m in close_matches)}?"
-
-    def _describe(self, entry: type[T] | str) -> str:
-        return entry if isinstance(entry, str) else entry.__qualname__
-
-    def _describe_params(self, params: dict[str, Any]) -> str:
-        if not params:
-            return "no parameters"
-        return ", ".join(f"{key}={value!r}" for key, value in sorted(params.items()))
+    def _import(self, path: str, name: str) -> Any:
+        module_path, _, attr = path.rpartition(".")
+        if not module_path:
+            raise ValueError(f"Invalid import path {path!r} for {name!r}")
+        mod = importlib.import_module(module_path)
+        try:
+            return getattr(mod, attr)
+        except AttributeError:
+            raise AttributeError(
+                f"{module_path!r} has no attribute {attr!r} for entry {name!r}"
+            ) from None

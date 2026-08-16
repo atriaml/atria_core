@@ -11,6 +11,7 @@ from atria_core.types._generic._annotations import (
     QuestionAnsweringAnnotation,
     TranscriptionAnnotation,
 )
+from atria_core.types._generic._elements import OCRLevel
 from tests.types.builders import (
     make_annotated_object,
     make_classification_annotation,
@@ -129,6 +130,22 @@ def test_transcription_annotation_roundtrip() -> None:
     restored = TranscriptionAnnotation.from_dict(data)
     assert restored == ann
     assert restored.text == "hello world"
+
+
+def test_transcription_annotation_roundtrip_preserves_level() -> None:
+    ann = make_transcription_annotation(text="hello world", level=OCRLevel.line)
+    data = ann.to_dict()
+    assert data["level"] == OCRLevel.line.value
+    restored = TranscriptionAnnotation.from_dict(data)
+    assert restored.level == OCRLevel.line
+
+
+def test_transcription_annotation_roundtrip_preserves_none_level() -> None:
+    ann = make_transcription_annotation(text="hello world", level=None)
+    data = ann.to_dict()
+    assert data["level"] is None
+    restored = TranscriptionAnnotation.from_dict(data)
+    assert restored.level is None
 
 
 def test_ocr_annotation_roundtrip() -> None:

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from tests.registry._discovery_fixtures import items
+from tests.registry._discovery_fixtures import Item, items
 
 
-@items.register("b")
-class B:
-    pass
+@items.register
+class B(Item):
+    __module_name__ = "b"

@@ -3,21 +3,22 @@ from __future__ import annotations
 import importlib
 from collections.abc import Callable, Iterable, Sequence
 from pathlib import Path
-from typing import Any, Generic
+from typing import Any
 
 from pydantic import ConfigDict
 
 from atria_core.datasets._common import FileStorageType
-from atria_core.datasets._dataset import Dataset, DatasetConfig, T_DataInstance
+from atria_core.datasets._dataset import Dataset, DatasetConfig
 from atria_core.datasets._snapshot import DatasetSnapshot
 from atria_core.datasets._storage._storage_manager import StorageManager
 from atria_core.logger import get_logger
 from atria_core.types import DatasetMetadata, DatasetSplitType
+from atria_core.types._data_instance._base import DataInstance
 
 logger = get_logger(__name__)
 
 
-class CachedDatasetConfig(DatasetConfig):
+class _CachedDatasetConfig(DatasetConfig):
     """The params recorded in a cache's snapshot, carried as plain data.
 
     A cache is described entirely by its snapshot, and reading it needs no
@@ -30,13 +31,15 @@ class CachedDatasetConfig(DatasetConfig):
     model_config = ConfigDict(frozen=True, extra="allow")
 
 
-class CachedDataset(
-    Dataset[T_DataInstance, CachedDatasetConfig], Generic[T_DataInstance]
+class CachedDataset[T_DataInstance: DataInstance = DataInstance](
+    Dataset[T_DataInstance, _CachedDatasetConfig]
 ):
     """A dataset read from an on-disk cache directory.
 
     Its sample class comes from the snapshot stored alongside the records, and
     its config carries that snapshot's params verbatim."""
+
+    __module_name__ = "cached"
 
     def __init__(self, path: Path | str) -> None:
         """Open a cache directory.
@@ -62,7 +65,7 @@ class CachedDataset(
         self._data_model_cls: type[T_DataInstance] = getattr(module, class_name)
 
         super().__init__(
-            config=CachedDatasetConfig.from_dict(self._snapshot.config),
+            config=_CachedDatasetConfig.from_dict(self._snapshot.config),
             data_dir=str(self._path),
         )
 

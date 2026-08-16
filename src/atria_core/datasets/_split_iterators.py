@@ -2,12 +2,9 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from itertools import islice
-from typing import Any, Generic, TypeVar, overload
+from typing import Any, overload
 
 from atria_core.types._utilities._repr import RepresentationMixin
-
-T_Output = TypeVar("T_Output")
-T_NewOutput = TypeVar("T_NewOutput")
 
 
 class Compose(RepresentationMixin):
@@ -30,9 +27,7 @@ class Compose(RepresentationMixin):
         return value
 
 
-class IndexableSplitIterator(
-    Sequence[T_Output], Generic[T_Output], RepresentationMixin
-):
+class IndexableSplitIterator[T_Output](Sequence[T_Output], RepresentationMixin):
     """A random-access split: wraps an indexable raw source and applies a
     transform to each sample on access, optionally capped at `max_samples`."""
 
@@ -68,7 +63,7 @@ class IndexableSplitIterator(
     def __getitems__(self, indices: list[int]) -> list[T_Output]:
         return [self[i] for i in indices]
 
-    def with_transform(
+    def with_transform[T_NewOutput](
         self, transform: Callable[[T_Output], T_NewOutput]
     ) -> IndexableSplitIterator[T_NewOutput]:
         """Return a new iterator applying `transform` after the current one."""
@@ -110,7 +105,7 @@ class IndexableSplitIterator(
         return self._max_samples
 
 
-class IterableSplitIterator(Iterable[T_Output], Generic[T_Output], RepresentationMixin):
+class IterableSplitIterator[T_Output](Iterable[T_Output], RepresentationMixin):
     """A streaming split: wraps a one-pass raw source and applies a transform
     to each sample as it is yielded, optionally capped at `max_samples`."""
 
@@ -141,7 +136,7 @@ class IterableSplitIterator(Iterable[T_Output], Generic[T_Output], Representatio
         """The transform applied to each raw sample."""
         return self._transform
 
-    def with_transform(
+    def with_transform[T_NewOutput](
         self, transform: Callable[[T_Output], T_NewOutput]
     ) -> IterableSplitIterator[T_NewOutput]:
         """Return a new iterator applying `transform` after the current one."""
