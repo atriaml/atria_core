@@ -1,14 +1,12 @@
 from __future__ import annotations
 
-from typing import Protocol, TypeVar
+from typing import Protocol
 
 from atria_core.types._arrays import FloatArray
 from atria_core.visualizers._drawers._style import DEFAULT_STYLE, DrawStyle
 
-T = TypeVar("T")
 
-
-class BboxDrawer(Protocol[T]):
+class BboxDrawer[T](Protocol):
     """Draws bboxes (+ optional per-box text/label) onto a target, using a
     shared DrawStyle for appearance. `bboxes` are always already in the
     target's native coordinate space (pixels for images, points for PDF

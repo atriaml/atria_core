@@ -6,7 +6,7 @@ import pickle
 from collections.abc import Callable, Sized
 from dataclasses import asdict, is_dataclass, replace
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, TypeVar, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from atria_core.datasets._cached_dataset import CachedDataset
 from atria_core.datasets._common import FileStorageType
@@ -36,12 +36,6 @@ if TYPE_CHECKING:
     from atria_core.datasets._dataset import Dataset
 
 logger = get_logger(__name__)
-
-T_Sample = TypeVar("T_Sample", bound=DataInstance)
-"""Sample type a dataset yields -- preserved through cache() into the handle."""
-
-T_ProcessedSample = TypeVar("T_ProcessedSample", bound=DataInstance)
-"""Sample type a write-time transform produces in process_and_cache()."""
 
 
 def transform_hash(transform: Callable[[Any], Any] | None) -> str | None:
@@ -171,7 +165,7 @@ class Cacher:
         self._resize_images = resize_images
         self._image_max_size = image_max_size
 
-    def cache(
+    def cache[T_Sample: DataInstance](
         self,
         dataset: Dataset[T_Sample, Any],
         *,
@@ -202,7 +196,7 @@ class Cacher:
             transform=None,
         )
 
-    def process_and_cache(
+    def process_and_cache[T_Sample: DataInstance, T_ProcessedSample: DataInstance](
         self,
         dataset: Dataset[T_Sample, Any],
         transform: Callable[[T_Sample], T_ProcessedSample],
@@ -239,7 +233,7 @@ class Cacher:
             transform=transform,
         )
 
-    def _cache(
+    def _cache[T_Sample: DataInstance, T_ProcessedSample: DataInstance](
         self,
         dataset: Dataset[T_Sample, Any],
         *,

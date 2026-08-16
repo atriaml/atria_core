@@ -1,13 +1,10 @@
 from __future__ import annotations
 
-from typing import Protocol, TypeVar, runtime_checkable
-
-In = TypeVar("In", contravariant=True)
-Out = TypeVar("Out", covariant=True)
+from typing import Protocol, runtime_checkable
 
 
 @runtime_checkable
-class Stage(Protocol[In, Out]):
+class Stage[In, Out](Protocol):
     """A typed, composable unit of transformation: given a value, returns a new value.
 
     All data transformations in this library (extractors, encoders, future
