@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import aiohttp
 
@@ -38,8 +38,6 @@ def _hf_storage_options() -> dict[str, Any]:
 class HuggingfaceDatasetConfig(DatasetConfig):
     """Params for a dataset streamed from the Hugging Face hub."""
 
-    config_name: str | None = None
-
 
 class HuggingfaceDataset[
     T_DataInstance: DataInstance,
@@ -48,14 +46,30 @@ class HuggingfaceDataset[
     Dataset[T_DataInstance, T_HuggingfaceDatasetConfig],
 ):
     """Streams a dataset straight off the Hugging Face hub, letting the
-    `datasets` library handle downloading and caching internally."""
+    `datasets` library handle downloading and caching internally.
+
+    A concrete subclass declares which hub repo (and, for repos with
+    multiple named configs, which one) it streams via `__hf_repo__` and
+    `__hf_config_name__` -- these identify the dataset itself, so they are
+    fixed on the class rather than supplied by callers, the same way
+    `__module_name__` is.
+    """
 
     __abstract__ = True
+    __hf_repo__: ClassVar[str]
+    __hf_config_name__: ClassVar[str | None] = None
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        if not cls.__abstract__ and "__hf_repo__" not in cls.__dict__:
+            raise TypeError(
+                f"{cls.__name__} is not abstract and must define a "
+                f"'__hf_repo__' class variable."
+            )
 
     def __init__(
         self,
         *,
-        repo: str,
         config: T_HuggingfaceDatasetConfig | None = None,
         data_dir: str | None = None,
         access_token: str | None = None,
@@ -65,13 +79,11 @@ class HuggingfaceDataset[
         """Stream a dataset from the Hugging Face hub.
 
         Args:
-            repo: Hub repo id, e.g. `"ylecun/mnist"`.
             config: Params for this dataset. Defaults to its generic config type.
             data_dir: Where Hugging Face caches its downloads.
             access_token: Credential for gated repos.
             split: Build only this split, instead of every available one.
         """
-        self._repo = repo
         super().__init__(
             config=config,
             data_dir=data_dir,
@@ -92,8 +104,8 @@ class HuggingfaceDataset[
         from datasets import load_dataset_builder
 
         self._builder: datasets.DatasetBuilder = load_dataset_builder(
-            self._repo,
-            name=self.config.config_name,
+            type(self).__hf_repo__,
+            name=type(self).__hf_config_name__,
             cache_dir=data_dir,
             storage_options=_hf_storage_options(),
         )
@@ -123,7 +135,7 @@ class HuggingfaceDataset[
         )
         if "packaged_modules" in str(self._builder.__module__):
             return datasets.DownloadManager(
-                dataset_name=self.config.config_name,
+                dataset_name=type(self).__hf_config_name__,
                 data_dir=data_dir,
                 download_config=download_config,
                 record_checksums=False,

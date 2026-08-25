@@ -14,6 +14,7 @@ from atria_core.types._generic._annotations import (
     ObjectDetectionAnnotation,
     OCRAnnotation,
     QuestionAnsweringAnnotation,
+    SentimentAnnotation,
     TranscriptionAnnotation,
 )
 
@@ -81,6 +82,10 @@ class DataInstance(BaseDataModel):
     def get_annotation_by_type(
         self, annotation_type: Literal[AnnotationType.ocr]
     ) -> OCRAnnotation | None: ...
+    @overload
+    def get_annotation_by_type(
+        self, annotation_type: Literal[AnnotationType.sentiment]
+    ) -> SentimentAnnotation | None: ...
 
     def get_annotation_by_type(
         self, annotation_type: AnnotationType

@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from ._registry import DatasetRegistry as DatasetRegistry, datasets as datasets
     from ._split_iterators import (
         Compose as Compose,
+        ConcatSplitIterator as ConcatSplitIterator,
         IndexableSplitIterator as IndexableSplitIterator,
         IterableSplitIterator as IterableSplitIterator,
     )
@@ -52,6 +53,7 @@ __getattr__, __dir__, __all__ = lazy.attach(
         ],
         "_split_iterators": [
             "Compose",
+            "ConcatSplitIterator",
             "IndexableSplitIterator",
             "IterableSplitIterator",
         ],

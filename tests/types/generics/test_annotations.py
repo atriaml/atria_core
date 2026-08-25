@@ -9,6 +9,7 @@ from atria_core.types._generic._annotations import (
     ObjectDetectionAnnotation,
     OCRAnnotation,
     QuestionAnsweringAnnotation,
+    SentimentAnnotation,
     TranscriptionAnnotation,
 )
 from atria_core.types._generic._elements import OCRLevel
@@ -41,6 +42,21 @@ def test_entity_labeling_annotation_serialize_word_labels() -> None:
 
     ann = make_entity_labeling_annotation(word_label_values=[0, 1, 0])
     assert json.loads(ann.serialize_word_labels()) == [0, 1, 0]
+
+
+def test_sentiment_annotation_roundtrip() -> None:
+    ann = SentimentAnnotation(
+        scores={"toxicity": 1.0, "jailbreaking": 0.0},
+        meta={"openai_moderation": '{"flagged": true}'},
+    )
+    restored = SentimentAnnotation.from_dict(ann.to_dict())
+    assert restored == ann
+    assert restored.type == AnnotationType.sentiment.value
+
+
+def test_sentiment_annotation_rejects_non_numeric_scores() -> None:
+    with pytest.raises(AssertionError):
+        SentimentAnnotation(scores={"toxicity": "high"}, meta={})  # type: ignore[dict-item]
 
 
 def test_question_answering_annotation_roundtrip() -> None:

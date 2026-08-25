@@ -5,17 +5,11 @@ from collections.abc import Callable
 from typing import Any
 
 from atria_core.datasets._cacher import Cacher, FileStorageType
-from atria_core.datasets._hf_dataset import HuggingfaceDataset, HuggingfaceDatasetConfig
+from atria_core.datasets._hf_dataset import HuggingfaceDataset
 from atria_core.datasets._registry import datasets
 from atria_core.types import SinglePageDocumentInstance
 from atria_core.types._generic._annotations import TranscriptionAnnotation
 from atria_core.types._generic._image import Image
-
-_REPO = "fhswf/german_handwriting"
-
-
-class FHSWFGermanHandwritingConfig(HuggingfaceDatasetConfig):
-    config_name: str = "default"
 
 
 class InputTransform:
@@ -26,13 +20,9 @@ class InputTransform:
 
 
 @datasets.register("fhswf_german_handwriting")
-class FHSWFGermanHandwriting(
-    HuggingfaceDataset[SinglePageDocumentInstance, FHSWFGermanHandwritingConfig]
-):
-    def __init__(
-        self, *, config: FHSWFGermanHandwritingConfig | None = None, **kwargs: Any
-    ) -> None:
-        super().__init__(repo=_REPO, config=config, **kwargs)
+class FHSWFGermanHandwriting(HuggingfaceDataset[SinglePageDocumentInstance]):
+    __hf_repo__ = "fhswf/german_handwriting"
+    __hf_config_name__ = "default"
 
     def _build_input_transform(self) -> Callable[[Any], SinglePageDocumentInstance]:
         return InputTransform()

@@ -28,6 +28,7 @@ class AnnotationType(str, enum.Enum):
     layout_analysis = "layout_analysis"
     ocr = "ocr"
     transcription = "transcription"
+    sentiment = "sentiment"
 
 
 @dataclass(frozen=True, repr=False)
@@ -263,6 +264,33 @@ class TranscriptionAnnotation(BaseDataModel):
         )
 
 
+@dataclass(frozen=True, repr=False)
+class SentimentAnnotation(BaseDataModel):
+    """Sentiment/toxicity/moderation-style scoring for an instance -- e.g. a
+    toxicity score, a jailbreak flag, a moderation-API verdict. `scores`
+    holds numeric measurements (a label's confidence, a 0/1 flag, a rating);
+    `meta` holds anything else as raw strings (a moderation category name, a
+    free-text verdict) that doesn't reduce to a number. Datasets vary widely
+    in which fields they report, so both dicts are open-ended rather than a
+    fixed set of named fields."""
+
+    type = AnnotationType.sentiment.value
+
+    scores: dict[str, float]
+    meta: dict[str, str]
+
+    def __post_init__(self) -> None:
+        assert all(isinstance(value, int | float) for value in self.scores.values())
+        assert all(isinstance(value, str) for value in self.meta.values())
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"type": self.type, "scores": self.scores, "meta": self.meta}
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        return cls(scores=dict(data["scores"]), meta=dict(data["meta"]))
+
+
 @dataclass(frozen=True, repr=False, eq=False)
 class OCRAnnotation(ElementArray):
     """Ground-truth OCR/text-layer hierarchy for a document instance --
@@ -285,6 +313,7 @@ Annotation = (
     | LayoutAnalysisAnnotation
     | TranscriptionAnnotation
     | OCRAnnotation
+    | SentimentAnnotation
 )
 
 #: type string -> class, for DataInstance's annotation dict (de)serialization.
@@ -296,4 +325,5 @@ ANNOTATION_TYPES: dict[str, type[Annotation]] = {
     AnnotationType.layout_analysis.value: LayoutAnalysisAnnotation,
     AnnotationType.transcription.value: TranscriptionAnnotation,
     AnnotationType.ocr.value: OCRAnnotation,
+    AnnotationType.sentiment.value: SentimentAnnotation,
 }

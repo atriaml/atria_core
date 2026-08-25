@@ -19,6 +19,9 @@ if TYPE_CHECKING:
         TaskType as TaskType,
     )
     from ._data_instance._base import DataInstance as DataInstance
+    from ._data_instance._conversation_instance import (
+        ConversationInstance as ConversationInstance,
+    )
     from ._data_instance._document_instance import (
         DocumentInstance as DocumentInstance,
         MultiPageDocumentInstance as MultiPageDocumentInstance,
@@ -47,7 +50,12 @@ if TYPE_CHECKING:
         ObjectDetectionAnnotation as ObjectDetectionAnnotation,
         TranscriptionAnnotation as TranscriptionAnnotation,
         OCRAnnotation as OCRAnnotation,
+        SentimentAnnotation as SentimentAnnotation,
         AnnotationType as AnnotationType,
+    )
+    from ._generic._conversation_turn import (
+        ConversationRole as ConversationRole,
+        ConversationTurn as ConversationTurn,
     )
     from ._generic._image import Image as Image
     from ._generic._qa_pair import QAPair as QAPair
@@ -70,6 +78,7 @@ __getattr__, __dir__, __all__ = lazy.attach(
             "TaskType",
         ],
         "_data_instance._base": ["DataInstance"],
+        "_data_instance._conversation_instance": ["ConversationInstance"],
         "_data_instance._document_instance": [
             "DocumentInstance",
             "MultiPageDocumentInstance",
@@ -98,8 +107,10 @@ __getattr__, __dir__, __all__ = lazy.attach(
             "ObjectDetectionAnnotation",
             "TranscriptionAnnotation",
             "OCRAnnotation",
+            "SentimentAnnotation",
             "AnnotationType",
         ],
+        "_generic._conversation_turn": ["ConversationRole", "ConversationTurn"],
         "_generic._image": ["Image"],
         "_generic._qa_pair": ["QAPair"],
         "_utilities._repr": ["RepresentationMixin"],

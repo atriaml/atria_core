@@ -14,7 +14,7 @@ from collections.abc import Callable
 from typing import Any
 
 from atria_core.datasets import Cacher, FileStorageType, datasets
-from atria_core.datasets._hf_dataset import HuggingfaceDataset, HuggingfaceDatasetConfig
+from atria_core.datasets._hf_dataset import HuggingfaceDataset
 from atria_core.logger import get_logger
 from atria_core.types import DatasetSplitType
 from atria_core.types._data_instance._image_instance import ImageInstance
@@ -22,12 +22,6 @@ from atria_core.types._generic._annotations import ClassificationAnnotation
 from atria_core.types._generic._image import Image
 
 logger = get_logger(__name__)
-
-_REPO = "ylecun/mnist"
-
-
-class MNISTConfig(HuggingfaceDatasetConfig):
-    config_name: str | None = "mnist"
 
 
 class InputTransform:
@@ -47,9 +41,9 @@ class InputTransform:
 
 
 @datasets.register("mnist")
-class MNIST(HuggingfaceDataset[ImageInstance, MNISTConfig]):
-    def __init__(self, *, config: MNISTConfig | None = None, **kwargs: Any) -> None:
-        super().__init__(repo=_REPO, config=config, **kwargs)
+class MNIST(HuggingfaceDataset[ImageInstance]):
+    __hf_repo__ = "ylecun/mnist"
+    __hf_config_name__ = "mnist"
 
     def _build_input_transform(self) -> Callable[[Any], ImageInstance]:
         return InputTransform(labels=self.metadata.dataset_labels.classification)

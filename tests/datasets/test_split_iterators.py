@@ -4,7 +4,12 @@ import pickle
 
 import pytest
 
-from atria_core.datasets import Compose, IndexableSplitIterator, IterableSplitIterator
+from atria_core.datasets import (
+    Compose,
+    ConcatSplitIterator,
+    IndexableSplitIterator,
+    IterableSplitIterator,
+)
 
 
 def test_indexable_split_iterator_getitem_and_len() -> None:
@@ -75,6 +80,77 @@ def test_limit_returns_bounded_view_without_mutating_original() -> None:
     assert list(limited) == [0, 2]
     assert len(limited) == 2
     assert len(iterator) == 4
+
+
+def test_shuffle_returns_reordered_view_without_mutating_original() -> None:
+    iterator = IndexableSplitIterator(base_iterator=list(range(10)), transform=lambda x: x)
+
+    shuffled = iterator.shuffle(seed=1234)
+
+    assert sorted(shuffled) == list(range(10))
+    assert list(iterator) == list(range(10))
+    assert list(shuffled) != list(range(10))
+
+
+def test_shuffle_is_deterministic_for_a_given_seed() -> None:
+    iterator = IndexableSplitIterator(base_iterator=list(range(20)), transform=lambda x: x)
+
+    first = list(iterator.shuffle(seed=7))
+    second = list(iterator.shuffle(seed=7))
+
+    assert first == second
+
+
+def test_shuffle_then_limit_samples_from_the_full_source() -> None:
+    iterator = IndexableSplitIterator(base_iterator=list(range(100)), transform=lambda x: x)
+
+    sampled = iterator.shuffle(seed=1).limit(5)
+
+    assert len(sampled) == 5
+    assert set(sampled) <= set(range(100))
+
+
+def test_limit_then_shuffle_only_reorders_the_limited_view() -> None:
+    iterator = IndexableSplitIterator(base_iterator=list(range(100)), transform=lambda x: x)
+
+    reordered = iterator.limit(5).shuffle(seed=1)
+
+    assert len(reordered) == 5
+    assert set(reordered) <= set(range(5))
+
+
+def test_concat_indexes_across_iterators_in_order() -> None:
+    first = IndexableSplitIterator(base_iterator=[0, 1, 2], transform=lambda x: x)
+    second = IndexableSplitIterator(base_iterator=[3, 4], transform=lambda x: x)
+
+    concatenated = ConcatSplitIterator([first, second])
+
+    assert len(concatenated) == 5
+    assert list(concatenated) == [0, 1, 2, 3, 4]
+    assert concatenated[0] == 0
+    assert concatenated[4] == 4
+
+
+def test_concat_getitem_out_of_range_raises() -> None:
+    concatenated = ConcatSplitIterator([[0, 1], [2]])
+
+    with pytest.raises(IndexError):
+        concatenated[3]
+
+
+def test_concat_composes_with_shuffled_and_limited_sources() -> None:
+    first = IndexableSplitIterator(base_iterator=list(range(10)), transform=lambda x: x).shuffle(
+        seed=1
+    ).limit(3)
+    second = IndexableSplitIterator(base_iterator=list(range(100, 110)), transform=lambda x: x).limit(
+        2
+    )
+
+    concatenated = ConcatSplitIterator([first, second])
+
+    assert len(concatenated) == 5
+    assert set(concatenated[:3]) <= set(range(10))
+    assert concatenated[3:] == [100, 101]
 
 
 def test_compose_is_picklable() -> None:
