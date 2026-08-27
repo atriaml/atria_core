@@ -28,6 +28,7 @@ class DatasetBuilder:
         data_dir: str | None = None,
         access_token: str | None = None,
         split: DatasetSplitType | None = None,
+        streaming: bool | None = None,
         **params: Any,
     ) -> DatasetBuilder:
         """Load the dataset registered under `name`.
@@ -37,10 +38,17 @@ class DatasetBuilder:
             data_dir: Where to read and write data.
             access_token: Credential for datasets behind authentication.
             split: Build only this split, instead of every available one.
+            streaming: Only meaningful for a Hugging-Face-backed dataset --
+                see `DatasetRegistry.create`/`HuggingfaceDataset.__init__`.
             params: Values for the dataset's config fields.
         """
         self._dataset = datasets.create(
-            name, data_dir=data_dir, access_token=access_token, split=split, **params
+            name,
+            data_dir=data_dir,
+            access_token=access_token,
+            split=split,
+            streaming=streaming,
+            **params,
         )
         return self
 

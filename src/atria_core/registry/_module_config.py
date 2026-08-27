@@ -11,6 +11,24 @@ from pydantic import BaseModel, ConfigDict
 
 _JSON_PRIMITIVES = (str, int, float, bool, type(None))
 
+#: A JSON-primitive value -- the widest type a `dict`/`list` field on a
+#: `ModuleConfig` can hold. `Any` isn't valid there: it isn't provably
+#: JSON-safe, so `ModuleConfig` rejects a field annotated with it at
+#: class-definition time (see `__pydantic_init_subclass__` below).
+JSONPrimitive = str | int | float | bool | None
+
+#: An open bag of extra key/value config, restricted to JSON-primitive values
+#: so it stays valid on any `ModuleConfig`. For a config field that needs to
+#: accept caller-specific extra options a module doesn't otherwise expose --
+#: e.g. `extra_from_pretrained_kwargs: ParamDict | None` on a config that
+#: forwards those kwargs to some underlying `from_pretrained(...)`-style call.
+ParamDict = dict[str, JSONPrimitive]
+
+#: Same idea as `ParamDict`, for an open list of extra JSON-primitive values
+#: instead of key/value pairs -- e.g. a config field forwarding a variable
+#: list of flags/positional values to some underlying call.
+ParamList = list[JSONPrimitive]
+
 
 def _is_union(annotation: Any) -> bool:
     return typing.get_origin(annotation) in (typing.Union, types.UnionType)

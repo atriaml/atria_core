@@ -36,7 +36,7 @@ def _hf_storage_options() -> dict[str, Any]:
 
 
 class HuggingfaceDatasetConfig(DatasetConfig):
-    """Params for a dataset streamed from the Hugging Face hub."""
+    """Params for a dataset loaded from the Hugging Face hub."""
 
 
 class HuggingfaceDataset[
@@ -75,15 +75,31 @@ class HuggingfaceDataset[
         access_token: str | None = None,
         split: DatasetSplitType | None = None,
         dataset_dir_name: str | None = None,
+        streaming: bool = False,
     ) -> None:
-        """Stream a dataset from the Hugging Face hub.
+        """Load a dataset from the Hugging Face hub.
 
         Args:
             config: Params for this dataset. Defaults to its generic config type.
             data_dir: Where Hugging Face caches its downloads.
             access_token: Credential for gated repos.
             split: Build only this split, instead of every available one.
+            streaming: Whether to stream rows instead of materializing the
+                dataset to disk first. Streaming avoids downloading/caching
+                the whole dataset -- worth it for datasets too large to
+                materialize. It comes at a real cost though: HF `datasets`'
+                streaming reader does not always yield rows in the same order
+                as the materialized (non-streaming) dataset -- confirmed
+                directly for OpenAssistant/oasst1, where the two orders
+                diverge after the first few rows, changing which
+                conversations end up sampled downstream even with an
+                identical shuffle seed. Defaults to `False` (materialize
+                first) so a dataset's row order is the canonical one every
+                other loader (e.g. plain `datasets.load_dataset(...,
+                streaming=False)`) also sees; set `True` only when streaming
+                is actually necessary.
         """
+        self._streaming = streaming
         super().__init__(
             config=config,
             data_dir=data_dir,
@@ -97,8 +113,12 @@ class HuggingfaceDataset[
     ) -> dict[str, Path]:
         """Prepare the hub builder, download manager and split generators.
 
-        The `datasets` library fetches data itself while streaming, so nothing
-        is downloaded here. This runs before any other hook, so the state it
+        When streaming, the `datasets` library fetches data itself while
+        streaming, so nothing is downloaded here. When not streaming, this
+        also materializes the dataset to disk (`download_and_prepare`), which
+        `_build_split_iterator` then reads via `as_dataset` -- the same path
+        plain `datasets.load_dataset(..., streaming=False)` takes, so row
+        order matches it. This runs before any other hook, so the state it
         builds is available to metadata and split construction.
         """
         from datasets import load_dataset_builder
@@ -117,6 +137,8 @@ class HuggingfaceDataset[
             for sg in self._builder._split_generators(self._download_manager)
             if sg.name in _HF_SPLIT_MAP
         }
+        if not self._streaming:
+            self._builder.download_and_prepare()
         return {}
 
     def _prepare_download_manager(
@@ -151,6 +173,11 @@ class HuggingfaceDataset[
         return DatasetMetadata.from_huggingface_info(self._builder.info)
 
     def _build_split_iterator(self, split: DatasetSplitType, data_dir: str) -> Any:
-        return self._builder._as_streaming_dataset_single(
-            self._hf_split_generators[split]
+        if self._streaming:
+            return self._builder._as_streaming_dataset_single(
+                self._hf_split_generators[split]
+            )
+        hf_split_name = next(
+            name for name, mapped in _HF_SPLIT_MAP.items() if mapped == split
         )
+        return self._builder.as_dataset(split=hf_split_name)

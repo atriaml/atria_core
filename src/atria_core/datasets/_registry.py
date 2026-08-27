@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 from typing import Any, cast
 
 from atria_core.datasets._dataset import Dataset, DatasetConfig
@@ -20,6 +21,7 @@ class DatasetRegistry(ModuleRegistry[Dataset[DataInstance, DatasetConfig]]):
         data_dir: str | None = None,
         access_token: str | None = None,
         split: DatasetSplitType | None = None,
+        streaming: bool | None = None,
         **params: Any,
     ) -> Dataset[DataInstance, DatasetConfig]:
         """Build the dataset registered under `name`.
@@ -31,6 +33,11 @@ class DatasetRegistry(ModuleRegistry[Dataset[DataInstance, DatasetConfig]]):
             data_dir: Where to read and write data.
             access_token: Credential for datasets behind authentication.
             split: Build only this split, instead of every available one.
+            streaming: Only meaningful for `HuggingfaceDataset` subclasses --
+                whether to stream rows instead of materializing the dataset
+                to disk first (see `HuggingfaceDataset.__init__`). Left
+                unset (`None`) to use that class's own default; ignored
+                entirely for a dataset that doesn't accept it.
             params: Values for the dataset's config fields. Mutually
                 exclusive with `config`.
 
@@ -45,12 +52,16 @@ class DatasetRegistry(ModuleRegistry[Dataset[DataInstance, DatasetConfig]]):
             config = dataset_cls.config_type()(**params)
         elif params:
             raise TypeError("cannot pass both 'config' and individual config params")
+        extra_kwargs: dict[str, Any] = {}
+        if streaming is not None and "streaming" in inspect.signature(dataset_cls).parameters:
+            extra_kwargs["streaming"] = streaming
         return dataset_cls(
             config=cast("DatasetConfig", config),
             data_dir=data_dir,
             access_token=access_token,
             split=split,
             dataset_dir_name=name,
+            **extra_kwargs,
         )
 
 
