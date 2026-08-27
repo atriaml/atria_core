@@ -1,11 +1,16 @@
 from __future__ import annotations
 
-import random
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from itertools import islice
-from typing import Any, overload
+from typing import TYPE_CHECKING, Any, overload
 
+import numpy as np
+
+from atria_core.datasets._pandas import samples_to_pandas
 from atria_core.types._utilities._repr import RepresentationMixin
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 
 class Compose(RepresentationMixin):
@@ -100,9 +105,39 @@ class IndexableSplitIterator[T_Output](Sequence[T_Output], RepresentationMixin):
         random sample of the source (the paper's `.shuffle(seed).take(n)`
         pattern); limit-then-shuffle instead reorders whatever was already
         selected.
+
+        Uses `numpy`'s PCG64 generator (`np.random.default_rng(seed).
+        permutation(n)`), matching HF `datasets.Dataset.shuffle`'s algorithm
+        exactly -- confirmed by comparing permutations directly. A dataset
+        wrapping a raw HF `datasets.Dataset` therefore shuffles into the same
+        order a caller would get shuffling that HF dataset directly with the
+        same seed, rather than a different (stdlib-`random`-based) order.
         """
-        indices = [self._resolve(i) for i in range(len(self))]
-        random.Random(seed).shuffle(indices)
+        base_indices = [self._resolve(i) for i in range(len(self))]
+        permutation = np.random.default_rng(seed).permutation(len(base_indices))
+        indices = [base_indices[i] for i in permutation]
+        return IndexableSplitIterator(
+            base_iterator=self._base_iterator,
+            transform=self._transform,
+            mapped_indices=indices,
+        )
+
+    def filter(
+        self, predicate: Callable[[T_Output], bool]
+    ) -> IndexableSplitIterator[T_Output]:
+        """Return an iterator exposing only the samples `predicate` accepts,
+        in their current order.
+
+        Evaluates `predicate` on the *transformed* value (what `__getitem__`
+        would return), same as `with_transform` composes after the current
+        transform -- so a filter chained after `shuffle()` filters the
+        shuffled order, and one chained before `limit()` (`.filter(...).
+        limit(n)`) takes the first `n` samples that pass, rather than
+        filtering whatever `limit()` already cut down to.
+        """
+        indices = [
+            self._resolve(i) for i in range(len(self)) if predicate(self[i])
+        ]
         return IndexableSplitIterator(
             base_iterator=self._base_iterator,
             transform=self._transform,
@@ -130,6 +165,16 @@ class IndexableSplitIterator[T_Output](Sequence[T_Output], RepresentationMixin):
         """Indices into the raw source, in exposure order -- None means the
         source's own order and length, unrestricted."""
         return self._mapped_indices
+
+    def to_pandas(self) -> pd.DataFrame:
+        """Convert these samples into a flat `pandas.DataFrame`, one row per
+        sample.
+
+        Raises:
+            TypeError: If any transformed sample is not a `BaseDataModel`
+                instance.
+        """
+        return samples_to_pandas(self)
 
 
 class ConcatSplitIterator[T_Output](Sequence[T_Output], RepresentationMixin):
@@ -228,6 +273,37 @@ class IterableSplitIterator[T_Output](Iterable[T_Output], RepresentationMixin):
             max_samples=max_samples,
         )
 
+    def filter(
+        self, predicate: Callable[[T_Output], bool]
+    ) -> IterableSplitIterator[T_Output]:
+        """Return an iterator yielding only the samples `predicate` accepts.
+
+        Evaluates `predicate` on the *transformed* value, same as `filter()`
+        on `IndexableSplitIterator`. Unlike that random-access version, this
+        is lazy and one-pass: chaining `.filter(...).limit(n)` yields the
+        first `n` samples that pass, streaming through as many raw samples as
+        it takes to find them -- there's no upfront index list to build,
+        since the source may not support random access or have a known
+        length.
+        """
+        return IterableSplitIterator(
+            base_iterator=filter(
+                lambda raw: predicate(self._transform(raw)), self.base_iterator
+            ),
+            transform=self._transform,
+            max_samples=None,
+        )
+
     @property
     def max_samples(self) -> int | None:
         return self._max_samples
+
+    def to_pandas(self) -> pd.DataFrame:
+        """Convert these samples into a flat `pandas.DataFrame`, one row per
+        sample. Consumes the underlying one-pass source.
+
+        Raises:
+            TypeError: If any transformed sample is not a `BaseDataModel`
+                instance.
+        """
+        return samples_to_pandas(self)
