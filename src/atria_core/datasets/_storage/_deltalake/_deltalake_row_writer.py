@@ -23,27 +23,30 @@ class ParquetSchema:
     Walks whatever dict shape the sample produces, with no per-type dispatch."""
 
     @staticmethod
-    def flatten(data: dict[str, Any], prefix: str = "") -> dict[str, Any]:
-        """Flatten a nested dict into dotted column names.
-
-        Args:
-            data: Nested sample dict.
-            prefix: Column-name prefix for the current nesting level.
-
-        Returns:
-            One flat dict, with variable-length sequences JSON-encoded.
-        """
+    def flatten(
+        data: dict[str, Any],
+        prefix: str = "",
+        encode_json: bool = True,
+    ) -> dict[str, Any]:
+        """Flatten a nested dict into dotted column names."""
         flat: dict[str, Any] = {}
+
         for key, value in data.items():
             full_key = f"{prefix}.{key}" if prefix else key
+
             if isinstance(value, dict):
-                flat.update(ParquetSchema.flatten(value, full_key))
-            elif isinstance(value, list | tuple):
-                # Variable-length per sample -- doesn't fit a fixed column,
-                # so JSON-encode as a pragmatic fallback.
+                flat.update(
+                    ParquetSchema.flatten(
+                        value,
+                        full_key,
+                        encode_json=encode_json,
+                    )
+                )
+            elif isinstance(value, list | tuple) and encode_json:
                 flat[full_key] = json.dumps(value)
             else:
                 flat[full_key] = value
+
         return flat
 
     @staticmethod

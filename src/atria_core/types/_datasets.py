@@ -112,6 +112,8 @@ class DatasetLabels(BaseDataModel):
         instance_labels = None
         object_labels = None
         token_labels = None
+        if features is None:
+            return cls()
         for key, value in features.items():
             if isinstance(value, datasets.ClassLabel):
                 instance_labels = value.names

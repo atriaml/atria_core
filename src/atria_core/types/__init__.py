@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from ._data_instance._base import DataInstance as DataInstance
     from ._data_instance._conversation_instance import (
         ConversationInstance as ConversationInstance,
+        ConversationSeed as ConversationSeed,
     )
     from ._data_instance._document_instance import (
         DocumentInstance as DocumentInstance,
@@ -78,7 +79,10 @@ __getattr__, __dir__, __all__ = lazy.attach(
             "TaskType",
         ],
         "_data_instance._base": ["DataInstance"],
-        "_data_instance._conversation_instance": ["ConversationInstance"],
+        "_data_instance._conversation_instance": [
+            "ConversationInstance",
+            "ConversationSeed",
+        ],
         "_data_instance._document_instance": [
             "DocumentInstance",
             "MultiPageDocumentInstance",

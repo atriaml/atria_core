@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import Any, Self
 
-from atria_core.types._data_instance._base import DataInstance
+from atria_core.types._data_instance._base import DataInstance, Metadata
 from atria_core.types._generic._image import Image
 
 
@@ -17,6 +17,7 @@ class ImageInstance(DataInstance):
     def to_dict(self) -> dict[str, Any]:
         return {
             "sample_id": self.sample_id,
+            "metadata": self.metadata.to_dict(),
             "image": self.image.to_dict(),
             "annotations": self._annotations_to_dict(),
         }
@@ -25,6 +26,7 @@ class ImageInstance(DataInstance):
     def from_dict(cls, data: dict[str, Any]) -> ImageInstance:
         return cls(
             sample_id=data["sample_id"],
+            metadata=Metadata.from_dict(data.get("metadata", {})),
             image=Image.from_dict(data["image"]),
             _annotations=cls._annotations_from_dict(data.get("annotations")),
         )

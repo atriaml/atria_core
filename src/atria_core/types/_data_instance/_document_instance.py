@@ -7,7 +7,7 @@ from typing import Any
 
 from PIL import Image as PILImage
 
-from atria_core.types._data_instance._base import DataInstance
+from atria_core.types._data_instance._base import DataInstance, Metadata
 from atria_core.types._generic._doc_content import DocumentContent
 from atria_core.types._generic._documents import PdfPage
 from atria_core.types._generic._image import Image
@@ -73,6 +73,7 @@ class SinglePageDocumentInstance(DocumentInstance):
     def to_dict(self) -> dict[str, Any]:
         return {
             "sample_id": self.sample_id,
+            "metadata": self.metadata.to_dict(),
             "visual_type": "pdf_page" if isinstance(self.visual, PdfPage) else "image",
             "visual": self.visual.to_dict(),
             "content": self.content.to_dict() if self.content is not None else None,
@@ -87,6 +88,7 @@ class SinglePageDocumentInstance(DocumentInstance):
         content = data.get("content")
         return cls(
             sample_id=data["sample_id"],
+            metadata=Metadata.from_dict(data.get("metadata", {})),
             visual=visual_cls.from_dict(data["visual"]),
             content=DocumentContent.from_dict(content) if content is not None else None,
             _annotations=cls._annotations_from_dict(data.get("annotations")),

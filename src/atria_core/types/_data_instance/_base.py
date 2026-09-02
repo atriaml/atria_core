@@ -18,10 +18,56 @@ from atria_core.types._generic._annotations import (
     TranscriptionAnnotation,
 )
 
+_JSON_PRIMITIVES = (str, int, float, bool, type(None))
+
+#: A JSON-primitive value -- the widest type a `dict`/`list` field on a
+#: `ModuleConfig` can hold. `Any` isn't valid there: it isn't provably
+#: JSON-safe, so `ModuleConfig` rejects a field annotated with it at
+#: class-definition time (see `__pydantic_init_subclass__` below).
+JSONPrimitive = str | int | float | bool | None
+
+#: An open bag of extra key/value config, restricted to JSON-primitive values
+#: so it stays valid on any `ModuleConfig`. For a config field that needs to
+#: accept caller-specific extra options a module doesn't otherwise expose --
+#: e.g. `extra_from_pretrained_kwargs: ParamDict | None` on a config that
+#: forwards those kwargs to some underlying `from_pretrained(...)`-style call.
+ParamDict = dict[str, JSONPrimitive]
+
+#: Same idea as `ParamDict`, for an open list of extra JSON-primitive values
+#: instead of key/value pairs -- e.g. a config field forwarding a variable
+#: list of flags/positional values to some underlying call.
+ParamList = list[JSONPrimitive]
+
+
+@dataclass(frozen=True, repr=False)
+class Metadata(BaseDataModel):
+    values: ParamDict = field(default_factory=dict, kw_only=True)
+
+    def __post_init__(self) -> None:
+        assert all(isinstance(key, str) for key in self.values)
+        assert all(
+            isinstance(value, _JSON_PRIMITIVES) for value in self.values.values()
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return dict(self.values)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        return cls(values=data)
+
+    def __getattr__(self, name):
+        if name in self.values:
+            return self.values[name]
+        raise AttributeError(
+            f"{self.__class__.__name__!r} object has no attribute {name!r}"
+        )
+
 
 @dataclass(frozen=True, repr=False)
 class DataInstance(BaseDataModel):
     sample_id: str
+    metadata: Metadata = field(default_factory=Metadata, kw_only=True)
     #: Keyed by annotation.type -- at most one annotation per type. Private:
     #: the only supported way to add/replace an entry is add_annotation(),
     #: and the only way to read one is has_annotation_type()/

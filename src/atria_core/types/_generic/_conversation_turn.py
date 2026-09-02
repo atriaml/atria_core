@@ -14,6 +14,8 @@ class ConversationRole(str, enum.Enum):
 
     user = "user"
     assistant = "assistant"
+    thinking = "thinking"
+    tool = "tool"
     system = "system"
 
 
@@ -21,12 +23,20 @@ class ConversationRole(str, enum.Enum):
 class ConversationTurn(BaseDataModel):
     """One message in a conversation: who sent it, and what it says."""
 
-    role: ConversationRole
+    role: ConversationRole | None
     text: str
 
     def to_dict(self) -> dict[str, Any]:
-        return {"role": self.role.value, "text": self.text}
+        if self.role is None:
+            return {"text": self.text}
+        return {
+            "role": self.role.value,
+            "text": self.text,
+        }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> ConversationTurn:
-        return cls(role=ConversationRole(data["role"]), text=data["text"])
+        role = data.get("role", None)
+        return cls(
+            role=ConversationRole(role) if role is not None else None, text=data["text"]
+        )

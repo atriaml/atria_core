@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Iterator, Sequence
+import json
+from collections.abc import Callable, Collection, Iterable, Iterator, Sequence
 from itertools import islice
-from typing import TYPE_CHECKING, Any, overload
+from typing import TYPE_CHECKING, Any, ClassVar, overload
 
 import numpy as np
+from numpy.compat import Path
 
 from atria_core.datasets._pandas import samples_to_pandas
 from atria_core.types._utilities._repr import RepresentationMixin
@@ -14,13 +16,7 @@ if TYPE_CHECKING:
 
 
 class Compose(RepresentationMixin):
-    """Plain class instead of a closure so composed transforms stay
-    picklable -- stdlib pickle can't serialize nested functions, and
-    multiprocessing writers need to send composed transforms to worker
-    processes. Holds a flat list of transforms, flattening nested Compose
-    instances on construction."""
-
-    __repr_fields__ = ("transforms",)
+    __repr_fields__: ClassVar[Collection[str]] = ("transforms",)
 
     def __init__(self, *transforms: Callable[[Any], Any]) -> None:
         self.transforms: list[Callable[[Any], Any]] = []
@@ -34,19 +30,16 @@ class Compose(RepresentationMixin):
 
 
 class IndexableSplitIterator[T_Output](Sequence[T_Output], RepresentationMixin):
-    """A random-access split: wraps an indexable raw source and applies a
-    transform to each sample on access, optionally restricted to
-    `mapped_indices` -- indices into the raw source, in the order these
-    samples should be exposed in. A cap (`limit()`) and a reorder
-    (`shuffle()`) are both just different ways of picking `mapped_indices`,
-    so one field covers both."""
-
-    __repr_fields__ = ("length", "base_iterator", "transform")
+    __repr_fields__: ClassVar[Collection[str]] = (
+        "length",
+        "base_iterator",
+        "transform",
+    )
 
     def __init__(
         self,
         base_iterator: Sequence[Any],
-        transform: Callable[[Any], T_Output],
+        transform: Callable[[Any], T_Output] = lambda x: x,
         mapped_indices: Sequence[int] | None = None,
     ) -> None:
         self._base_iterator = base_iterator
@@ -59,7 +52,9 @@ class IndexableSplitIterator[T_Output](Sequence[T_Output], RepresentationMixin):
         return len(self._base_iterator)
 
     def _resolve(self, index: int) -> int:
-        return self._mapped_indices[index] if self._mapped_indices is not None else index
+        return (
+            self._mapped_indices[index] if self._mapped_indices is not None else index
+        )
 
     @overload
     def __getitem__(self, index: int) -> T_Output: ...
@@ -79,7 +74,6 @@ class IndexableSplitIterator[T_Output](Sequence[T_Output], RepresentationMixin):
     def with_transform[T_NewOutput](
         self, transform: Callable[[T_Output], T_NewOutput]
     ) -> IndexableSplitIterator[T_NewOutput]:
-        """Return a new iterator applying `transform` after the current one."""
         composed_transform = Compose(self._transform, transform)
         return IndexableSplitIterator(
             base_iterator=self._base_iterator,
@@ -88,7 +82,6 @@ class IndexableSplitIterator[T_Output](Sequence[T_Output], RepresentationMixin):
         )
 
     def limit(self, max_samples: int) -> IndexableSplitIterator[T_Output]:
-        """Return an iterator exposing at most `max_samples` of these samples."""
         if max_samples < 0:
             raise ValueError("max_samples cannot be negative")
         indices = [self._resolve(i) for i in range(min(max_samples, len(self)))]
@@ -99,20 +92,6 @@ class IndexableSplitIterator[T_Output](Sequence[T_Output], RepresentationMixin):
         )
 
     def shuffle(self, seed: int) -> IndexableSplitIterator[T_Output]:
-        """Return an iterator exposing these samples in a shuffled order.
-
-        Composes with `limit()` in either order: shuffle-then-limit takes a
-        random sample of the source (the paper's `.shuffle(seed).take(n)`
-        pattern); limit-then-shuffle instead reorders whatever was already
-        selected.
-
-        Uses `numpy`'s PCG64 generator (`np.random.default_rng(seed).
-        permutation(n)`), matching HF `datasets.Dataset.shuffle`'s algorithm
-        exactly -- confirmed by comparing permutations directly. A dataset
-        wrapping a raw HF `datasets.Dataset` therefore shuffles into the same
-        order a caller would get shuffling that HF dataset directly with the
-        same seed, rather than a different (stdlib-`random`-based) order.
-        """
         base_indices = [self._resolve(i) for i in range(len(self))]
         permutation = np.random.default_rng(seed).permutation(len(base_indices))
         indices = [base_indices[i] for i in permutation]
@@ -125,19 +104,7 @@ class IndexableSplitIterator[T_Output](Sequence[T_Output], RepresentationMixin):
     def filter(
         self, predicate: Callable[[T_Output], bool]
     ) -> IndexableSplitIterator[T_Output]:
-        """Return an iterator exposing only the samples `predicate` accepts,
-        in their current order.
-
-        Evaluates `predicate` on the *transformed* value (what `__getitem__`
-        would return), same as `with_transform` composes after the current
-        transform -- so a filter chained after `shuffle()` filters the
-        shuffled order, and one chained before `limit()` (`.filter(...).
-        limit(n)`) takes the first `n` samples that pass, rather than
-        filtering whatever `limit()` already cut down to.
-        """
-        indices = [
-            self._resolve(i) for i in range(len(self)) if predicate(self[i])
-        ]
+        indices = [self._resolve(i) for i in range(len(self)) if predicate(self[i])]
         return IndexableSplitIterator(
             base_iterator=self._base_iterator,
             transform=self._transform,
@@ -146,14 +113,12 @@ class IndexableSplitIterator[T_Output](Sequence[T_Output], RepresentationMixin):
 
     @property
     def base_iterator(self) -> Iterable[Any]:
-        """The untransformed source, in the order these samples are exposed."""
         if self._mapped_indices is None:
             return self._base_iterator
         return (self._base_iterator[i] for i in self._mapped_indices)
 
     @property
     def transform(self) -> Callable[[Any], T_Output]:
-        """The transform applied to each raw sample."""
         return self._transform
 
     @property
@@ -162,29 +127,66 @@ class IndexableSplitIterator[T_Output](Sequence[T_Output], RepresentationMixin):
 
     @property
     def mapped_indices(self) -> Sequence[int] | None:
-        """Indices into the raw source, in exposure order -- None means the
-        source's own order and length, unrestricted."""
         return self._mapped_indices
 
     def to_pandas(self) -> pd.DataFrame:
-        """Convert these samples into a flat `pandas.DataFrame`, one row per
-        sample.
-
-        Raises:
-            TypeError: If any transformed sample is not a `BaseDataModel`
-                instance.
-        """
         return samples_to_pandas(self)
 
+    def to_jsonl(self, path: Path) -> int:
+        """Materialize the iterator outputs to a JSONL file."""
+        path.parent.mkdir(parents=True, exist_ok=True)
 
-class ConcatSplitIterator[T_Output](Sequence[T_Output], RepresentationMixin):
-    """A random-access view over several sequences end to end -- e.g. several
-    datasets' split iterators, each already shuffled/limited/transformed to
-    a common output type. Indexing walks across them in order; `len()` is
-    their combined length."""
+        written = 0
+        with path.open("w", encoding="utf-8") as output_file:
+            for sample in self:
+                if not hasattr(sample, "to_dict"):
+                    raise TypeError(
+                        f"{type(sample).__name__} does not implement to_dict()"
+                    )
 
-    __repr_fields__ = ("length", "iterators")
+                output_file.write(
+                    json.dumps(sample.to_dict(), ensure_ascii=False) + "\n"
+                )
+                written += 1
 
+        return written
+
+    @classmethod
+    def from_jsonl[T](
+        cls,
+        path: Path,
+        output_type: type[T],
+    ) -> IndexableSplitIterator[T]:
+        """Load materialized iterator outputs from a JSONL file."""
+        if not hasattr(output_type, "from_dict"):
+            raise TypeError(f"{output_type.__name__} does not implement from_dict()")
+
+        samples: list[T] = []
+
+        with path.open(encoding="utf-8") as jsonl_file:
+            for line_number, line in enumerate(jsonl_file, start=1):
+                if not line.strip():
+                    continue
+
+                try:
+                    samples.append(output_type.from_dict(json.loads(line)))
+                except (
+                    KeyError,
+                    TypeError,
+                    ValueError,
+                    json.JSONDecodeError,
+                ) as error:
+                    raise ValueError(
+                        f"Invalid {output_type.__name__} at {path}:{line_number}"
+                    ) from error
+
+        return cls(
+            base_iterator=samples,
+            transform=lambda sample: sample,
+        )
+
+
+class _ConcatenatedSequence[T_Output](Sequence[T_Output]):
     def __init__(self, iterators: Sequence[Sequence[T_Output]]) -> None:
         self._iterators = iterators
 
@@ -205,25 +207,29 @@ class ConcatSplitIterator[T_Output](Sequence[T_Output], RepresentationMixin):
             if bounded_index < len(iterator):
                 return iterator[bounded_index]
             bounded_index -= len(iterator)
-        raise IndexError(index)  # pragma: no cover -- unreachable, bounded_index is in range(len(self))
+        raise IndexError(index)  # pragma: no cover -- unreachable
 
-    def __getitems__(self, indices: list[int]) -> list[T_Output]:
-        return [self[i] for i in indices]
+
+class ConcatSplitIterator[T_Output](IndexableSplitIterator[T_Output]):
+    __repr_fields__: ClassVar[Collection[str]] = ("length", "iterators")
+
+    def __init__(self, iterators: Sequence[Sequence[T_Output]]) -> None:
+        super().__init__(
+            base_iterator=_ConcatenatedSequence(iterators), transform=lambda x: x
+        )
+        self._iterators = iterators
 
     @property
     def iterators(self) -> Sequence[Sequence[T_Output]]:
         return self._iterators
 
-    @property
-    def length(self) -> int:
-        return len(self)
-
 
 class IterableSplitIterator[T_Output](Iterable[T_Output], RepresentationMixin):
-    """A streaming split: wraps a one-pass raw source and applies a transform
-    to each sample as it is yielded, optionally capped at `max_samples`."""
-
-    __repr_fields__ = ("base_iterator", "transform", "max_samples")
+    __repr_fields__: ClassVar[Collection[str]] = (
+        "base_iterator",
+        "transform",
+        "max_samples",
+    )
 
     def __init__(
         self,
@@ -240,20 +246,17 @@ class IterableSplitIterator[T_Output](Iterable[T_Output], RepresentationMixin):
 
     @property
     def base_iterator(self) -> Iterable[Any]:
-        """The untransformed source, capped at `max_samples` if one is set."""
         if self._max_samples is None:
             return self._base_iterator
         return islice(self._base_iterator, self._max_samples)
 
     @property
     def transform(self) -> Callable[[Any], T_Output]:
-        """The transform applied to each raw sample."""
         return self._transform
 
     def with_transform[T_NewOutput](
         self, transform: Callable[[T_Output], T_NewOutput]
     ) -> IterableSplitIterator[T_NewOutput]:
-        """Return a new iterator applying `transform` after the current one."""
         composed_transform = Compose(self._transform, transform)
         return IterableSplitIterator(
             base_iterator=self._base_iterator,
@@ -262,7 +265,6 @@ class IterableSplitIterator[T_Output](Iterable[T_Output], RepresentationMixin):
         )
 
     def limit(self, max_samples: int) -> IterableSplitIterator[T_Output]:
-        """Return an iterator yielding at most `max_samples` of these samples."""
         if max_samples < 0:
             raise ValueError("max_samples cannot be negative")
         if self._max_samples is not None:
@@ -276,16 +278,6 @@ class IterableSplitIterator[T_Output](Iterable[T_Output], RepresentationMixin):
     def filter(
         self, predicate: Callable[[T_Output], bool]
     ) -> IterableSplitIterator[T_Output]:
-        """Return an iterator yielding only the samples `predicate` accepts.
-
-        Evaluates `predicate` on the *transformed* value, same as `filter()`
-        on `IndexableSplitIterator`. Unlike that random-access version, this
-        is lazy and one-pass: chaining `.filter(...).limit(n)` yields the
-        first `n` samples that pass, streaming through as many raw samples as
-        it takes to find them -- there's no upfront index list to build,
-        since the source may not support random access or have a known
-        length.
-        """
         return IterableSplitIterator(
             base_iterator=filter(
                 lambda raw: predicate(self._transform(raw)), self.base_iterator
@@ -299,11 +291,9 @@ class IterableSplitIterator[T_Output](Iterable[T_Output], RepresentationMixin):
         return self._max_samples
 
     def to_pandas(self) -> pd.DataFrame:
-        """Convert these samples into a flat `pandas.DataFrame`, one row per
-        sample. Consumes the underlying one-pass source.
-
-        Raises:
-            TypeError: If any transformed sample is not a `BaseDataModel`
-                instance.
-        """
         return samples_to_pandas(self)
+
+    def to_indexable(self) -> IndexableSplitIterator[T_Output]:
+        return IndexableSplitIterator(
+            base_iterator=list(self.base_iterator), transform=self._transform
+        )

@@ -68,7 +68,9 @@ class ModuleRegistry[T_Module: Module[ModuleConfig]]:
         """Class every entry in this registry must subclass."""
         return cast("type[T_Module]", type(self).__module_type__)
 
-    def register(self, cls: type[T_Module]) -> type[T_Module]:
+    def register[T_Registered: Module[ModuleConfig]](
+        self, cls: type[T_Registered]
+    ) -> type[T_Registered]:
         name = cls.__module_name__
         if name in self._store:
             raise ValueError(f"{self.name!r} already has {name!r}")

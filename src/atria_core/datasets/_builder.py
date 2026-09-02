@@ -7,7 +7,10 @@ from atria_core.datasets._cacher import Cacher
 from atria_core.datasets._common import FileStorageType
 from atria_core.datasets._dataset import Dataset
 from atria_core.datasets._registry import datasets
+from atria_core.logger import get_logger
 from atria_core.types import DatasetSplitType
+
+logger = get_logger(__name__)
 
 
 class DatasetBuilder:
@@ -42,6 +45,7 @@ class DatasetBuilder:
                 see `DatasetRegistry.create`/`HuggingfaceDataset.__init__`.
             params: Values for the dataset's config fields.
         """
+        logger.info(f"Loading dataset {name} with params {params}")
         self._dataset = datasets.create(
             name,
             data_dir=data_dir,

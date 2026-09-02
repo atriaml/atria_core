@@ -10,10 +10,6 @@ if TYPE_CHECKING:
     import pandas as pd
 
 
-def _sample_to_row(sample: BaseDataModel) -> dict[str, Any]:
-    return ParquetSchema.flatten(sample.to_dict())
-
-
 def samples_to_pandas(samples: Iterable[object]) -> pd.DataFrame:
     """Convert an iterable of `BaseDataModel` samples into a flat DataFrame.
 
@@ -33,5 +29,5 @@ def samples_to_pandas(samples: Iterable[object]) -> pd.DataFrame:
                 "to_pandas() requires every sample to be a BaseDataModel instance, "
                 f"got {type(sample).__name__}."
             )
-        rows.append(_sample_to_row(sample))
+        rows.append(ParquetSchema.flatten(sample.to_dict(), encode_json=False))
     return pd.DataFrame(rows)

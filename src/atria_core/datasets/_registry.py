@@ -3,6 +3,8 @@ from __future__ import annotations
 import inspect
 from typing import Any, cast
 
+from pydantic import ValidationError
+
 from atria_core.datasets._dataset import Dataset, DatasetConfig
 from atria_core.registry._module_config import ModuleConfig
 from atria_core.registry._registry import ModuleRegistry
@@ -10,7 +12,7 @@ from atria_core.types import DatasetSplitType
 from atria_core.types._data_instance._base import DataInstance
 
 
-class DatasetRegistry(ModuleRegistry[Dataset[DataInstance, DatasetConfig]]):
+class DatasetRegistry(ModuleRegistry[Dataset]):
     __registry_name__ = "datasets"
 
     def create(
@@ -44,16 +46,24 @@ class DatasetRegistry(ModuleRegistry[Dataset[DataInstance, DatasetConfig]]):
         Raises:
             KeyError: If nothing is registered under `name`.
             TypeError: If both `config` and `params` are given.
-            ValidationError: If `params` holds a name the dataset's config
-                does not declare, or a value it rejects.
+            ValueError: If `params` holds a name the dataset's config does
+                not declare, or a value it rejects.
         """
         dataset_cls = self.get(name)
         if config is None:
-            config = dataset_cls.config_type()(**params)
+            config_cls = dataset_cls.config_type()
+            try:
+                config = config_cls(**params)
+            except ValidationError as error:
+                valid_fields = sorted(config_cls.model_fields)
+                raise ValueError(f"{error}\nValid fields: {valid_fields}") from error
         elif params:
             raise TypeError("cannot pass both 'config' and individual config params")
         extra_kwargs: dict[str, Any] = {}
-        if streaming is not None and "streaming" in inspect.signature(dataset_cls).parameters:
+        if (
+            streaming is not None
+            and "streaming" in inspect.signature(dataset_cls).parameters
+        ):
             extra_kwargs["streaming"] = streaming
         return dataset_cls(
             config=cast("DatasetConfig", config),

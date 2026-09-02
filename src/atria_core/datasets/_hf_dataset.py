@@ -6,10 +6,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 import aiohttp
 
 from atria_core.datasets._constants import _HF_DOWNLOAD_TIMEOUT_SECONDS
-from atria_core.datasets._dataset import (
-    Dataset,
-    DatasetConfig,
-)
+from atria_core.datasets._dataset import Dataset, DatasetConfig
 from atria_core.logger import get_logger
 from atria_core.types import DatasetMetadata, DatasetSplitType
 from atria_core.types._data_instance._base import DataInstance
@@ -35,8 +32,16 @@ def _hf_storage_options() -> dict[str, Any]:
     }
 
 
+_DEFAULT_SHUFFLE_SEED = 42
+_DEFAULT_SHUFFLE_BUFFER_SIZE = 10_000
+
+
 class HuggingfaceDatasetConfig(DatasetConfig):
     """Params for a dataset loaded from the Hugging Face hub."""
+
+    shuffle: bool = False
+    shuffle_seed: int = _DEFAULT_SHUFFLE_SEED
+    shuffle_buffer_size: int = _DEFAULT_SHUFFLE_BUFFER_SIZE
 
 
 class HuggingfaceDataset[
@@ -113,8 +118,10 @@ class HuggingfaceDataset[
     ) -> dict[str, Path]:
         """Prepare the hub builder, download manager and split generators.
 
-        When streaming, the `datasets` library fetches data itself while
-        streaming, so nothing is downloaded here. When not streaming, this
+        When streaming, `_split_generators` runs against a
+        `StreamingDownloadManager` -- the same one plain `datasets.load_dataset(...,
+        streaming=True)` uses -- so resolving the split list only yields lazy
+        URLs instead of eagerly downloading every shard. When not streaming, this
         also materializes the dataset to disk (`download_and_prepare`), which
         `_build_split_iterator` then reads via `as_dataset` -- the same path
         plain `datasets.load_dataset(..., streaming=False)` takes, so row
@@ -155,6 +162,13 @@ class HuggingfaceDataset[
             storage_options=_hf_storage_options(),
             token=access_token,
         )
+        if self._streaming:
+            return datasets.StreamingDownloadManager(
+                base_path=self._builder.base_path,
+                download_config=download_config,
+                dataset_name=type(self).__hf_config_name__,
+                data_dir=data_dir,
+            )
         if "packaged_modules" in str(self._builder.__module__):
             return datasets.DownloadManager(
                 dataset_name=type(self).__hf_config_name__,
@@ -174,9 +188,15 @@ class HuggingfaceDataset[
 
     def _build_split_iterator(self, split: DatasetSplitType, data_dir: str) -> Any:
         if self._streaming:
-            return self._builder._as_streaming_dataset_single(
+            streamed_split = self._builder._as_streaming_dataset_single(
                 self._hf_split_generators[split]
             )
+            if self.config.shuffle:
+                return streamed_split.shuffle(
+                    seed=self.config.shuffle_seed,
+                    buffer_size=self.config.shuffle_buffer_size,
+                )
+            return streamed_split
         hf_split_name = next(
             name for name, mapped in _HF_SPLIT_MAP.items() if mapped == split
         )
