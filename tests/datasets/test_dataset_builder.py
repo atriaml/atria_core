@@ -4,7 +4,6 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
-from pydantic import ValidationError
 
 from atria_core.datasets import CachedDataset, DatasetBuilder, FileStorageType
 from atria_core.types import DatasetSplitType, ImageInstance
@@ -109,7 +108,7 @@ def test_load_params_reach_the_config(tmp_path: Path) -> None:
 
 
 def test_unknown_load_param_is_rejected(tmp_path: Path) -> None:
-    with pytest.raises(ValidationError, match="nonsense"):
+    with pytest.raises(ValueError, match="nonsense"):
         DatasetBuilder().load("synthetic", nonsense=1, data_dir=str(tmp_path))
 
 

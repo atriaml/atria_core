@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from pydantic import ValidationError
 
 from atria_core.datasets import DatasetRegistry, datasets
 from atria_core.registry import RegistryStore
@@ -53,12 +52,12 @@ def test_create_passes_runtime_arguments_outside_the_config(tmp_path: Path) -> N
 
 
 def test_create_rejects_a_param_the_config_does_not_declare(tmp_path: Path) -> None:
-    with pytest.raises(ValidationError, match="nonsense"):
+    with pytest.raises(ValueError, match="nonsense"):
         datasets.create("synthetic", nonsense=1, data_dir=str(tmp_path))
 
 
 def test_create_rejects_a_param_value_the_config_rejects(tmp_path: Path) -> None:
-    with pytest.raises(ValidationError, match="max_train_samples"):
+    with pytest.raises(ValueError, match="max_train_samples"):
         datasets.create("synthetic", max_train_samples="lots", data_dir=str(tmp_path))
 
 
