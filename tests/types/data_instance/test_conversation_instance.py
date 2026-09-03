@@ -3,16 +3,16 @@ from __future__ import annotations
 from atria_core.types._data_instance._conversation_instance import ConversationInstance
 from atria_core.types._generic._annotations import AnnotationType
 from atria_core.types._generic._conversation_turn import (
+    ConversationItem,
     ConversationRole,
-    ConversationTurn,
 )
 from tests.types.builders import make_classification_annotation
 
 
-def _turns() -> list[ConversationTurn]:
+def _turns() -> list[ConversationItem]:
     return [
-        ConversationTurn(role=ConversationRole.user, text="hello"),
-        ConversationTurn(role=ConversationRole.assistant, text="hi there"),
+        ConversationItem(role=ConversationRole.user, text="hello"),
+        ConversationItem(role=ConversationRole.assistant, text="hi there"),
     ]
 
 

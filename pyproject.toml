@@ -7,7 +7,7 @@ name = "atria_core"
 version = "0.1.8"
 description = "Core utilities for Atria projects, including a lightweight and flexible logging submodule and structured data types for document/OCR processing."
 readme = "README.md"
-requires-python = ">3.13"
+requires-python = ">=3.13,<3.14"
 license = { file = "LICENSE.txt" }
 authors = [{ name = "Saifullah", email = "saifullah.saifullah@dfki.de" }]
 dependencies = [

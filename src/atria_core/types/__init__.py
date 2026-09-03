@@ -18,7 +18,7 @@ if TYPE_CHECKING:
         OCRType as OCRType,
         TaskType as TaskType,
     )
-    from ._data_instance._base import DataInstance as DataInstance
+    from ._data_instance._base import DataInstance as DataInstance, Metadata as Metadata
     from ._data_instance._conversation_instance import (
         ConversationInstance as ConversationInstance,
         ConversationSeed as ConversationSeed,
@@ -57,6 +57,9 @@ if TYPE_CHECKING:
     from ._generic._conversation_turn import (
         ConversationRole as ConversationRole,
         ConversationTurn as ConversationTurn,
+        ConversationItem as ConversationItem,
+        ToolCall as ToolCall,
+        ToolResult as ToolResult,
     )
     from ._generic._image import Image as Image
     from ._generic._qa_pair import QAPair as QAPair
@@ -78,7 +81,7 @@ __getattr__, __dir__, __all__ = lazy.attach(
             "OCRType",
             "TaskType",
         ],
-        "_data_instance._base": ["DataInstance"],
+        "_data_instance._base": ["DataInstance", "Metadata"],
         "_data_instance._conversation_instance": [
             "ConversationInstance",
             "ConversationSeed",
@@ -114,7 +117,13 @@ __getattr__, __dir__, __all__ = lazy.attach(
             "SentimentAnnotation",
             "AnnotationType",
         ],
-        "_generic._conversation_turn": ["ConversationRole", "ConversationTurn"],
+        "_generic._conversation_turn": [
+            "ConversationRole",
+            "ConversationTurn",
+            "ConversationItem",
+            "ToolCall",
+            "ToolResult",
+        ],
         "_generic._image": ["Image"],
         "_generic._qa_pair": ["QAPair"],
         "_utilities._repr": ["RepresentationMixin"],

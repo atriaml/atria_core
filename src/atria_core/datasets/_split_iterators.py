@@ -3,10 +3,10 @@ from __future__ import annotations
 import json
 from collections.abc import Callable, Collection, Iterable, Iterator, Sequence
 from itertools import islice
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, overload
 
 import numpy as np
-from numpy.compat import Path
 
 from atria_core.datasets._pandas import samples_to_pandas
 from atria_core.types._utilities._repr import RepresentationMixin
