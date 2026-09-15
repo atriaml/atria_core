@@ -19,28 +19,37 @@ class ConversationRole(str, enum.Enum):
     tool = "tool"
     tool_call = "tool_call"
     system = "system"
+    other = "other"
 
 
 @dataclass(frozen=True, repr=False)
 class ConversationItem(BaseDataModel):
-    """One message in a conversation: who sent it, and what it says."""
+    """One message in a conversation: who sent it, and what it says.
+
+    `custom_role` names the turn's role when `role` is `ConversationRole.other`,
+    for a producer-specific role outside the fixed vocabulary. It is ignored
+    for every other role.
+    """
 
     role: ConversationRole | None
     text: str
+    custom_role: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         if self.role is None:
             return {"text": self.text}
-        return {
-            "role": self.role.value,
-            "text": self.text,
-        }
+        data: dict[str, Any] = {"role": self.role.value, "text": self.text}
+        if self.role is ConversationRole.other and self.custom_role is not None:
+            data["custom_role"] = self.custom_role
+        return data
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> ConversationItem:
         role = data.get("role", None)
         return cls(
-            role=ConversationRole(role) if role is not None else None, text=data["text"]
+            role=ConversationRole(role) if role is not None else None,
+            text=data["text"],
+            custom_role=data.get("custom_role"),
         )
 
 
