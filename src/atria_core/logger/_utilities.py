@@ -32,7 +32,7 @@ def _next_available_path(path: Path) -> Path:
     return candidate
 
 
-def _enable_colored_logging(
+def enable_colored_logging(
     logger: logging.Logger,
     log_level: int,
     styles: dict[str, dict[str, Any]],
@@ -51,7 +51,7 @@ def _enable_colored_logging(
     )
 
 
-def _attach_file_handler(
+def attach_file_handler(
     logger: logging.Logger,
     log_file_path: str,
     log_level: int = logging.INFO,
@@ -101,7 +101,7 @@ def _attach_stream_handler(
     return handler
 
 
-def _reset_logger(logger: logging.Logger) -> None:
+def reset_logger(logger: logging.Logger) -> None:
     # Remove all handlers
     for handler in list(logger.handlers):
         logger.removeHandler(handler)

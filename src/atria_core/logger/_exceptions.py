@@ -10,9 +10,9 @@ import sys
 import threading
 from types import TracebackType
 
-from ._constants import _ROOT_LOGGER_NAME
+from ._constants import ROOT_LOGGER_NAME
 
-_logger = logging.getLogger(f"{_ROOT_LOGGER_NAME}.uncaught")
+_logger = logging.getLogger(f"{ROOT_LOGGER_NAME}.uncaught")
 
 _installed = False
 _original_excepthook = sys.excepthook
@@ -31,7 +31,7 @@ def _log_uncaught_exception(
 
 def _log_uncaught_thread_exception(args: threading.ExceptHookArgs) -> None:
     thread_name = args.thread.name if args.thread is not None else "unknown"
-    if args.exc_type is not None and args.exc_value is not None:
+    if args.exc_value is not None:
         _logger.critical(
             "Unhandled exception in thread %s",
             thread_name,

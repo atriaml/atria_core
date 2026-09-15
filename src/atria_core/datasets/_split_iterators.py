@@ -4,11 +4,12 @@ import json
 from collections.abc import Callable, Collection, Iterable, Iterator, Sequence
 from itertools import islice
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar, overload
+from typing import TYPE_CHECKING, Any, ClassVar, cast, overload
 
 import numpy as np
 
 from atria_core.datasets._pandas import samples_to_pandas
+from atria_core.types._base_data_model import BaseDataModel
 from atria_core.types._utilities._repr import RepresentationMixin
 
 if TYPE_CHECKING:
@@ -139,7 +140,7 @@ class IndexableSplitIterator[T_Output](Sequence[T_Output], RepresentationMixin):
         written = 0
         with path.open("w", encoding="utf-8") as output_file:
             for sample in self:
-                if not hasattr(sample, "to_dict"):
+                if not isinstance(sample, BaseDataModel):
                     raise TypeError(
                         f"{type(sample).__name__} does not implement to_dict()"
                     )
@@ -152,16 +153,13 @@ class IndexableSplitIterator[T_Output](Sequence[T_Output], RepresentationMixin):
         return written
 
     @classmethod
-    def from_jsonl[T](
+    def from_jsonl[T_DataModel: BaseDataModel](
         cls,
         path: Path,
-        output_type: type[T],
-    ) -> IndexableSplitIterator[T]:
+        output_type: type[T_DataModel],
+    ) -> IndexableSplitIterator[T_DataModel]:
         """Load materialized iterator outputs from a JSONL file."""
-        if not hasattr(output_type, "from_dict"):
-            raise TypeError(f"{output_type.__name__} does not implement from_dict()")
-
-        samples: list[T] = []
+        samples: list[T_DataModel] = []
 
         with path.open(encoding="utf-8") as jsonl_file:
             for line_number, line in enumerate(jsonl_file, start=1):
@@ -169,7 +167,10 @@ class IndexableSplitIterator[T_Output](Sequence[T_Output], RepresentationMixin):
                     continue
 
                 try:
-                    samples.append(output_type.from_dict(json.loads(line)))
+                    sample = cast(
+                        "T_DataModel", output_type.from_dict(json.loads(line))
+                    )
+                    samples.append(sample)
                 except (
                     KeyError,
                     TypeError,
@@ -180,9 +181,9 @@ class IndexableSplitIterator[T_Output](Sequence[T_Output], RepresentationMixin):
                         f"Invalid {output_type.__name__} at {path}:{line_number}"
                     ) from error
 
-        return cls(
-            base_iterator=samples,
-            transform=lambda sample: sample,
+        return cast(
+            "IndexableSplitIterator[T_DataModel]",
+            cls(base_iterator=samples, transform=lambda sample: sample),
         )
 
 

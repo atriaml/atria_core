@@ -55,7 +55,7 @@ class DatasetRegistry(ModuleRegistry[Dataset]):
         if config is None:
             config_cls = dataset_cls.config_type()
             try:
-                config = config_cls(**params)
+                config = cast("T_DatasetConfig", config_cls(**params))
             except ValidationError as error:
                 valid_fields = sorted(config_cls.model_fields)
                 raise ValueError(f"{error}\nValid fields: {valid_fields}") from error
@@ -67,13 +67,16 @@ class DatasetRegistry(ModuleRegistry[Dataset]):
             and "streaming" in inspect.signature(dataset_cls).parameters
         ):
             extra_kwargs["streaming"] = streaming
-        return dataset_cls(
-            config=cast("DatasetConfig", config),
-            data_dir=data_dir,
-            access_token=access_token,
-            split=split,
-            dataset_dir_name=name,
-            **extra_kwargs,
+        return cast(
+            "Dataset[T_DataInstance, T_DatasetConfig]",
+            dataset_cls(
+                config=cast("DatasetConfig", config),
+                data_dir=data_dir,
+                access_token=access_token,
+                split=split,
+                dataset_dir_name=name,
+                **extra_kwargs,
+            ),
         )
 
 

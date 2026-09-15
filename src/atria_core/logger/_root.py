@@ -15,13 +15,13 @@ import logging
 import os
 from pathlib import Path
 
-from ._constants import _DEFAULT_COLOR_STYLES, _DEFAULT_LOG_FORMAT, _ROOT_LOGGER_NAME
+from ._constants import DEFAULT_COLOR_STYLES, DEFAULT_LOG_FORMAT, ROOT_LOGGER_NAME
 from ._exceptions import install_global_exception_hook
 from ._filters import DistributedFilter
-from ._utilities import _attach_file_handler, _enable_colored_logging, _reset_logger
+from ._utilities import attach_file_handler, enable_colored_logging, reset_logger
 
 # Module-level root logger
-_root_logger: logging.Logger = logging.getLogger(_ROOT_LOGGER_NAME)
+_root_logger: logging.Logger = logging.getLogger(ROOT_LOGGER_NAME)
 
 
 class RootLoggerAdapter(logging.LoggerAdapter[logging.Logger]):
@@ -75,11 +75,11 @@ class RootLoggerAdapter(logging.LoggerAdapter[logging.Logger]):
             )
             self.logger.setLevel(logging.INFO)
 
-        _enable_colored_logging(
+        enable_colored_logging(
             logger=self.logger,
             log_level=self.logger.level,
-            styles=_DEFAULT_COLOR_STYLES,
-            log_format=_DEFAULT_LOG_FORMAT,
+            styles=DEFAULT_COLOR_STYLES,
+            log_format=DEFAULT_LOG_FORMAT,
         )
 
         # remove propagation of logs to ancestor loggers to prevent duplicate logs in some environments
@@ -123,14 +123,14 @@ class RootLoggerAdapter(logging.LoggerAdapter[logging.Logger]):
         Returns:
             str: The actual file path logs are written to.
         """
-        log_format = log_format or _DEFAULT_LOG_FORMAT
+        log_format = log_format or DEFAULT_LOG_FORMAT
         level = level or self.logger.level
 
         if self._file_handler:
             self.logger.removeHandler(self._file_handler)
 
         file_path = Path(path)
-        self._file_handler = _attach_file_handler(
+        self._file_handler = attach_file_handler(
             self.logger, str(file_path), level, log_format
         )
 
@@ -157,5 +157,5 @@ def reload_adapter() -> None:
     Useful in tests or when environment variables affecting logging change.
     """
     global _root_adapter
-    _reset_logger(_root_logger)
+    reset_logger(_root_logger)
     _root_adapter = RootLoggerAdapter(_root_logger)

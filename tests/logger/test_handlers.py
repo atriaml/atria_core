@@ -28,7 +28,7 @@ import sys
 
 import pytest
 
-from atria_core.logger._utilities import _attach_file_handler, _attach_stream_handler
+from atria_core.logger._utilities import _attach_stream_handler, attach_file_handler
 
 
 def test_configure_file_handler(tmp_path: pathlib.Path) -> None:
@@ -52,7 +52,7 @@ def test_configure_file_handler(tmp_path: pathlib.Path) -> None:
     logger.setLevel(logging.INFO)
 
     # Add the file handler
-    _attach_file_handler(logger, str(log_file), logging.INFO, "%(message)s")
+    attach_file_handler(logger, str(log_file), logging.INFO, "%(message)s")
 
     # Log a message
     logger.info("This is a test log message.")

@@ -2,7 +2,7 @@ from ._api import enable_file_logging, get_logger, set_atria_log_level
 from ._banner import EnvInfo, get_env_info, log_banner
 from ._exceptions import install_global_exception_hook
 from ._filters import DistributedFilter
-from ._tqdm import FileLoggingTqdm
+from ._tqdm import TqdmLogger
 
 __all__ = [
     "get_logger",
@@ -13,5 +13,5 @@ __all__ = [
     "EnvInfo",
     "install_global_exception_hook",
     "DistributedFilter",
-    "FileLoggingTqdm",
+    "TqdmLogger",
 ]

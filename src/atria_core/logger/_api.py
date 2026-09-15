@@ -11,7 +11,7 @@ All module loggers propagate to the root logger by default.
 
 import logging
 
-from ._constants import _ROOT_LOGGER_NAME
+from ._constants import ROOT_LOGGER_NAME
 from ._root import get_root_adapter
 
 
@@ -28,10 +28,10 @@ def get_logger(name: str | None = None) -> logging.Logger:
     """
     # if the name does not start with the root logger name, prefix it
     # we do this to ensure all loggers are under the root logger hierarchy and propagate correctly
-    if name is not None and not name.startswith(f"{_ROOT_LOGGER_NAME}."):
-        name = f"{_ROOT_LOGGER_NAME}.{name}"
+    if name is not None and not name.startswith(f"{ROOT_LOGGER_NAME}."):
+        name = f"{ROOT_LOGGER_NAME}.{name}"
 
-    return logging.getLogger(name or _ROOT_LOGGER_NAME)
+    return logging.getLogger(name or ROOT_LOGGER_NAME)
 
 
 def enable_file_logging(

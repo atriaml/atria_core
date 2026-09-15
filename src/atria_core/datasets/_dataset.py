@@ -161,15 +161,8 @@ class Dataset[
                 hasattr(split_iterator, "__len__")
                 and hasattr(split_iterator, "__getitem__")
             ):
-                # `isinstance(..., Sequence)` alone misses HF `datasets.Dataset`:
-                # it supports len()/indexing (everything IndexableSplitIterator
-                # needs) but isn't registered as a `Sequence`, so it would
-                # otherwise fall through to the Iterable branch below and lose
-                # random access -- silently changing a non-streaming HF load's
-                # row order downstream (via .shuffle()/.filter()/.limit()) from
-                # what indexing the dataset directly gives.
                 split_iterator = IndexableSplitIterator(
-                    base_iterator=split_iterator,
+                    base_iterator=cast("Sequence[Any]", split_iterator),
                     transform=input_transform,
                 )
 

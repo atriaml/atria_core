@@ -16,9 +16,9 @@ Attributes:
 import logging
 from typing import Any, Final
 
-_ROOT_LOGGER_NAME: Final[str] = "atria"
-_DEFAULT_LOG_FORMAT: Final[str] = "[%(asctime)s][%(name)s][%(levelname)s] %(message)s"
-_DEFAULT_COLOR_STYLES: Final[dict[str, dict[str, Any]]] = {
+ROOT_LOGGER_NAME: Final[str] = "atria"
+DEFAULT_LOG_FORMAT: Final[str] = "[%(asctime)s][%(name)s][%(levelname)s] %(message)s"
+DEFAULT_COLOR_STYLES: Final[dict[str, dict[str, Any]]] = {
     "critical": {"bold": True, "color": "red"},
     "debug": {"color": "green"},
     "error": {"color": "red"},
@@ -29,7 +29,7 @@ _DEFAULT_COLOR_STYLES: Final[dict[str, dict[str, Any]]] = {
     "verbose": {"color": "blue"},
     "warning": {"color": "yellow"},
 }
-_LOG_FILE_SUFFIXES: Final[dict[int, str]] = {
+LOG_FILE_SUFFIXES: Final[dict[int, str]] = {
     logging.DEBUG: "_debug.log",
     logging.INFO: "_info.log",
     logging.WARNING: "_warning.log",
