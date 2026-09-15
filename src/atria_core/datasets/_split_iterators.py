@@ -95,7 +95,7 @@ class IndexableSplitIterator[T_Output](Sequence[T_Output], RepresentationMixin):
     def shuffle(self, seed: int) -> IndexableSplitIterator[T_Output]:
         base_indices = [self._resolve(i) for i in range(len(self))]
         permutation = np.random.default_rng(seed).permutation(len(base_indices))
-        indices = [base_indices[i] for i in permutation]
+        indices = [base_indices[int(i)] for i in permutation]
         return IndexableSplitIterator(
             base_iterator=self._base_iterator,
             transform=self._transform,
