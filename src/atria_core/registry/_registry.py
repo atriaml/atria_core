@@ -42,7 +42,9 @@ class ModuleRegistry[T_Module: Module[ModuleConfig]]:
             if get_origin(base) is ModuleRegistry:
                 (arg,) = get_args(base)
                 module_cls = get_origin(arg) or arg
-                if not (isinstance(module_cls, type) and issubclass(module_cls, Module)):
+                if not (
+                    isinstance(module_cls, type) and issubclass(module_cls, Module)
+                ):
                     raise TypeError(
                         f"{cls.__name__} must specialize ModuleRegistry with a "
                         f"concrete Module subclass, got {arg!r}"
@@ -89,9 +91,15 @@ class ModuleRegistry[T_Module: Module[ModuleConfig]]:
             return resolved
         return entry
 
-    def create(self, name: str, config: ModuleConfig | None = None) -> T_Module:
+    def create(self, name: str, **params: Any) -> T_Module:
+        """Instantiate the module registered under `name`.
+
+        `params` are the module's config fields, validated by constructing
+        the module's config class before the module itself is built.
+        """
         cls = self.get(name)
-        return cls(config)
+        config = cls.__config_type__(**params)
+        return cls(config=config)
 
     def list(self) -> list[str]:
         return list(self._store)

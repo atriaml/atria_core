@@ -154,6 +154,8 @@ class HuggingfaceDataset[
         import datasets
 
         download_config = datasets.DownloadConfig(
+            # this library actually never uses this path as always
+            # the only thing we can do is set HF_HOME which now atria does by default
             cache_dir=data_dir,
             force_download=False,
             force_extract=False,

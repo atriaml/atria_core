@@ -6,7 +6,6 @@ from typing import Any, cast
 from pydantic import ValidationError
 
 from atria_core.datasets._dataset import Dataset, DatasetConfig
-from atria_core.registry._module_config import ModuleConfig
 from atria_core.registry._registry import ModuleRegistry
 from atria_core.types import DatasetSplitType
 from atria_core.types._data_instance._base import DataInstance
@@ -15,17 +14,20 @@ from atria_core.types._data_instance._base import DataInstance
 class DatasetRegistry(ModuleRegistry[Dataset]):
     __registry_name__ = "datasets"
 
-    def create(
+    def create[
+        T_DataInstance: DataInstance = DataInstance,
+        T_DatasetConfig: DatasetConfig = DatasetConfig,
+    ](
         self,
         name: str,
-        config: ModuleConfig | None = None,
+        config: T_DatasetConfig | None = None,
         *,
         data_dir: str | None = None,
         access_token: str | None = None,
         split: DatasetSplitType | None = None,
         streaming: bool | None = None,
         **params: Any,
-    ) -> Dataset[DataInstance, DatasetConfig]:
+    ) -> Dataset[T_DataInstance, T_DatasetConfig]:
         """Build the dataset registered under `name`.
 
         Args:

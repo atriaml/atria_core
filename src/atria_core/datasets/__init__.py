@@ -15,6 +15,10 @@ if TYPE_CHECKING:
         FileStorageType as FileStorageType,
     )
     from ._dataset import Dataset as Dataset, DatasetConfig as DatasetConfig
+    from ._download._download_manager import (
+        AtriaDownloadManager as AtriaDownloadManager,
+        UrlSpec as UrlSpec,
+    )
     from ._hf_dataset import (
         HuggingfaceDataset as HuggingfaceDataset,
         HuggingfaceDatasetConfig as HuggingfaceDatasetConfig,
@@ -43,6 +47,7 @@ __getattr__, __dir__, __all__ = lazy.attach(
             "Dataset",
             "DatasetConfig",
         ],
+        "_download._download_manager": ["AtriaDownloadManager", "UrlSpec"],
         "_hf_dataset": [
             "HuggingfaceDataset",
             "HuggingfaceDatasetConfig",
