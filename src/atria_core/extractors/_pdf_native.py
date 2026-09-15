@@ -12,6 +12,7 @@ from atria_core.types import (
     ElementArray,
     MultiPageDocumentInstance,
     OCRLevel,
+    PdfPage,
     ResourceLoader,
     SinglePageDocumentInstance,
 )
@@ -26,9 +27,6 @@ class PdfNativeExtractor:
     it's its own class, called on a whole MultiPageDocumentInstance (mirroring
     ContentExtractor.__call__'s "operates on documents" shape).
 
-    Each page comes from `MultiPageDocumentInstance.get_page()`, which is
-    lazy -- its `PdfPage` visual isn't rendered here, since text extraction
-    never touches pixels; whatever loads the visual later renders on demand.
     """
 
     def __init__(self, x_tolerance: float = 1.0, y_tolerance: float = 1.0) -> None:
@@ -40,7 +38,9 @@ class PdfNativeExtractor:
     ) -> list[SinglePageDocumentInstance]:
         import pdfplumber
 
-        pdf_bytes = ResourceLoader.for_uri(document.source_path).load_bytes()
+        first_page = document.get_page(0).visual
+        assert isinstance(first_page, PdfPage) and first_page.file_path is not None
+        pdf_bytes = ResourceLoader.for_uri(first_page.file_path).load_bytes()
         with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
             contents = [self._extract_page(page) for page in pdf.pages]
 

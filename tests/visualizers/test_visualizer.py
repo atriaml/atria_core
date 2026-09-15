@@ -100,9 +100,7 @@ def test_visualize_document_instance_pdf_page_draws_on_pdf_directly(
 def test_visualize_document_instance_multi_page_reexports_all_pages(
     tmp_path: Path, sample_pdf_path: Path
 ) -> None:
-    instance = MultiPageDocumentInstance(
-        sample_id="m1", source_path=str(sample_pdf_path)
-    )
+    instance = MultiPageDocumentInstance.from_pdf(sample_pdf_path, sample_id="m1")
 
     path = visualize_document_instance(instance, str(tmp_path))
 

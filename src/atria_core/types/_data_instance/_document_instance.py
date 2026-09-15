@@ -97,47 +97,49 @@ class SinglePageDocumentInstance(DocumentInstance):
 
 @dataclass(frozen=True, repr=False)
 class MultiPageDocumentInstance(DocumentInstance):
-    """Multi-page document backed by a source path (local or remote URI).
-    Holds no bytes, no open file/native handles as instance state -- trivially
-    picklable and safe to pass across process boundaries (e.g. torch
-    DataLoader workers). Bytes are fetched and a pdfium handle opened fresh,
-    on demand, each time a page is actually rendered."""
+    pages: list[SinglePageDocumentInstance]
 
-    source_path: str
-    dpi: int = 200
+    @classmethod
+    def from_pdf(
+        cls, source_path: str | Path, sample_id: str | None = None, dpi: int = 200
+    ) -> MultiPageDocumentInstance:
+        import pypdfium2 as pdfium
+
+        sample_id = sample_id if sample_id is not None else Path(source_path).name
+        pdf_bytes = ResourceLoader.for_uri(str(source_path)).load_bytes()
+        pdf = pdfium.PdfDocument(pdf_bytes)
+        try:
+            num_pages = len(pdf)
+        finally:
+            pdf.close()
+        return cls(
+            sample_id=sample_id,
+            pages=[
+                SinglePageDocumentInstance.from_pdf(
+                    source_path, page_id=page_number, dpi=dpi
+                )
+                for page_number in range(num_pages)
+            ],
+        )
 
     @property
     def num_pages(self) -> int:
-        import pypdfium2 as pdfium
-
-        pdf_bytes = ResourceLoader.for_uri(self.source_path).load_bytes()
-        pdf = pdfium.PdfDocument(pdf_bytes)
-        try:
-            return len(pdf)
-        finally:
-            pdf.close()
+        return len(self.pages)
 
     def get_page(self, page_number: int) -> SinglePageDocumentInstance:
         assert 0 <= page_number < self.num_pages, (
             f"Page number {page_number} out of range [0, {self.num_pages - 1}]"
         )
-        return SinglePageDocumentInstance(
-            sample_id=f"{self.sample_id}#{page_number}",
-            visual=PdfPage(
-                file_path=self.source_path, page_id=page_number, dpi=self.dpi
-            ),
-            _annotations=dict(self._annotations),
-        )
+        return self.pages[page_number]
 
     def __iter__(self) -> Iterator[SinglePageDocumentInstance]:
-        for i in range(self.num_pages):
-            yield self.get_page(i)
+        return iter(self.pages)
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "sample_id": self.sample_id,
-            "source_path": self.source_path,
-            "dpi": self.dpi,
+            "metadata": self.metadata,
+            "pages": [page.to_dict() for page in self.pages],
             "annotations": self._annotations_to_dict(),
         }
 
@@ -145,7 +147,9 @@ class MultiPageDocumentInstance(DocumentInstance):
     def from_dict(cls, data: dict[str, Any]) -> MultiPageDocumentInstance:
         return cls(
             sample_id=data["sample_id"],
-            source_path=data["source_path"],
-            dpi=data.get("dpi", 200),
+            metadata=data.get("metadata", {}),
+            pages=[
+                SinglePageDocumentInstance.from_dict(page) for page in data["pages"]
+            ],
             _annotations=cls._annotations_from_dict(data.get("annotations")),
         )

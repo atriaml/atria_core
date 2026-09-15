@@ -69,8 +69,8 @@ def test_fetch_remote_multi_page_pdf(
     remote_pdf = tmp_path / "remote.pdf"
     remote_pdf.write_bytes(sample_pdf_path.read_bytes())
 
-    document = MultiPageDocumentInstance(
-        sample_id="remote", source_path=f"{http_server}/remote.pdf"
+    document = MultiPageDocumentInstance.from_pdf(
+        f"{http_server}/remote.pdf", sample_id="remote"
     )
     assert document.num_pages == 2
 

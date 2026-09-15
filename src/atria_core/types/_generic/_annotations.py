@@ -17,13 +17,14 @@ from atria_core.types._base_data_model import BaseDataModel
 from atria_core.types._generic._annotated_object import AnnotatedObject
 from atria_core.types._generic._bounding_box import BoundingBoxMode
 from atria_core.types._generic._elements import ElementArray, OCRLevel
-from atria_core.types._generic._qa_pair import QAPair
+from atria_core.types._generic._qa_pair import MultiPageQAPair, QAPair
 
 
 class AnnotationType(enum.StrEnum):
     classification = "classification"
     entity_labeling = "entity_labeling"
     question_answering = "question_answering"
+    multi_page_question_answering = "multi_page_question_answering"
     object_detection = "object_detection"
     layout_analysis = "layout_analysis"
     ocr = "ocr"
@@ -90,6 +91,23 @@ class QuestionAnsweringAnnotation(BaseDataModel):
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Self:
         return cls(qa_pairs=[QAPair.from_dict(q) for q in data["qa_pairs"]])
+
+
+@dataclass(frozen=True, repr=False)
+class MultiPageQuestionAnsweringAnnotation(BaseDataModel):
+    """Question-answering ground truth for a multi-page document, where each
+    answer is backed by specific evidence pages rather than a text span."""
+
+    type = AnnotationType.multi_page_question_answering.value
+
+    qa_pairs: list[MultiPageQAPair]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"type": self.type, "qa_pairs": [q.to_dict() for q in self.qa_pairs]}
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        return cls(qa_pairs=[MultiPageQAPair.from_dict(q) for q in data["qa_pairs"]])
 
 
 @dataclass(frozen=True, repr=False, eq=False)
@@ -309,6 +327,7 @@ Annotation = (
     ClassificationAnnotation
     | EntityLabelingAnnotation
     | QuestionAnsweringAnnotation
+    | MultiPageQuestionAnsweringAnnotation
     | ObjectDetectionAnnotation
     | LayoutAnalysisAnnotation
     | TranscriptionAnnotation
@@ -321,6 +340,7 @@ ANNOTATION_TYPES: dict[str, type[Annotation]] = {
     AnnotationType.classification.value: ClassificationAnnotation,
     AnnotationType.entity_labeling.value: EntityLabelingAnnotation,
     AnnotationType.question_answering.value: QuestionAnsweringAnnotation,
+    AnnotationType.multi_page_question_answering.value: MultiPageQuestionAnsweringAnnotation,
     AnnotationType.object_detection.value: ObjectDetectionAnnotation,
     AnnotationType.layout_analysis.value: LayoutAnalysisAnnotation,
     AnnotationType.transcription.value: TranscriptionAnnotation,

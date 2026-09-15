@@ -9,6 +9,7 @@ from atria_core.types._generic._annotated_object import AnnotatedObject
 from atria_core.types._generic._annotations import (
     ClassificationAnnotation,
     EntityLabelingAnnotation,
+    MultiPageQuestionAnsweringAnnotation,
     ObjectDetectionAnnotation,
     OCRAnnotation,
     QuestionAnsweringAnnotation,
@@ -18,7 +19,7 @@ from atria_core.types._generic._bounding_box import as_bbox_array, as_segmentati
 from atria_core.types._generic._doc_content import DocumentContent
 from atria_core.types._generic._elements import ElementArray, OCRLevel
 from atria_core.types._generic._image import Image
-from atria_core.types._generic._qa_pair import QAPair
+from atria_core.types._generic._qa_pair import MultiPageQAPair, QAPair
 
 
 def make_bounding_box(**overrides: Any) -> np.ndarray:
@@ -89,6 +90,26 @@ def make_question_answering_annotation(**overrides: Any) -> QuestionAnsweringAnn
     kwargs: dict[str, Any] = {"qa_pairs": [make_qa_pair()]}
     kwargs.update(overrides)
     return QuestionAnsweringAnnotation(**kwargs)
+
+
+def make_multi_page_qa_pair(**overrides: Any) -> MultiPageQAPair:
+    kwargs: dict[str, Any] = {
+        "id": 0,
+        "question_text": "what is this?",
+        "answer_text": "this",
+        "evidence_pages": [0, 2],
+        "arithmetic_expression": None,
+    }
+    kwargs.update(overrides)
+    return MultiPageQAPair(**kwargs)
+
+
+def make_multi_page_question_answering_annotation(
+    **overrides: Any,
+) -> MultiPageQuestionAnsweringAnnotation:
+    kwargs: dict[str, Any] = {"qa_pairs": [make_multi_page_qa_pair()]}
+    kwargs.update(overrides)
+    return MultiPageQuestionAnsweringAnnotation(**kwargs)
 
 
 def make_object_detection_annotation(**overrides: Any) -> ObjectDetectionAnnotation:

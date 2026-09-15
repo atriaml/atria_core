@@ -12,9 +12,7 @@ from atria_core.types import (
 
 
 def test_extracts_real_text_layer(native_text_pdf_path: Path) -> None:
-    document = MultiPageDocumentInstance(
-        sample_id="d1", source_path=str(native_text_pdf_path)
-    )
+    document = MultiPageDocumentInstance.from_pdf(native_text_pdf_path, sample_id="d1")
     pages = PdfNativeExtractor()(document)
 
     assert len(pages) == 1
@@ -26,9 +24,7 @@ def test_extracts_real_text_layer(native_text_pdf_path: Path) -> None:
 
 
 def test_words_grouped_under_line_segment_bboxes(native_text_pdf_path: Path) -> None:
-    document = MultiPageDocumentInstance(
-        sample_id="d1", source_path=str(native_text_pdf_path)
-    )
+    document = MultiPageDocumentInstance.from_pdf(native_text_pdf_path, sample_id="d1")
     page = PdfNativeExtractor()(document)[0]
 
     elements = page.content.elements
@@ -51,9 +47,7 @@ def test_words_grouped_under_line_segment_bboxes(native_text_pdf_path: Path) -> 
 def test_page_visual_stays_lazy_until_loaded(native_text_pdf_path: Path) -> None:
     """PdfNativeExtractor reads the text layer, not pixels -- the page's
     visual shouldn't be rendered as a side effect."""
-    document = MultiPageDocumentInstance(
-        sample_id="d1", source_path=str(native_text_pdf_path)
-    )
+    document = MultiPageDocumentInstance.from_pdf(native_text_pdf_path, sample_id="d1")
     page = PdfNativeExtractor()(document)[0]
 
     assert isinstance(page.visual, PdfPage)

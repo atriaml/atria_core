@@ -149,11 +149,9 @@ def _visualize_document_pdf_page(
 def _visualize_multi_page_document(
     instance: MultiPageDocumentInstance, output_dir: str
 ) -> Path:
-    # MultiPageDocumentInstance carries no per-page DocumentContent -- there's
-    # nothing page-specific to draw yet, so this just re-saves a valid
-    # multi-page PDF rather than raising. See _drawers/ for the drawing
-    # infrastructure a future per-page-content shape would plug into.
-    pdf_bytes = ResourceLoader.for_uri(instance.source_path).load_bytes()
+    first_page = instance.get_page(0).visual
+    assert isinstance(first_page, PdfPage) and first_page.file_path is not None
+    pdf_bytes = ResourceLoader.for_uri(first_page.file_path).load_bytes()
     source_doc = pymupdf.open(stream=pdf_bytes, filetype="pdf")
 
     Path(output_dir).mkdir(parents=True, exist_ok=True)

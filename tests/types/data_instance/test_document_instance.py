@@ -83,74 +83,84 @@ def test_single_page_equality() -> None:
     assert a != c
 
 
-def test_multi_page_num_pages(sample_pdf_path: Path) -> None:
-    instance = MultiPageDocumentInstance(
-        sample_id="m1", source_path=str(sample_pdf_path)
-    )
+def test_multi_page_from_pdf_num_pages(sample_pdf_path: Path) -> None:
+    instance = MultiPageDocumentInstance.from_pdf(sample_pdf_path, sample_id="m1")
     assert instance.num_pages == 2
 
 
 def test_multi_page_get_page_returns_single_page_instance_with_suffixed_id(
     sample_pdf_path: Path,
 ) -> None:
-    instance = MultiPageDocumentInstance(
-        sample_id="m1", source_path=str(sample_pdf_path)
-    )
+    instance = MultiPageDocumentInstance.from_pdf(sample_pdf_path, sample_id="m1")
     page = instance.get_page(0)
     assert isinstance(page, SinglePageDocumentInstance)
-    assert page.sample_id == "m1#0"
+    assert page.sample_id == f"{sample_pdf_path.name}#0"
     assert isinstance(page.visual, PdfPage)
-    assert page.visual.content is None  # lazy -- not rendered by get_page()
+    assert page.visual.content is None
 
 
 def test_multi_page_get_page_out_of_range_raises(sample_pdf_path: Path) -> None:
-    instance = MultiPageDocumentInstance(
-        sample_id="m1", source_path=str(sample_pdf_path)
-    )
+    instance = MultiPageDocumentInstance.from_pdf(sample_pdf_path, sample_id="m1")
     with pytest.raises(AssertionError):
         instance.get_page(5)
 
 
 def test_multi_page_iteration_yields_all_pages(sample_pdf_path: Path) -> None:
-    instance = MultiPageDocumentInstance(
-        sample_id="m1", source_path=str(sample_pdf_path)
-    )
+    instance = MultiPageDocumentInstance.from_pdf(sample_pdf_path, sample_id="m1")
     pages = list(instance)
-    assert [p.sample_id for p in pages] == ["m1#0", "m1#1"]
+    assert [p.sample_id for p in pages] == [
+        f"{sample_pdf_path.name}#0",
+        f"{sample_pdf_path.name}#1",
+    ]
 
 
-def test_multi_page_get_page_propagates_annotations(sample_pdf_path: Path) -> None:
+def test_multi_page_page_carries_its_own_annotation(sample_pdf_path: Path) -> None:
     from atria_core.types._generic._annotations import (
         AnnotationType,
         ClassificationAnnotation,
     )
 
+    instance = MultiPageDocumentInstance.from_pdf(sample_pdf_path, sample_id="m1")
+    page0 = instance.get_page(0).add_annotation(
+        ClassificationAnnotation(label_value=0, label_name="a")
+    )
     instance = MultiPageDocumentInstance(
-        sample_id="m1", source_path=str(sample_pdf_path)
+        sample_id=instance.sample_id,
+        pages=[page0, instance.get_page(1)],
+    )
+
+    assert instance.get_page(0).has_annotation_type(AnnotationType.classification)
+    assert not instance.get_page(1).has_annotation_type(AnnotationType.classification)
+
+
+def test_multi_page_deck_wide_annotation(sample_pdf_path: Path) -> None:
+    from atria_core.types._generic._annotations import (
+        AnnotationType,
+        ClassificationAnnotation,
+    )
+
+    instance = MultiPageDocumentInstance.from_pdf(
+        sample_pdf_path, sample_id="m1"
     ).add_annotation(ClassificationAnnotation(label_value=0, label_name="a"))
 
-    page = instance.get_page(0)
-
-    assert page.has_annotation_type(AnnotationType.classification)
+    assert instance.has_annotation_type(AnnotationType.classification)
 
 
 def test_multi_page_to_dict_from_dict_roundtrip(sample_pdf_path: Path) -> None:
-    instance = MultiPageDocumentInstance(
-        sample_id="m1", source_path=str(sample_pdf_path), dpi=150
+    instance = MultiPageDocumentInstance.from_pdf(
+        sample_pdf_path, sample_id="m1", dpi=150
     )
     data = instance.to_dict()
     restored = MultiPageDocumentInstance.from_dict(data)
     assert restored.sample_id == "m1"
-    assert restored.source_path == str(sample_pdf_path)
-    assert restored.dpi == 150
+    assert restored.num_pages == instance.num_pages
+    assert restored.get_page(0).visual.dpi == 150
 
 
 def test_multi_page_equality(sample_pdf_path: Path) -> None:
-    a = MultiPageDocumentInstance(sample_id="m1", source_path=str(sample_pdf_path))
-    b = MultiPageDocumentInstance(sample_id="m1", source_path=str(sample_pdf_path))
-    c = MultiPageDocumentInstance(
-        sample_id="m1", source_path=str(sample_pdf_path), dpi=100
-    )
+    a = MultiPageDocumentInstance.from_pdf(sample_pdf_path, sample_id="m1")
+    b = MultiPageDocumentInstance.from_pdf(sample_pdf_path, sample_id="m1")
+    c = MultiPageDocumentInstance.from_pdf(sample_pdf_path, sample_id="m1", dpi=100)
     assert a == b
     assert a != c
 
@@ -159,6 +169,6 @@ def test_single_and_multi_page_are_both_document_instances(
     sample_image_path: Path, sample_pdf_path: Path
 ) -> None:
     single = SinglePageDocumentInstance.from_image(sample_image_path)
-    multi = MultiPageDocumentInstance(sample_id="m1", source_path=str(sample_pdf_path))
+    multi = MultiPageDocumentInstance.from_pdf(sample_pdf_path, sample_id="m1")
     assert isinstance(single, DocumentInstance)
     assert isinstance(multi, DocumentInstance)

@@ -6,6 +6,7 @@ import pytest
 from atria_core.types._generic._annotations import (
     AnnotationType,
     LayoutAnalysisAnnotation,
+    MultiPageQuestionAnsweringAnnotation,
     ObjectDetectionAnnotation,
     OCRAnnotation,
     QuestionAnsweringAnnotation,
@@ -17,6 +18,8 @@ from tests.types.builders import (
     make_annotated_object,
     make_classification_annotation,
     make_entity_labeling_annotation,
+    make_multi_page_qa_pair,
+    make_multi_page_question_answering_annotation,
     make_object_detection_annotation,
     make_ocr_annotation,
     make_qa_pair,
@@ -66,6 +69,27 @@ def test_question_answering_annotation_roundtrip() -> None:
     data = ann.to_dict()
     restored = QuestionAnsweringAnnotation.from_dict(data)
     assert restored == ann
+
+
+def test_multi_page_question_answering_annotation_roundtrip() -> None:
+    ann = make_multi_page_question_answering_annotation(
+        qa_pairs=[
+            make_multi_page_qa_pair(),
+            make_multi_page_qa_pair(id=2, evidence_pages=[5]),
+        ]
+    )
+    data = ann.to_dict()
+    restored = MultiPageQuestionAnsweringAnnotation.from_dict(data)
+    assert restored == ann
+    assert restored.type == AnnotationType.multi_page_question_answering.value
+
+
+def test_multi_page_qa_pair_evidence_pages_and_arithmetic_expression() -> None:
+    pair = make_multi_page_qa_pair(
+        evidence_pages=[1, 3, 4], arithmetic_expression="1+3"
+    )
+    assert pair.evidence_pages == [1, 3, 4]
+    assert pair.arithmetic_expression == "1+3"
 
 
 def test_object_detection_annotation_from_objects_and_to_objects() -> None:
@@ -189,6 +213,7 @@ def test_ocr_annotation_rejects_mismatched_bboxes_and_texts() -> None:
         lambda: make_classification_annotation(),
         lambda: make_entity_labeling_annotation(),
         lambda: make_question_answering_annotation(),
+        lambda: make_multi_page_question_answering_annotation(),
         lambda: make_object_detection_annotation(),
         lambda: LayoutAnalysisAnnotation(),
         lambda: make_transcription_annotation(),

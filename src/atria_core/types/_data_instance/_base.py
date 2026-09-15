@@ -11,6 +11,7 @@ from atria_core.types._generic._annotations import (
     ClassificationAnnotation,
     EntityLabelingAnnotation,
     LayoutAnalysisAnnotation,
+    MultiPageQuestionAnsweringAnnotation,
     ObjectDetectionAnnotation,
     OCRAnnotation,
     QuestionAnsweringAnnotation,
@@ -70,6 +71,10 @@ class DataInstance(BaseDataModel):
     def get_annotation_by_type(
         self, annotation_type: Literal[AnnotationType.question_answering]
     ) -> QuestionAnsweringAnnotation | None: ...
+    @overload
+    def get_annotation_by_type(
+        self, annotation_type: Literal[AnnotationType.multi_page_question_answering]
+    ) -> MultiPageQuestionAnsweringAnnotation | None: ...
     @overload
     def get_annotation_by_type(
         self, annotation_type: Literal[AnnotationType.object_detection]

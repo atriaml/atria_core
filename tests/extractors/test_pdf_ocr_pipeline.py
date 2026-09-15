@@ -18,8 +18,8 @@ def test_local_pdf_to_ocr_populated_document_instances(text_pdf_path: Path) -> N
     OCR per page, and gets back SinglePageDocumentInstances with content
     populated -- no atria_datasets involved, just the pieces atria_core
     provides."""
-    document = MultiPageDocumentInstance(
-        sample_id=text_pdf_path.stem, source_path=str(text_pdf_path)
+    document = MultiPageDocumentInstance.from_pdf(
+        text_pdf_path, sample_id=text_pdf_path.stem
     )
     extractor = TesseractExtractorConfig().build()
 
@@ -43,8 +43,8 @@ def test_single_page_pdf_source_ocr_roundtrip(text_pdf_path: Path) -> None:
     sample."""
     from atria_core.types import OCRLevel
 
-    document = MultiPageDocumentInstance(
-        sample_id=text_pdf_path.stem, source_path=str(text_pdf_path)
+    document = MultiPageDocumentInstance.from_pdf(
+        text_pdf_path, sample_id=text_pdf_path.stem
     )
     page = document.get_page(0)
 

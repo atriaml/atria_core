@@ -38,3 +38,35 @@ class QAPair(BaseDataModel):
             end=data.get("end"),
             alternative_answers=list(data.get("alternative_answers", [])),
         )
+
+
+@dataclass(frozen=True, repr=False)
+class MultiPageQAPair(BaseDataModel):
+    """A question-answer pair over a multi-page document, naming which pages
+    support the answer and, when the answer is computed rather than quoted,
+    the arithmetic expression used to derive it."""
+
+    id: int
+    question_text: str
+    answer_text: str
+    evidence_pages: list[int] = field(default_factory=list)
+    arithmetic_expression: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "question_text": self.question_text,
+            "answer_text": self.answer_text,
+            "evidence_pages": self.evidence_pages,
+            "arithmetic_expression": self.arithmetic_expression,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> MultiPageQAPair:
+        return cls(
+            id=data["id"],
+            question_text=data["question_text"],
+            answer_text=data["answer_text"],
+            evidence_pages=list(data.get("evidence_pages", [])),
+            arithmetic_expression=data.get("arithmetic_expression"),
+        )

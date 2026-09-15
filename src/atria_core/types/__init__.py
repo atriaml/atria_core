@@ -48,6 +48,7 @@ if TYPE_CHECKING:
         ClassificationAnnotation as ClassificationAnnotation,
         LayoutAnalysisAnnotation as LayoutAnalysisAnnotation,
         QuestionAnsweringAnnotation as QuestionAnsweringAnnotation,
+        MultiPageQuestionAnsweringAnnotation as MultiPageQuestionAnsweringAnnotation,
         ObjectDetectionAnnotation as ObjectDetectionAnnotation,
         TranscriptionAnnotation as TranscriptionAnnotation,
         OCRAnnotation as OCRAnnotation,
@@ -62,7 +63,7 @@ if TYPE_CHECKING:
         ToolResult as ToolResult,
     )
     from ._generic._image import Image as Image
-    from ._generic._qa_pair import QAPair as QAPair
+    from ._generic._qa_pair import QAPair as QAPair, MultiPageQAPair as MultiPageQAPair
     from ._utilities._repr import RepresentationMixin as RepresentationMixin
     from ._utilities._url_fetchers import (
         LocalResourceLoader as LocalResourceLoader,
@@ -111,6 +112,7 @@ __getattr__, __dir__, __all__ = lazy.attach(
             "ClassificationAnnotation",
             "LayoutAnalysisAnnotation",
             "QuestionAnsweringAnnotation",
+            "MultiPageQuestionAnsweringAnnotation",
             "ObjectDetectionAnnotation",
             "TranscriptionAnnotation",
             "OCRAnnotation",
@@ -125,7 +127,7 @@ __getattr__, __dir__, __all__ = lazy.attach(
             "ToolResult",
         ],
         "_generic._image": ["Image"],
-        "_generic._qa_pair": ["QAPair"],
+        "_generic._qa_pair": ["QAPair", "MultiPageQAPair"],
         "_utilities._repr": ["RepresentationMixin"],
         "_utilities._url_fetchers": [
             "LocalResourceLoader",
