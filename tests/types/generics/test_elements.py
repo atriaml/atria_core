@@ -12,22 +12,18 @@ def _hierarchy() -> ElementArray:
     return ElementArray(
         ids=np.array([0, 1, 2, 3]),
         parent_ids=np.array([-1, 0, 1, 1]),
-        levels=np.array(
-            [
-                OCRLevel.page.value,
-                OCRLevel.line.value,
-                OCRLevel.word.value,
-                OCRLevel.word.value,
-            ]
-        ),
-        bboxes=np.array(
-            [
-                [0.0, 0.0, 1.0, 1.0],
-                [0.1, 0.1, 0.6, 0.2],
-                [0.1, 0.1, 0.3, 0.2],
-                [0.35, 0.1, 0.6, 0.2],
-            ]
-        ),
+        levels=np.array([
+            OCRLevel.page.value,
+            OCRLevel.line.value,
+            OCRLevel.word.value,
+            OCRLevel.word.value,
+        ]),
+        bboxes=np.array([
+            [0.0, 0.0, 1.0, 1.0],
+            [0.1, 0.1, 0.6, 0.2],
+            [0.1, 0.1, 0.3, 0.2],
+            [0.35, 0.1, 0.6, 0.2],
+        ]),
         normalized=True,
         texts=np.array(["", "", "hello", "world"], dtype=object),
     )

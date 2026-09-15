@@ -1,7 +1,7 @@
 import enum
 
 
-class DatasetSplitType(str, enum.Enum):
+class DatasetSplitType(enum.StrEnum):
     """
     An enumeration representing the dataset splits.
 
@@ -16,7 +16,7 @@ class DatasetSplitType(str, enum.Enum):
     validation = "validation"
 
 
-class OCRType(str, enum.Enum):
+class OCRType(enum.StrEnum):
     """
     Enum for OCR types.
 
@@ -38,7 +38,7 @@ class OCRType(str, enum.Enum):
     other = "other"
 
 
-class TaskType(str, enum.Enum):
+class TaskType(enum.StrEnum):
     image_classification = "image_classification"
     sequence_classification = "sequence_classification"
     token_classification = "token_classification"
@@ -49,7 +49,7 @@ class TaskType(str, enum.Enum):
     object_detection = "object_detection"
 
 
-class ModelType(str, enum.Enum):
+class ModelType(enum.StrEnum):
     timm = "timm"
     torchvision = "torchvision"
     transformers_image_classification = "transformers/image_classification"
@@ -60,7 +60,7 @@ class ModelType(str, enum.Enum):
     # mmdet = "mmdet"
 
 
-class ConfigType(str, enum.Enum):
+class ConfigType(enum.StrEnum):
     batch_sampler = "batch_sampler"
     data_pipeline = "data_pipeline"
     dataset = "dataset"

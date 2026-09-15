@@ -109,7 +109,9 @@ class MultiprocessingParallelSplitWriter:
                 a worker never reports back after being sent its sentinel.
         """
         split_name = split_dir.name
-        logger.info(f"Writing split {split_name} with {self.num_workers} worker processes...")
+        logger.info(
+            f"Writing split {split_name} with {self.num_workers} worker processes..."
+        )
 
         work_queue: mp.Queue[tuple[int, Any] | None] = mp.Queue()
         outcome_queue: mp.Queue[_WriteOutcome] = mp.Queue()

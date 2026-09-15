@@ -148,9 +148,9 @@ class RayParallelSplitWriter:
 
             ray.get(pending_tasks)
 
-            write_info_per_actor = ray.get(
-                [actor.close.remote() for actor in self.actors]
-            )
+            write_info_per_actor = ray.get([
+                actor.close.remote() for actor in self.actors
+            ])
             write_info = [
                 x for shard in write_info_per_actor for x in shard if x.nsamples > 0
             ]

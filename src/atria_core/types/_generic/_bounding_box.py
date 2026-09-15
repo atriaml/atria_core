@@ -7,7 +7,7 @@ import numpy as np
 from atria_core.types._arrays import FloatArray
 
 
-class BoundingBoxMode(str, enum.Enum):
+class BoundingBoxMode(enum.StrEnum):
     XYXY = "xyxy"
     XYWH = "xywh"
 

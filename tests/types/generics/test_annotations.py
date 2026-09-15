@@ -117,9 +117,10 @@ def test_object_detection_annotation_segmentation_padding_mixed_objects() -> Non
 
 
 def test_object_detection_annotation_roundtrip() -> None:
-    ann = ObjectDetectionAnnotation.from_objects(
-        [make_annotated_object(), make_annotated_object(label_value=1)]
-    )
+    ann = ObjectDetectionAnnotation.from_objects([
+        make_annotated_object(),
+        make_annotated_object(label_value=1),
+    ])
     data = ann.to_dict()
     restored = ObjectDetectionAnnotation.from_dict(data)
     assert restored.to_dict() == data

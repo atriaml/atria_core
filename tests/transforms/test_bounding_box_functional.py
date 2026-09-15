@@ -16,9 +16,9 @@ from atria_core.types import (
 
 
 def _annotation(bbox=(10, 10, 50, 60)) -> ObjectDetectionAnnotation:
-    return ObjectDetectionAnnotation.from_objects(
-        [AnnotatedObject(label_value=0, bbox=np.asarray(bbox, dtype=np.float64))]
-    )
+    return ObjectDetectionAnnotation.from_objects([
+        AnnotatedObject(label_value=0, bbox=np.asarray(bbox, dtype=np.float64))
+    ])
 
 
 def test_normalize() -> None:
@@ -78,9 +78,9 @@ def test_normalize_with_no_objects_is_noop() -> None:
 
 
 def test_normalize_preserves_layout_analysis_annotation_subclass() -> None:
-    ann = LayoutAnalysisAnnotation.from_objects(
-        [AnnotatedObject(label_value=0, bbox=np.array([10.0, 10.0, 50.0, 60.0]))]
-    )
+    ann = LayoutAnalysisAnnotation.from_objects([
+        AnnotatedObject(label_value=0, bbox=np.array([10.0, 10.0, 50.0, 60.0]))
+    ])
     result = F.bbox.normalize(ann, 100, 100)
     assert isinstance(result, LayoutAnalysisAnnotation)
 

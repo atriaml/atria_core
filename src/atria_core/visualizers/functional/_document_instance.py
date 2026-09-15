@@ -130,9 +130,12 @@ def _visualize_document_pdf_page(
     if prepared is not None:
         bboxes, texts, labels, normalized = prepared
         if normalized:
-            scale = np.array(
-                [page.rect.width, page.rect.height, page.rect.width, page.rect.height]
-            )
+            scale = np.array([
+                page.rect.width,
+                page.rect.height,
+                page.rect.width,
+                page.rect.height,
+            ])
             bboxes = bboxes * scale
         PdfDrawer().draw(page, bboxes, texts=texts, labels=labels, style=style)
 

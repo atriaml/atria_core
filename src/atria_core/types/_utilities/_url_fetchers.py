@@ -139,13 +139,11 @@ class RemoteResourceLoader(ResourceLoader):
     def _strip_query_params(self, *keys: str) -> str:
         query = {k: v for k, v in self.query.items() if k not in keys}
         new_query = urlencode(query, doseq=True)
-        return urlunparse(
-            (
-                self.parsed.scheme,
-                self.parsed.netloc,
-                self.parsed.path,
-                self.parsed.params,
-                new_query,
-                self.parsed.fragment,
-            )
-        )
+        return urlunparse((
+            self.parsed.scheme,
+            self.parsed.netloc,
+            self.parsed.path,
+            self.parsed.params,
+            new_query,
+            self.parsed.fragment,
+        ))

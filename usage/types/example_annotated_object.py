@@ -36,9 +36,12 @@ def main() -> None:
             label_value=1,
             label_name="person",
             bbox=np.asarray([500.0, 100.0, 600.0, 350.0]),
-            segmentation=np.asarray(
-                [[500.0, 100.0], [600.0, 100.0], [600.0, 350.0], [500.0, 350.0]]
-            ),
+            segmentation=np.asarray([
+                [500.0, 100.0],
+                [600.0, 100.0],
+                [600.0, 350.0],
+                [500.0, 350.0],
+            ]),
         ),
     ]
 

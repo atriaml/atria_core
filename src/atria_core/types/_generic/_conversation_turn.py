@@ -8,7 +8,7 @@ from typing import Any
 from atria_core.types._base_data_model import BaseDataModel
 
 
-class ConversationRole(str, enum.Enum):
+class ConversationRole(enum.StrEnum):
     """Fixed role vocabulary every ConversationInstance producer maps its
     own source roles onto, so consumers can filter by role without knowing
     which dataset a conversation came from."""

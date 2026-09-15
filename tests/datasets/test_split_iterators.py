@@ -83,7 +83,9 @@ def test_limit_returns_bounded_view_without_mutating_original() -> None:
 
 
 def test_shuffle_returns_reordered_view_without_mutating_original() -> None:
-    iterator = IndexableSplitIterator(base_iterator=list(range(10)), transform=lambda x: x)
+    iterator = IndexableSplitIterator(
+        base_iterator=list(range(10)), transform=lambda x: x
+    )
 
     shuffled = iterator.shuffle(seed=1234)
 
@@ -93,7 +95,9 @@ def test_shuffle_returns_reordered_view_without_mutating_original() -> None:
 
 
 def test_shuffle_is_deterministic_for_a_given_seed() -> None:
-    iterator = IndexableSplitIterator(base_iterator=list(range(20)), transform=lambda x: x)
+    iterator = IndexableSplitIterator(
+        base_iterator=list(range(20)), transform=lambda x: x
+    )
 
     first = list(iterator.shuffle(seed=7))
     second = list(iterator.shuffle(seed=7))
@@ -102,7 +106,9 @@ def test_shuffle_is_deterministic_for_a_given_seed() -> None:
 
 
 def test_shuffle_then_limit_samples_from_the_full_source() -> None:
-    iterator = IndexableSplitIterator(base_iterator=list(range(100)), transform=lambda x: x)
+    iterator = IndexableSplitIterator(
+        base_iterator=list(range(100)), transform=lambda x: x
+    )
 
     sampled = iterator.shuffle(seed=1).limit(5)
 
@@ -111,7 +117,9 @@ def test_shuffle_then_limit_samples_from_the_full_source() -> None:
 
 
 def test_limit_then_shuffle_only_reorders_the_limited_view() -> None:
-    iterator = IndexableSplitIterator(base_iterator=list(range(100)), transform=lambda x: x)
+    iterator = IndexableSplitIterator(
+        base_iterator=list(range(100)), transform=lambda x: x
+    )
 
     reordered = iterator.limit(5).shuffle(seed=1)
 
@@ -139,12 +147,14 @@ def test_concat_getitem_out_of_range_raises() -> None:
 
 
 def test_concat_composes_with_shuffled_and_limited_sources() -> None:
-    first = IndexableSplitIterator(base_iterator=list(range(10)), transform=lambda x: x).shuffle(
-        seed=1
-    ).limit(3)
-    second = IndexableSplitIterator(base_iterator=list(range(100, 110)), transform=lambda x: x).limit(
-        2
+    first = (
+        IndexableSplitIterator(base_iterator=list(range(10)), transform=lambda x: x)
+        .shuffle(seed=1)
+        .limit(3)
     )
+    second = IndexableSplitIterator(
+        base_iterator=list(range(100, 110)), transform=lambda x: x
+    ).limit(2)
 
     concatenated = ConcatSplitIterator([first, second])
 

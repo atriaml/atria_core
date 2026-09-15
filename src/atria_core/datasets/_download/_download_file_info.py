@@ -61,16 +61,14 @@ class DownloadFileInfo(RepresentationMixin):
     @property
     def hashed_url_without_part(self) -> str:
         """Digest of the URL minus its part suffix, shared by all parts of one archive."""
-        url_without_part = urlunparse(
-            (
-                self.parsed_url.scheme,
-                self.parsed_url.netloc,
-                str(Path(self.parsed_url.path).with_suffix("")),
-                self.parsed_url.params,
-                self.parsed_url.query,
-                self.parsed_url.fragment,
-            )
-        )
+        url_without_part = urlunparse((
+            self.parsed_url.scheme,
+            self.parsed_url.netloc,
+            str(Path(self.parsed_url.path).with_suffix("")),
+            self.parsed_url.params,
+            self.parsed_url.query,
+            self.parsed_url.fragment,
+        ))
         return hashlib.sha256(url_without_part.encode()).hexdigest()
 
     @property

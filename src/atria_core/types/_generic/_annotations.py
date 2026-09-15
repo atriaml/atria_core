@@ -20,7 +20,7 @@ from atria_core.types._generic._elements import ElementArray, OCRLevel
 from atria_core.types._generic._qa_pair import QAPair
 
 
-class AnnotationType(str, enum.Enum):
+class AnnotationType(enum.StrEnum):
     classification = "classification"
     entity_labeling = "entity_labeling"
     question_answering = "question_answering"
