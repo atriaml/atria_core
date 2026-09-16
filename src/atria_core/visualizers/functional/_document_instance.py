@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import io
 from pathlib import Path
 
 import numpy as np
 import pymupdf
+from PIL import Image as PILImage
 
 from atria_core.logger import get_logger
 from atria_core.types import (
@@ -18,7 +20,10 @@ from atria_core.types import (
     SinglePageDocumentInstance,
 )
 from atria_core.types._arrays import FloatArray
-from atria_core.types._generic._annotations import OCRAnnotation
+from atria_core.types._generic._annotations import (
+    ObjectDetectionAnnotation,
+    OCRAnnotation,
+)
 from atria_core.visualizers._drawers._image import ImageDrawer
 from atria_core.visualizers._drawers._pdf import PdfDrawer
 from atria_core.visualizers._drawers._style import DEFAULT_STYLE, DrawStyle
@@ -27,13 +32,16 @@ from atria_core.visualizers.functional._visualize import output_name
 logger = get_logger(__name__)
 
 
+_DrawLayer = tuple[FloatArray, list[str] | None, list[str] | None, bool]
+
+
 def _words_to_draw(
     instance: DocumentInstance,
     content: DocumentContent | None,
     *,
     draw_segment_bboxes: bool,
     draw_word_labels: bool,
-) -> tuple[FloatArray, list[str] | None, list[str] | None, bool] | None:
+) -> _DrawLayer | None:
     """Word-level XYXY bboxes, texts, labels, and normalization metadata."""
     ocr_ann: OCRAnnotation | None = instance.get_annotation_by_type(AnnotationType.ocr)
     elements = (
@@ -67,49 +75,63 @@ def _words_to_draw(
         return bboxes, texts, labels, elements.normalized
 
 
-def _visualize_document_image(
+def _objects_to_draw(instance: DocumentInstance) -> _DrawLayer | None:
+    """Object-detection/layout-analysis boxes, labelled by class name."""
+    detection: ObjectDetectionAnnotation | None = instance.get_annotation_by_type(
+        AnnotationType.object_detection
+    )
+    if detection is None or detection.bboxes is None or len(detection.bboxes) == 0:
+        return None
+
+    bboxes = detection.bboxes
+    if detection.bbox_mode == BoundingBoxMode.XYWH:
+        bboxes = bboxes.copy()
+        bboxes[:, 2:] += bboxes[:, :2]
+    labels = (
+        detection.label_names.tolist() if detection.label_names is not None else None
+    )
+    return bboxes, labels, None, detection.normalized
+
+
+def _render_document_image(
     instance: SinglePageDocumentInstance,
-    output_dir: str,
     *,
     draw_segment_bboxes: bool,
     draw_word_labels: bool,
     style: DrawStyle,
-) -> Path:
+) -> PILImage.Image:
     image = instance.load().require_content().copy().convert("RGB")
-    prepared = _words_to_draw(
-        instance,
-        instance.content,
-        draw_segment_bboxes=draw_segment_bboxes,
-        draw_word_labels=draw_word_labels,
+    scale = np.array(
+        [image.width, image.height, image.width, image.height], dtype=np.float64
     )
-    if prepared is not None:
-        bboxes, texts, labels, normalized = prepared
+    layers = [
+        _words_to_draw(
+            instance,
+            instance.content,
+            draw_segment_bboxes=draw_segment_bboxes,
+            draw_word_labels=draw_word_labels,
+        ),
+        _objects_to_draw(instance),
+    ]
+    for layer in layers:
+        if layer is None:
+            continue
+        bboxes, texts, labels, normalized = layer
         if normalized:
-            scale = np.array(
-                [image.width, image.height, image.width, image.height],
-                dtype=np.float64,
-            )
             bboxes = bboxes * scale
-
         ImageDrawer().draw(
             image, bboxes.tolist(), texts=texts, labels=labels, style=style
         )
-
-    Path(output_dir).mkdir(parents=True, exist_ok=True)
-    path = Path(output_dir) / f"{output_name(instance)}.png"
-    logger.debug(f"Saving visualization for sample {instance.sample_id} to {path}")
-    image.save(path)
-    return path
+    return image
 
 
-def _visualize_document_pdf_page(
+def _render_document_pdf_page(
     instance: SinglePageDocumentInstance,
-    output_dir: str,
     *,
     draw_segment_bboxes: bool,
     draw_word_labels: bool,
     style: DrawStyle,
-) -> Path:
+) -> pymupdf.Document:
     assert (
         isinstance(instance.visual, PdfPage) and instance.visual.file_path is not None
     )
@@ -120,45 +142,95 @@ def _visualize_document_pdf_page(
         source_doc, from_page=instance.visual.page_id, to_page=instance.visual.page_id
     )
     page = out_doc[0]
+    scale = np.array([
+        page.rect.width,
+        page.rect.height,
+        page.rect.width,
+        page.rect.height,
+    ])
 
-    prepared = _words_to_draw(
-        instance,
-        instance.content,
-        draw_segment_bboxes=draw_segment_bboxes,
-        draw_word_labels=draw_word_labels,
-    )
-    if prepared is not None:
-        bboxes, texts, labels, normalized = prepared
+    layers = [
+        _words_to_draw(
+            instance,
+            instance.content,
+            draw_segment_bboxes=draw_segment_bboxes,
+            draw_word_labels=draw_word_labels,
+        ),
+        _objects_to_draw(instance),
+    ]
+    for layer in layers:
+        if layer is None:
+            continue
+        bboxes, texts, labels, normalized = layer
         if normalized:
-            scale = np.array([
-                page.rect.width,
-                page.rect.height,
-                page.rect.width,
-                page.rect.height,
-            ])
             bboxes = bboxes * scale
         PdfDrawer().draw(page, bboxes, texts=texts, labels=labels, style=style)
-
-    Path(output_dir).mkdir(parents=True, exist_ok=True)
-    path = Path(output_dir) / f"{output_name(instance)}.pdf"
-    logger.debug(f"Saving visualization for sample {instance.sample_id} to {path}")
-    out_doc.save(path)
-    return path
+    return out_doc
 
 
-def _visualize_multi_page_document(
-    instance: MultiPageDocumentInstance, output_dir: str
-) -> Path:
-    first_page = instance.get_page(0).visual
-    assert isinstance(first_page, PdfPage) and first_page.file_path is not None
-    pdf_bytes = ResourceLoader.for_uri(first_page.file_path).load_bytes()
-    source_doc = pymupdf.open(stream=pdf_bytes, filetype="pdf")
+def _render_multi_page_document(
+    instance: MultiPageDocumentInstance,
+    *,
+    draw_segment_bboxes: bool,
+    draw_word_labels: bool,
+    style: DrawStyle,
+) -> pymupdf.Document:
+    combined = pymupdf.open()
+    for page in instance:
+        if isinstance(page.visual, PdfPage):
+            page_doc = _render_document_pdf_page(
+                page,
+                draw_segment_bboxes=draw_segment_bboxes,
+                draw_word_labels=draw_word_labels,
+                style=style,
+            )
+            combined.insert_pdf(page_doc)
+        else:
+            image = _render_document_image(
+                page,
+                draw_segment_bboxes=draw_segment_bboxes,
+                draw_word_labels=draw_word_labels,
+                style=style,
+            )
+            buffer = io.BytesIO()
+            image.save(buffer, format="PNG")
+            combined.insert_file(pymupdf.Pixmap(buffer.getvalue()))
+    return combined
 
-    Path(output_dir).mkdir(parents=True, exist_ok=True)
-    path = Path(output_dir) / f"{output_name(instance)}.pdf"
-    logger.debug(f"Saving visualization for sample {instance.sample_id} to {path}")
-    source_doc.save(path)
-    return path
+
+def render_document_instance(
+    instance: DocumentInstance,
+    *,
+    draw_segment_bboxes: bool = False,
+    draw_word_labels: bool = True,
+    style: DrawStyle = DEFAULT_STYLE,
+) -> PILImage.Image | pymupdf.Document:
+    """Draw `instance` and return the result in memory, without saving it --
+    a PIL image for an image-sourced page, a pymupdf Document otherwise (one
+    page for a PDF-sourced page, one page per page for a multi-page
+    document)."""
+    if isinstance(instance, MultiPageDocumentInstance):
+        return _render_multi_page_document(
+            instance,
+            draw_segment_bboxes=draw_segment_bboxes,
+            draw_word_labels=draw_word_labels,
+            style=style,
+        )
+
+    assert isinstance(instance, SinglePageDocumentInstance)
+    if isinstance(instance.visual, PdfPage):
+        return _render_document_pdf_page(
+            instance,
+            draw_segment_bboxes=draw_segment_bboxes,
+            draw_word_labels=draw_word_labels,
+            style=style,
+        )
+    return _render_document_image(
+        instance,
+        draw_segment_bboxes=draw_segment_bboxes,
+        draw_word_labels=draw_word_labels,
+        style=style,
+    )
 
 
 def visualize_document_instance(
@@ -169,22 +241,15 @@ def visualize_document_instance(
     draw_word_labels: bool = True,
     style: DrawStyle = DEFAULT_STYLE,
 ) -> Path:
-    if isinstance(instance, MultiPageDocumentInstance):
-        return _visualize_multi_page_document(instance, output_dir)
-
-    assert isinstance(instance, SinglePageDocumentInstance)
-    if isinstance(instance.visual, PdfPage):
-        return _visualize_document_pdf_page(
-            instance,
-            output_dir,
-            draw_segment_bboxes=draw_segment_bboxes,
-            draw_word_labels=draw_word_labels,
-            style=style,
-        )
-    return _visualize_document_image(
+    rendered = render_document_instance(
         instance,
-        output_dir,
         draw_segment_bboxes=draw_segment_bboxes,
         draw_word_labels=draw_word_labels,
         style=style,
     )
+    extension = "png" if isinstance(rendered, PILImage.Image) else "pdf"
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
+    path = Path(output_dir) / f"{output_name(instance)}.{extension}"
+    logger.debug(f"Saving visualization for sample {instance.sample_id} to {path}")
+    rendered.save(path)
+    return path

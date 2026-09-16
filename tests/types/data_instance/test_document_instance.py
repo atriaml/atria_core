@@ -146,6 +146,15 @@ def test_multi_page_deck_wide_annotation(sample_pdf_path: Path) -> None:
     assert instance.has_annotation_type(AnnotationType.classification)
 
 
+def test_multi_page_load_loads_every_page(sample_pdf_path: Path) -> None:
+    instance = MultiPageDocumentInstance.from_pdf(sample_pdf_path, sample_id="m1")
+    assert instance.get_page(0).visual.content is None
+
+    loaded = instance.load()
+
+    assert all(page.visual.content is not None for page in loaded)
+
+
 def test_multi_page_to_dict_from_dict_roundtrip(sample_pdf_path: Path) -> None:
     instance = MultiPageDocumentInstance.from_pdf(
         sample_pdf_path, sample_id="m1", dpi=150

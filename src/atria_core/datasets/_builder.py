@@ -45,7 +45,6 @@ class DatasetBuilder:
                 see `DatasetRegistry.create`/`HuggingfaceDataset.__init__`.
             params: Values for the dataset's config fields.
         """
-        logger.info(f"Loading dataset {name} with params {params}")
         self._dataset = datasets.create(
             name,
             data_dir=data_dir,

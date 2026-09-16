@@ -145,6 +145,7 @@ class Dataset[
         split: DatasetSplitType | None = None,
         access_token: str | None = None,
     ) -> None:
+        logger.info(f"Building split iterators for {type(self).__name__} at {data_dir}")
         self._download(data_dir=data_dir, access_token=access_token)
         input_transform = self._build_input_transform()
         self._split_iterators = {}

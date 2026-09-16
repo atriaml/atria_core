@@ -135,6 +135,9 @@ class MultiPageDocumentInstance(DocumentInstance):
     def __iter__(self) -> Iterator[SinglePageDocumentInstance]:
         return iter(self.pages)
 
+    def load(self) -> MultiPageDocumentInstance:
+        return replace(self, pages=[page.load() for page in self.pages])
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "sample_id": self.sample_id,

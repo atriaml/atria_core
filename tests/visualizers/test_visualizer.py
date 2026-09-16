@@ -77,6 +77,23 @@ def test_visualize_document_instance_image_sourced_saves_png(tmp_path: Path) -> 
     assert path.exists()
 
 
+def test_visualize_document_instance_draws_object_detection_boxes(
+    tmp_path: Path,
+) -> None:
+    image = PILImage.new("RGB", (100, 100), color="white")
+    detection = make_object_detection_annotation(
+        bboxes=np.array([[0.1, 0.1, 0.5, 0.5]]), normalized=True
+    )
+    instance = SinglePageDocumentInstance.from_image(
+        image, sample_id="d1"
+    ).add_annotation(detection)
+
+    path = visualize_document_instance(instance, str(tmp_path))
+
+    saved = np.array(PILImage.open(path))
+    assert not np.all(saved == 255)
+
+
 def test_visualize_document_instance_pdf_page_draws_on_pdf_directly(
     tmp_path: Path, sample_pdf_path: Path
 ) -> None:
@@ -107,6 +124,24 @@ def test_visualize_document_instance_multi_page_reexports_all_pages(
     assert path == tmp_path / "m1.pdf"
     reopened = pymupdf.open(str(path))
     assert len(reopened) == instance.num_pages
+
+
+def test_visualize_document_instance_multi_page_image_sourced_combines_pages(
+    tmp_path: Path,
+) -> None:
+    pages = [
+        SinglePageDocumentInstance.from_image(
+            PILImage.new("RGB", (20, 10), color="white"), sample_id=f"m1#{i}"
+        )
+        for i in range(3)
+    ]
+    instance = MultiPageDocumentInstance(sample_id="m1", pages=pages)
+
+    path = visualize_document_instance(instance, str(tmp_path))
+
+    assert path == tmp_path / "m1.pdf"
+    reopened = pymupdf.open(str(path))
+    assert len(reopened) == 3
 
 
 def test_visualize_dispatches_by_instance_type(tmp_path: Path) -> None:
