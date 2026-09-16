@@ -14,6 +14,41 @@ from atria_core.types._data_instance._base import DataInstance
 class DatasetRegistry(ModuleRegistry[Dataset]):
     __registry_name__ = "datasets"
 
+    def resolve_config[T_DatasetConfig: DatasetConfig = DatasetConfig](
+        self,
+        name: str,
+        config: T_DatasetConfig | None = None,
+        **params: Any,
+    ) -> tuple[type[Dataset[Any, T_DatasetConfig]], T_DatasetConfig]:
+        """Return the class registered under `name` and its resolved config,
+        without constructing the dataset -- so no download or split-iterator
+        build is triggered.
+
+        Args:
+            name: Registered name of the dataset.
+            config: The dataset's config, built directly. Mutually exclusive
+                with `params`.
+            params: Values for the dataset's config fields. Mutually
+                exclusive with `config`.
+
+        Raises:
+            KeyError: If nothing is registered under `name`.
+            TypeError: If both `config` and `params` are given.
+            ValueError: If `params` holds a name the dataset's config does
+                not declare, or a value it rejects.
+        """
+        dataset_cls = cast("type[Dataset[Any, T_DatasetConfig]]", self.get(name))
+        if config is None:
+            config_cls = dataset_cls.config_type()
+            try:
+                config = config_cls(**params)
+            except ValidationError as error:
+                valid_fields = sorted(config_cls.model_fields)
+                raise ValueError(f"{error}\nValid fields: {valid_fields}") from error
+        elif params:
+            raise TypeError("cannot pass both 'config' and individual config params")
+        return dataset_cls, config
+
     def create[
         T_DataInstance: DataInstance = DataInstance,
         T_DatasetConfig: DatasetConfig = DatasetConfig,
@@ -51,16 +86,7 @@ class DatasetRegistry(ModuleRegistry[Dataset]):
             ValueError: If `params` holds a name the dataset's config does
                 not declare, or a value it rejects.
         """
-        dataset_cls = self.get(name)
-        if config is None:
-            config_cls = dataset_cls.config_type()
-            try:
-                config = cast("T_DatasetConfig", config_cls(**params))
-            except ValidationError as error:
-                valid_fields = sorted(config_cls.model_fields)
-                raise ValueError(f"{error}\nValid fields: {valid_fields}") from error
-        elif params:
-            raise TypeError("cannot pass both 'config' and individual config params")
+        dataset_cls, config = self.resolve_config(name, config, **params)
         extra_kwargs: dict[str, Any] = {}
         if (
             streaming is not None
@@ -70,7 +96,7 @@ class DatasetRegistry(ModuleRegistry[Dataset]):
         return cast(
             "Dataset[T_DataInstance, T_DatasetConfig]",
             dataset_cls(
-                config=cast("DatasetConfig", config),
+                config=config,
                 data_dir=data_dir,
                 access_token=access_token,
                 split=split,

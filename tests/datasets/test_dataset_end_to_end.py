@@ -388,6 +388,27 @@ def test_cache_writes_discoverable_versioned_snapshot(tmp_path: Path) -> None:
     assert [item.data_dir for item in reopened] == [cached.data_dir]
 
 
+def test_cache_with_an_empty_config_is_still_a_valid_reusable_cache(
+    tmp_path: Path,
+) -> None:
+    """An empty embedded config (current schema) is a legitimately configless
+    dataset, not a sign the cache is incomplete -- unlike a legacy snapshot,
+    which never embeds config at all. See test_snapshot_loads_legacy_schema."""
+    dataset = EmptyConfigDataset(data_dir=str(tmp_path))
+    cached = Cacher(FileStorageType.MSGPACK, num_processes=1).cache(
+        dataset, data_dir=str(tmp_path)
+    )
+
+    assert DatasetSnapshot.load(cached.data_dir).config == {}
+    assert DatasetSnapshot.validate(cached.data_dir)
+    assert Cacher.validate_cache(cached.data_dir)
+
+    reused = Cacher(FileStorageType.MSGPACK, num_processes=1).cache(
+        dataset, data_dir=str(tmp_path)
+    )
+    assert reused.data_dir == cached.data_dir
+
+
 def test_snapshot_loads_legacy_schema(tmp_path: Path) -> None:
     (tmp_path / "snapshot.yaml").write_text(
         "storage_type: msgpack\n"

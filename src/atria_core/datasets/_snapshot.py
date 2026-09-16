@@ -170,16 +170,25 @@ class DatasetSnapshot:
             return False
         if snapshot.schema_version > cls.CURRENT_SCHEMA_VERSION:
             return False
-        if snapshot.snapshot_kind == SOURCE_DATASET_SNAPSHOT_KIND:
-            return bool(snapshot.config)
-        if (
-            snapshot.storage_type is None
-            or snapshot.data_model is None
-            or snapshot.config_name is None
-            or snapshot.config_hash is None
-        ):
+        # Pre-schema-version-1 snapshots stored config in a sidecar
+        # config.yaml instead of embedding it. That sidecar is no longer
+        # read, so a legacy snapshot is never self-contained. From schema
+        # version 1 onward, config is always embedded -- an empty dict there
+        # is a legitimately configless dataset, not a missing config.
+        if snapshot.schema_version < 1:
             return False
-        return bool(snapshot.config)
+        if snapshot.snapshot_kind == SOURCE_DATASET_SNAPSHOT_KIND:
+            # dataset_class_name/config_name/config_hash are non-optional
+            # fields write_source_snapshot always fills in; storage_type and
+            # data_model are deliberately left unset for a source snapshot
+            # (they describe a cache), so there's nothing further to check.
+            return True
+        return (
+            snapshot.storage_type is not None
+            and snapshot.data_model is not None
+            and snapshot.config_name is not None
+            and snapshot.config_hash is not None
+        )
 
     @property
     def dataset_metadata(self) -> DatasetMetadata:

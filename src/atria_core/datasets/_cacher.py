@@ -255,7 +255,8 @@ class Cacher:
             Compose(preprocess, transform) if transform is not None else preprocess
         )
         unique_path = self._compute_cache_path(
-            dataset=dataset,
+            dataset_class_name=type(dataset).__name__,
+            config_hash=dataset.config.hash,
             data_dir=resolved_data_dir,
             write_transform=write_transform,
             max_samples=max_samples,
@@ -319,7 +320,8 @@ class Cacher:
 
     def _compute_cache_path(
         self,
-        dataset: Dataset,
+        dataset_class_name: str,
+        config_hash: str,
         data_dir: str,
         write_transform: Callable[[Any], Any],
         max_samples: int | None = None,
@@ -329,14 +331,16 @@ class Cacher:
         class's name, the storage backend's prefix, a hash of whatever is
         actually being written per-sample, and any sample cap into the cache
         directory name, so different backends/materialization settings/process
-        transforms/sample counts never collide."""
+        transforms/sample counts never collide.
+
+        Depends only on the dataset's class name and config hash -- neither
+        requires the dataset itself to be constructed or built."""
         from atria_core.datasets._storage._storage_manager import StorageManager
 
         storage_manager_cls = StorageManager.resolve_class(self._storage_type)
         storage_dir = Path(data_dir) / _DEFAULT_ATRIA_DATASETS_STORAGE_SUBDIR
         config_name = (
-            f"{storage_manager_cls.storage_prefix}/"
-            f"{type(dataset).__name__}-{dataset.config.hash}"
+            f"{storage_manager_cls.storage_prefix}/{dataset_class_name}-{config_hash}"
         )
         hash_ = transform_hash(write_transform)
         if hash_ is not None:
@@ -348,6 +352,49 @@ class Cacher:
             # from, so it must never be reused as though it were complete.
             config_name += f"-max{max_samples}"
         return storage_dir / config_name
+
+    def find_existing_cache_path(
+        self,
+        dataset_class_name: str,
+        config_hash: str,
+        *,
+        data_dir: str,
+        transform: Callable[[Any], Any] | None = None,
+        max_samples: int | None = None,
+    ) -> Path | None:
+        """Return a valid existing cache's path for this class name/config
+        hash, or None if no matching cache exists.
+
+        Needs only the dataset's class name and config hash -- computable
+        without constructing or building the `Dataset`, so this never
+        triggers a download or split-iterator build.
+
+        Args:
+            dataset_class_name: `type(dataset).__name__` of the dataset that
+                would produce this cache.
+            config_hash: `dataset.config.hash` of the dataset that would
+                produce this cache.
+            data_dir: Root the cache would be written under.
+            transform: Write-time transform `process_and_cache()` would apply.
+            max_samples: Sample cap the cache would have been written with.
+        """
+        preprocess = PreprocessTransform(
+            resize_images=self._resize_images,
+            image_max_size=self._image_max_size,
+        )
+        write_transform = (
+            Compose(preprocess, transform) if transform is not None else preprocess
+        )
+        unique_path = self._compute_cache_path(
+            dataset_class_name=dataset_class_name,
+            config_hash=config_hash,
+            data_dir=_validate_data_dir(data_dir),
+            write_transform=write_transform,
+            max_samples=max_samples,
+        )
+        if unique_path.exists() and Cacher.validate_cache(unique_path):
+            return unique_path
+        return None
 
     @classmethod
     def validate_cache(cls, path: Path | str) -> bool:

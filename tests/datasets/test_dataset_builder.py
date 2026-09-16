@@ -12,6 +12,31 @@ from atria_core.types import DatasetSplitType, ImageInstance
 from tests.datasets.test_dataset_end_to_end import SyntheticDataset  # noqa: F401
 
 
+def test_build_reuses_an_existing_cache_without_constructing_the_source_dataset(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    DatasetBuilder().load("synthetic", data_dir=str(tmp_path)).cache(
+        FileStorageType.MSGPACK, num_processes=1
+    ).build()
+
+    def _fail_if_constructed(*args: object, **kwargs: object) -> None:
+        raise AssertionError(
+            "source dataset should not be constructed when a cache already exists"
+        )
+
+    monkeypatch.setattr(SyntheticDataset, "__init__", _fail_if_constructed)
+
+    dataset = (
+        DatasetBuilder()
+        .load("synthetic", data_dir=str(tmp_path))
+        .cache(FileStorageType.MSGPACK, num_processes=1)
+        .build()
+    )
+
+    assert isinstance(dataset, CachedDataset)
+    assert len(dataset.train) == 4
+
+
 def _mark_processed(sample: ImageInstance) -> ImageInstance:
     """Module-level (picklable) transform -- see test_dataset_end_to_end.py."""
     return replace(sample, sample_id=f"processed-{sample.sample_id}")
@@ -79,16 +104,16 @@ def test_different_transforms_produce_different_cache_directories(
     assert first.data_dir != second.data_dir
 
 
-def test_cache_before_load_is_rejected() -> None:
-    with pytest.raises(ValueError, match="call load\\(\\) before cache\\(\\)"):
-        DatasetBuilder().cache(FileStorageType.MSGPACK)
+def test_cache_before_load_is_rejected_at_build() -> None:
+    with pytest.raises(ValueError, match="call load\\(\\) before build\\(\\)"):
+        DatasetBuilder().cache(FileStorageType.MSGPACK).build()
 
 
-def test_process_and_cache_before_load_is_rejected() -> None:
-    with pytest.raises(
-        ValueError, match="call load\\(\\) before process_and_cache\\(\\)"
-    ):
-        DatasetBuilder().process_and_cache(FileStorageType.MSGPACK, _mark_processed)
+def test_process_and_cache_before_load_is_rejected_at_build() -> None:
+    with pytest.raises(ValueError, match="call load\\(\\) before build\\(\\)"):
+        DatasetBuilder().process_and_cache(
+            FileStorageType.MSGPACK, _mark_processed
+        ).build()
 
 
 def test_build_before_load_is_rejected() -> None:
@@ -107,9 +132,9 @@ def test_load_params_reach_the_config(tmp_path: Path) -> None:
     assert len(dataset.train) == 2
 
 
-def test_unknown_load_param_is_rejected(tmp_path: Path) -> None:
+def test_unknown_load_param_is_rejected_at_build(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="nonsense"):
-        DatasetBuilder().load("synthetic", nonsense=1, data_dir=str(tmp_path))
+        DatasetBuilder().load("synthetic", nonsense=1, data_dir=str(tmp_path)).build()
 
 
 def test_split_builds_only_that_split(tmp_path: Path) -> None:
