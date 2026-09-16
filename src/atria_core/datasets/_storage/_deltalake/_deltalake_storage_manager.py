@@ -4,6 +4,10 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, ClassVar
 
+from atria_core.datasets._split_iterators import (
+    IndexableSplitIterator,
+    IterableSplitIterator,
+)
 from atria_core.datasets._storage._deltalake._deltalake_local_writer import (
     MultiprocessingParallelDeltalakeWriter,
     SingleDeltalakeWriter,
@@ -54,7 +58,9 @@ class DeltalakeStorageManager(StorageManager):
         return (self.split_dir(split) / "_delta_log").exists()
 
     def _write_split_internal(
-        self, split: DatasetSplitType, split_iterator: Any
+        self,
+        split: DatasetSplitType,
+        split_iterator: IndexableSplitIterator | IterableSplitIterator,
     ) -> None:
         split_dir = self.split_dir(split)
         write_dir = self.storage_dir / self.config_name

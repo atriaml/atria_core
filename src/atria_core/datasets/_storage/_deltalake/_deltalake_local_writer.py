@@ -68,6 +68,12 @@ class MultiprocessingParallelDeltalakeWriter:
             split_dir: Directory the Delta table is written into.
             artifacts_dir: Directory large binary fields are hoisted into.
         """
+        assert isinstance(dataset, Sequence), (
+            "MultiprocessingParallelSplitWriter requires an indexable "
+            f"(Sequence) dataset; got {type(dataset).__name__}. Use "
+            "RayParallelSplitWriter for a stream-only source."
+        )
+
         split_name = split_dir.name
         logger.info(
             f"Writing split {split_name} with {self.num_workers} multiprocessing workers..."

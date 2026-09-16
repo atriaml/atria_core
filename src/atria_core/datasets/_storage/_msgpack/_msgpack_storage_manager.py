@@ -66,7 +66,7 @@ class MsgpackStorageManager(StorageManager):
             f"({'parallel' if self.num_processes > 1 else 'single'} mode)"
         )
 
-        dataset = split_iterator.base_iterator
+        base_iterator = split_iterator.base_iterator
         transform = split_iterator.transform
 
         writer: (
@@ -83,7 +83,9 @@ class MsgpackStorageManager(StorageManager):
         else:
             writer = SingleSplitWriter(max_shard_size=self.max_shard_size)
 
-        write_info = writer.write_split(dataset, transform, split_dir)
+        write_info = writer.write_split(
+            dataset=base_iterator, transform=transform, split_dir=split_dir
+        )
         self._log_write_results(write_info, split)
 
     def _log_write_results(

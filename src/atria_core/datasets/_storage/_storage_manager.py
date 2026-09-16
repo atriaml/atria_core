@@ -10,12 +10,17 @@ from pathlib import Path
 from typing import Any, ClassVar
 
 from atria_core.datasets._common import FileStorageType
+from atria_core.datasets._split_iterators import (
+    IndexableSplitIterator,
+    IterableSplitIterator,
+)
 from atria_core.logger import get_logger
 from atria_core.types import (
     DataInstance,
     DatasetSplitType,
     Image,
     ImageInstance,
+    MultiPageDocumentInstance,
     SinglePageDocumentInstance,
 )
 
@@ -29,11 +34,20 @@ class _StoreImagesToFiles:
     def __call__(self, sample: DataInstance) -> DataInstance:
         if isinstance(sample, ImageInstance):
             return replace(sample, image=self._store(sample.image))
-        if isinstance(sample, SinglePageDocumentInstance) and isinstance(
-            sample.visual, Image
-        ):
-            return replace(sample, visual=self._store(sample.visual))
+        if isinstance(sample, SinglePageDocumentInstance):
+            return self._store_page(sample)
+        if isinstance(sample, MultiPageDocumentInstance):
+            return replace(
+                sample, pages=[self._store_page(page) for page in sample.pages]
+            )
         return sample
+
+    def _store_page(
+        self, page: SinglePageDocumentInstance
+    ) -> SinglePageDocumentInstance:
+        if isinstance(page.visual, Image):
+            return replace(page, visual=self._store(page.visual))
+        return page
 
     def _store(self, image: Image) -> Image:
         if image.file_path is not None:
@@ -164,7 +178,11 @@ class StorageManager(ABC):
             logger.info(f"Purging dataset split {split.value} from storage {split_dir}")
             shutil.rmtree(split_dir)
 
-    def write_split(self, split: DatasetSplitType, split_iterator: Any) -> None:
+    def write_split(
+        self,
+        split: DatasetSplitType,
+        split_iterator: IndexableSplitIterator | IterableSplitIterator,
+    ) -> None:
         """Write every sample of `split` to storage, purging it on failure.
 
         Args:
@@ -200,7 +218,9 @@ class StorageManager(ABC):
 
     @abstractmethod
     def _write_split_internal(
-        self, split: DatasetSplitType, split_iterator: Any
+        self,
+        split: DatasetSplitType,
+        split_iterator: IndexableSplitIterator | IterableSplitIterator,
     ) -> None:
         raise NotImplementedError
 

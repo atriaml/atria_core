@@ -35,9 +35,10 @@ _ShardResult = DatasetShardInfo | None
 
 def _run_worker(
     shard_index: int,
-    work_queue: mp.Queue[tuple[int, Any] | None],
+    work_queue: mp.Queue[int | None],
     outcome_queue: mp.Queue[_WriteOutcome],
     result_queue: mp.Queue[_ShardResult],
+    dataset: Sequence[Any],
     transform: Callable[[Any], Any] | None,
     split_dir: Path,
 ) -> None:
@@ -45,13 +46,18 @@ def _run_worker(
 
     Runs entirely in one child process: the writer it opens is never shared
     with any other process, so there is no question of who is responsible
-    for closing it -- this worker owns it start to finish. Pulls
-    `(index, item)` pairs off `work_queue` until it receives the sentinel
-    `None`, at which point every item meant for this worker has already been
-    placed on the queue (FIFO ordering means a worker's own sentinel is only
-    consumed after every real item queued ahead of it), so closing here is
-    always safe -- there is no remaining work this worker could still be
-    assigned afterward.
+    for closing it -- this worker owns it start to finish. Pulls indices off
+    `work_queue` until it receives the sentinel `None`, at which point every
+    index meant for this worker has already been placed on the queue (FIFO
+    ordering means a worker's own sentinel is only consumed after every real
+    index queued ahead of it), so closing here is always safe -- there is no
+    remaining work this worker could still be assigned afterward.
+
+    Both `dataset[idx]` and `transform` run here, inside the worker -- never
+    in the parent process. Indexing a lazy dataset can already do real work
+    (decoding images, reading auxiliary files), so doing it in the parent
+    before handing items to workers would serialize exactly the work this
+    pool exists to parallelize.
     """
     shard_file_pattern = str(Path(split_dir) / f"{shard_index:06d}-%06d.msgpack")
     writer = ShardWriterWorker(
@@ -61,11 +67,11 @@ def _run_worker(
     ).load()
 
     while True:
-        item = work_queue.get()
-        if item is None:
+        idx = work_queue.get()
+        if idx is None:
             break
-        idx, raw_item = item
         try:
+            raw_item = dataset[idx]
             writer.write(idx, raw_item)
             outcome_queue.put((idx, "ok", None))
         except Exception as e:
@@ -90,14 +96,19 @@ class MultiprocessingParallelSplitWriter:
 
     def write_split(
         self,
-        dataset: Sequence[Any] | Iterable[Any],
+        dataset: Sequence[Any],
         transform: Callable[[Any], Any] | None,
         split_dir: Path,
     ) -> list[DatasetShardInfo]:
         """Write every sample of a split across worker processes.
 
         Args:
-            dataset: Samples to write.
+            dataset: Samples to write. Must be indexable (`Sequence`) --
+                only ids are queued here; each worker calls `dataset[idx]`
+                itself, since indexing a lazy dataset can already do real
+                work. A stream-only source (no `__getitem__`/`len`) can't be
+                split into a work queue this way; use a Ray-based writer for
+                that instead.
             transform: Applied to each sample before writing, if given.
             split_dir: Directory the shards are written into.
 
@@ -108,29 +119,42 @@ class MultiprocessingParallelSplitWriter:
             RuntimeError: If more than MAX_FAILED_SAMPLES samples fail, or if
                 a worker never reports back after being sent its sentinel.
         """
+        assert isinstance(dataset, Sequence), (
+            "MultiprocessingParallelSplitWriter requires an indexable "
+            f"(Sequence) dataset; got {type(dataset).__name__}. Use "
+            "RayParallelSplitWriter for a stream-only source."
+        )
+
         split_name = split_dir.name
         logger.info(
             f"Writing split {split_name} with {self.num_workers} worker processes..."
         )
 
-        work_queue: mp.Queue[tuple[int, Any] | None] = mp.Queue()
+        work_queue: mp.Queue[int | None] = mp.Queue()
         outcome_queue: mp.Queue[_WriteOutcome] = mp.Queue()
         result_queue: mp.Queue[_ShardResult] = mp.Queue()
 
         workers = [
             mp.Process(
                 target=_run_worker,
-                args=(i, work_queue, outcome_queue, result_queue, transform, split_dir),
+                args=(
+                    i,
+                    work_queue,
+                    outcome_queue,
+                    result_queue,
+                    dataset,
+                    transform,
+                    split_dir,
+                ),
             )
             for i in range(self.num_workers)
         ]
         for worker in workers:
             worker.start()
 
-        total = 0
-        for idx, raw_item in enumerate(dataset):
-            work_queue.put((idx, raw_item))
-            total += 1
+        total = len(dataset)
+        for idx in range(total):
+            work_queue.put(idx)
         for _ in workers:
             work_queue.put(None)
 
