@@ -319,7 +319,7 @@ class Cacher:
 
     def _compute_cache_path(
         self,
-        dataset: Dataset[Any, Any],
+        dataset: Dataset,
         data_dir: str,
         write_transform: Callable[[Any], Any],
         max_samples: int | None = None,

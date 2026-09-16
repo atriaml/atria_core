@@ -22,7 +22,7 @@ class DatasetBuilder:
     """
 
     def __init__(self) -> None:
-        self._dataset: Dataset[Any, Any] | None = None
+        self._dataset: Dataset | None = None
 
     def load(
         self,
@@ -134,7 +134,7 @@ class DatasetBuilder:
         )
         return self
 
-    def build(self) -> Dataset[Any, Any]:
+    def build(self) -> Dataset:
         """Return the built dataset.
 
         Raises:
@@ -142,7 +142,7 @@ class DatasetBuilder:
         """
         return self._require_loaded_dataset(step_name="build")
 
-    def _require_loaded_dataset(self, *, step_name: str) -> Dataset[Any, Any]:
+    def _require_loaded_dataset(self, *, step_name: str) -> Dataset:
         if self._dataset is None:
             raise ValueError(f"call load() before {step_name}()")
         return self._dataset

@@ -45,7 +45,7 @@ class DatasetSnapshotStore:
     @classmethod
     def write_source_snapshot(
         cls,
-        dataset: Dataset[Any, Any],
+        dataset: Dataset,
         data_dir: Path | str,
     ) -> DatasetSnapshot:
         """Write the snapshot describing a dataset as loaded from its source.
@@ -77,7 +77,7 @@ class DatasetSnapshotStore:
     def write_cached_snapshot(
         cls,
         *,
-        dataset: Dataset[Any, Any],
+        dataset: Dataset,
         snapshot_dir: Path | str,
         storage_type: FileStorageType,
         data_model: type[Any],
