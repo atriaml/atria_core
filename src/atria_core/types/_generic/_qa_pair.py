@@ -16,7 +16,7 @@ class QAPair(BaseDataModel):
     #: Every acceptable gold answer string, when a dataset provides more than
     #: one (e.g. SQuAD). Empty for datasets with a single gold answer --
     #: consumers should fall back to `answer_text` in that case.
-    alternative_answers: list[str] = field(default_factory=list)
+    alternative_answers: list[str] = field(default_factory=list[str])
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -49,8 +49,11 @@ class MultiPageQAPair(BaseDataModel):
     id: int
     question_text: str
     answer_text: str
-    evidence_pages: list[int] = field(default_factory=list)
+    evidence_pages: list[int] = field(default_factory=list[int])
     arithmetic_expression: str | None = None
+    alternative_answers: list[str] = field(default_factory=list[str])
+    evidence_sources: list[str] = field(default_factory=list[str])
+    answer_format: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -59,6 +62,9 @@ class MultiPageQAPair(BaseDataModel):
             "answer_text": self.answer_text,
             "evidence_pages": self.evidence_pages,
             "arithmetic_expression": self.arithmetic_expression,
+            "alternative_answers": self.alternative_answers,
+            "evidence_sources": self.evidence_sources,
+            "answer_format": self.answer_format,
         }
 
     @classmethod
@@ -69,4 +75,7 @@ class MultiPageQAPair(BaseDataModel):
             answer_text=data["answer_text"],
             evidence_pages=list(data.get("evidence_pages", [])),
             arithmetic_expression=data.get("arithmetic_expression"),
+            alternative_answers=list(data.get("alternative_answers", [])),
+            evidence_sources=list(data.get("evidence_sources", [])),
+            answer_format=data.get("answer_format"),
         )
