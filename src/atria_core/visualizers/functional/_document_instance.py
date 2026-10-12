@@ -42,7 +42,7 @@ def _words_to_draw(
     draw_segment_bboxes: bool,
     draw_word_labels: bool,
 ) -> _DrawLayer | None:
-    """Word-level XYXY bboxes, texts, labels, and normalization metadata."""
+    """Word boxes, falling back to line boxes when word boxes are absent."""
     ocr_ann: OCRAnnotation | None = instance.get_annotation_by_type(AnnotationType.ocr)
     elements = (
         content.elements
@@ -51,28 +51,32 @@ def _words_to_draw(
     )
     if elements is None:
         return None
-    else:
-        words = elements.at(OCRLevel.word)
-        if words.bboxes is None or len(words) == 0:
-            return None
 
-        bboxes = (
-            elements.segment_bboxes(OCRLevel.word)
-            if draw_segment_bboxes
-            else words.bboxes
-        )
-        if elements.bbox_mode == BoundingBoxMode.XYWH:
-            bboxes = bboxes.copy()
-            bboxes[:, 2:] += bboxes[:, :2]
-        texts = words.texts.tolist() if words.texts is not None else None
+    level = OCRLevel.word
+    selected = elements.at(level)
+    if selected.bboxes is None or len(selected) == 0:
+        level = OCRLevel.line
+        selected = elements.at(level)
+    if selected.bboxes is None or len(selected) == 0:
+        return None
 
-        labels = None
-        if draw_word_labels:
-            ann = instance.get_annotation_by_type(AnnotationType.entity_labeling)
-            if ann is not None:
-                labels = ann.word_label_names
+    bboxes = (
+        elements.segment_bboxes(level)
+        if draw_segment_bboxes
+        else selected.bboxes
+    )
+    if elements.bbox_mode == BoundingBoxMode.XYWH:
+        bboxes = bboxes.copy()
+        bboxes[:, 2:] += bboxes[:, :2]
+    texts = selected.texts.tolist() if selected.texts is not None else None
 
-        return bboxes, texts, labels, elements.normalized
+    labels = None
+    if level == OCRLevel.word and draw_word_labels:
+        ann = instance.get_annotation_by_type(AnnotationType.entity_labeling)
+        if ann is not None:
+            labels = ann.word_label_names
+
+    return bboxes, texts, labels, elements.normalized
 
 
 def _objects_to_draw(instance: DocumentInstance) -> _DrawLayer | None:
