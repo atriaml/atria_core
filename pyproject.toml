@@ -22,7 +22,7 @@ dependencies = [
     "Pillow>=11.0.0",
     "beautifulsoup4>=4.12.2",
     "imagesize>=1.4.1",
-    "pyarrow>14",
+    "pyarrow>14,<26",
     "codename>=1.1",
     "lxml>=6.0.0",
     "pypdf2>=3.0.1",
