@@ -28,8 +28,8 @@ def visualize_image_instance(
             image, np.stack([o.bbox for o in objects]), labels=labels, style=style
         )
 
-    Path(output_dir).mkdir(parents=True, exist_ok=True)
     path = Path(output_dir) / f"{output_name(instance)}.png"
+    path.parent.mkdir(parents=True, exist_ok=True)
     logger.debug(f"Saving visualization for sample {instance.sample_id} to {path}")
     image.save(path)
     return path

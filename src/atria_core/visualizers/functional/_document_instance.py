@@ -252,8 +252,8 @@ def visualize_document_instance(
         style=style,
     )
     extension = "png" if isinstance(rendered, PILImage.Image) else "pdf"
-    Path(output_dir).mkdir(parents=True, exist_ok=True)
     path = Path(output_dir) / f"{output_name(instance)}.{extension}"
+    path.parent.mkdir(parents=True, exist_ok=True)
     logger.debug(f"Saving visualization for sample {instance.sample_id} to {path}")
     rendered.save(path)
     return path

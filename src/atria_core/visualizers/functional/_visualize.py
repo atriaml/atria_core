@@ -12,12 +12,13 @@ from atria_core.types import (
 
 
 def output_name(instance: DataInstance) -> str:
+    sample_name = Path(instance.sample_id).name
     classification_annotation = instance.get_annotation_by_type(
         AnnotationType.classification
     )
     if classification_annotation is None:
-        return instance.sample_id
-    return f"{instance.sample_id}_label={classification_annotation.label_name}"
+        return sample_name
+    return f"{sample_name}_label={classification_annotation.label_name}"
 
 
 def visualize(instance: DataInstance, output_dir: str, **kwargs: Any) -> Path:
