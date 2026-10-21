@@ -1,11 +1,8 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
-DEFAULT_ATRIA_CACHE_DIR = os.environ.get(
-    "DEFAULT_ATRIA_CACHE_DIR", str(Path.home() / ".cache/atria/")
-)
+from atria_core._constants import DEFAULT_ATRIA_CACHE_DIR
 
 _DEFAULT_ATRIA_DATASETS_CACHE_DIR = Path(DEFAULT_ATRIA_CACHE_DIR) / "datasets/"
 _DEFAULT_ATRIA_DATASETS_STORAGE_SUBDIR = "storage"
