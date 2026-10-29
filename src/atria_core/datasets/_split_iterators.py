@@ -102,6 +102,28 @@ class IndexableSplitIterator[T_Output](Sequence[T_Output], RepresentationMixin):
             mapped_indices=indices,
         )
 
+    def split(
+        self, ratio: float
+    ) -> tuple[IndexableSplitIterator[T_Output], IndexableSplitIterator[T_Output]]:
+        """The first `ratio` of the samples and the rest, in order, so the same
+        ratio always splits the same way. Chain after `shuffle` for a random
+        split: `shuffle(seed).split(0.9)`."""
+        if not 0.0 <= ratio <= 1.0:
+            raise ValueError(f"ratio must lie in [0, 1], got {ratio}")
+        indices = [self._resolve(i) for i in range(len(self))]
+        split_point = int(len(indices) * ratio)
+        first = IndexableSplitIterator(
+            base_iterator=self._base_iterator,
+            transform=self._transform,
+            mapped_indices=indices[:split_point],
+        )
+        rest = IndexableSplitIterator(
+            base_iterator=self._base_iterator,
+            transform=self._transform,
+            mapped_indices=indices[split_point:],
+        )
+        return first, rest
+
     def filter(
         self, predicate: Callable[[T_Output], bool]
     ) -> IndexableSplitIterator[T_Output]:

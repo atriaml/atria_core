@@ -127,6 +127,38 @@ def test_limit_then_shuffle_only_reorders_the_limited_view() -> None:
     assert set(reordered) <= set(range(5))
 
 
+def test_split_returns_two_ordered_views_without_mutating_original() -> None:
+    iterator = IndexableSplitIterator(
+        base_iterator=list(range(10)), transform=lambda x: x * 2
+    )
+
+    first, rest = iterator.split(0.7)
+
+    assert list(first) == [0, 2, 4, 6, 8, 10, 12]
+    assert list(rest) == [14, 16, 18]
+    assert len(iterator) == 10
+
+
+def test_shuffle_then_split_partitions_all_samples() -> None:
+    iterator = IndexableSplitIterator(
+        base_iterator=list(range(10)), transform=lambda x: x
+    )
+
+    first, rest = iterator.shuffle(seed=1).split(0.8)
+
+    assert len(first) == 8
+    assert len(rest) == 2
+    assert sorted([*first, *rest]) == list(range(10))
+    assert list(first) != list(range(8))
+
+
+def test_split_ratio_out_of_range_raises() -> None:
+    iterator = IndexableSplitIterator(base_iterator=[0, 1], transform=lambda x: x)
+
+    with pytest.raises(ValueError, match="ratio"):
+        iterator.split(1.5)
+
+
 def test_concat_indexes_across_iterators_in_order() -> None:
     first = IndexableSplitIterator(base_iterator=[0, 1, 2], transform=lambda x: x)
     second = IndexableSplitIterator(base_iterator=[3, 4], transform=lambda x: x)
