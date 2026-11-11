@@ -98,7 +98,7 @@ class Image(BaseDataModel):
     def from_dict(cls, data: dict[str, Any]) -> Image:
         crop_box = data.get("crop_box")
         crop_box = tuple(crop_box) if crop_box is not None else None
-        if "content_bytes" in data:
+        if data.get("content_bytes") is not None:
             from atria_core.types._utilities._image_encoding import _bytes_to_image
 
             return cls(
